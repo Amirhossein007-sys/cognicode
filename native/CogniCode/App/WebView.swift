@@ -69,66 +69,6 @@ final class HapticManager {
 }
 
 // MARK: - پل ارتباطی داینامیک آیلند (Live Activities و WidgetKit سخت‌افزاری)
-final class DynamicIslandManager {
-    static let shared = DynamicIslandManager()
-    #if canImport(ActivityKit)
-    private var currentActivity: Any? = nil
-    #endif
-
-    private init() {
-        #if canImport(ActivityKit)
-        if #available(iOS 16.2, *) {
-            // Analysis belongs to the previous web session after an app restart.
-            let abandoned = Activity<CogniCodeActivityAttributes>.activities
-            Task {
-                for activity in abandoned {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
-            }
-        }
-        #endif
-    }
-
-    func startAnalysis(title: String) {
-        #if canImport(ActivityKit)
-        if #available(iOS 16.2, *), ActivityAuthorizationInfo().areActivitiesEnabled {
-            endAnalysis(success: true)
-            let attributes = CogniCodeActivityAttributes(appName: "CogniCode")
-            let state = CogniCodeActivityAttributes.ContentState(status: title, isAnalyzing: true)
-            do {
-                let activity = try Activity<CogniCodeActivityAttributes>.request(
-                    attributes: attributes,
-                    content: ActivityContent(state: state, staleDate: Date().addingTimeInterval(120)),
-                    pushType: nil
-                )
-                currentActivity = activity
-            } catch {
-                print("[DynamicIsland] Failed to start Live Activity: \(error)")
-            }
-        }
-        #endif
-    }
-
-    func endAnalysis(success: Bool = true) {
-        #if canImport(ActivityKit)
-        if #available(iOS 16.2, *), let act = currentActivity as? Activity<CogniCodeActivityAttributes> {
-            let finalState = CogniCodeActivityAttributes.ContentState(
-                status: success ? "پایان بررسی کد ✓" : "خطا در تحلیل ⚠️",
-                isAnalyzing: false,
-                failed: !success
-            )
-            Task {
-                await act.end(
-                    ActivityContent(state: finalState, staleDate: nil),
-                    dismissalPolicy: .after(Date().addingTimeInterval(2.5))
-                )
-            }
-            currentActivity = nil
-        }
-        #endif
-    }
-}
-
 // MARK: - موتور نیتیو همگام‌سازی کیبورد iOS 18 (بدون لگ، پرش یا نوار سیاه)
 final class NativeKeyboardManager: NSObject {
     weak var webView: WKWebView?
@@ -202,6 +142,7 @@ struct WebViewContainer: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        DynamicIslandManager.shared.endAnalysis(success: false)
         coordinator.keyboardManager.stopObserving()
         uiView.stopLoading()
         uiView.navigationDelegate = nil
@@ -254,6 +195,9 @@ struct WebViewContainer: UIViewRepresentable {
             self.webView = wv
 
             super.init()
+
+            // Initialize session cleanup at app launch, not at the next Play tap.
+            DispatchQueue.main.async { _ = DynamicIslandManager.shared }
 
             wv.navigationDelegate = self
             for name in Self.messageHandlerNames {
@@ -315,7 +259,11 @@ struct WebViewContainer: UIViewRepresentable {
                     DispatchQueue.main.async {
                         if action == "start" {
                             let title = (dict["title"] as? String) ?? "تحلیل کد هوش مصنوعی"
-                            DynamicIslandManager.shared.startAnalysis(title: title)
+                            let status = DynamicIslandManager.shared.startAnalysis(title: title)
+                            self.webView.evaluateJavaScript(
+                                "window.__onNativeActivityStatus && window.__onNativeActivityStatus('\(status)');",
+                                completionHandler: nil
+                            )
                         } else if action == "stop" {
                             let state = (dict["state"] as? String) ?? "done"
                             DynamicIslandManager.shared.endAnalysis(success: state != "error")
@@ -384,6 +332,10 @@ struct WebViewContainer: UIViewRepresentable {
             }.resume()
         }
 
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            DynamicIslandManager.shared.endAnalysis(success: false)
+        }
+
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -398,3 +350,4 @@ struct WebViewContainer: UIViewRepresentable {
         }
     }
 }
+

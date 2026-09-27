@@ -57,11 +57,12 @@ Native Live Activities now have an embedded WidgetKit extension, a shared
 attributes type, and the actual app logo. Compact leading shows the logo and
 trailing shows the waveform while analysis runs; completion/error use distinct
 symbols. Stale activities ask the user to reopen the app. Activities from the
-previous session are ended on the next analysis after relaunch.
+previous session are ended at app launch.
 
 PWA has no ActivityKit API. Its accessible in-app status capsule provides the
-logo and animated bars (static with Reduce Motion). The native app also retains
-this in-app feedback when Live Activities are disabled or not visible. Apple's
+logo and animated bars (static with Reduce Motion). The native app hides this
+web capsule and uses ActivityKit only; request failures or disabled activities
+are reported with the existing toast. Apple's
 Live Activity animation limits do not permit promising a continuously running
 Now Playing equalizer; the native waveform is a status symbol with a transition
 when state changes, not an audio playback session.
@@ -74,3 +75,73 @@ Run tools/sync-native.ps1 before building. The IPA verifier now requires the
 embedded extension and its assets. The unsigned CI IPA must be signed together
 with its extension before installation. Xcode compilation, physical Dynamic
 Island presentation and ProMotion frame pacing still require a Mac/iPhone.
+
+## Native system activity routing (2026-09-27)
+
+Play starts a system ActivityKit request once analysis actually begins (an empty
+editor or the API-setup chooser does not start an activity). The native bridge
+suppresses the web status capsule. PWA keeps its existing behavior. The compact
+WidgetKit presentation remains app logo leading and waveform trailing; minimal,
+expanded and Lock Screen layouts remain provided by the extension.
+
+DynamicIslandManager now owns a typed activity on the main actor, reports
+request failure/disabled authorization, checks that the signing tool preserved
+the extension, and ends immediately on completion/error or web-process teardown.
+It clears prior-session activities at launch and bounds orphaned activities with
+a 120-second in-process timeout (the AI request has a 90-second timeout). This
+timer is not guaranteed to execute while iOS suspends the app; staleDate marks
+outdated content, and restart cleanup ends abandoned activities. This does not
+add a server/APNs background progress system.
+
+Apple controls presentation: https://developer.apple.com/design/human-interface-guidelines/live-activities
+The owning app cannot force permanent foreground Dynamic Island visibility or
+the system music player's continuously animated equalizer. Do not remove PlugIns
+when signing/installing the IPA. With Live Activities enabled, validate on an
+actual Dynamic Island iPhone: start a long AI analysis, leave the app while it is
+still running, check the compact logo/waveform and expanded status, then return
+and verify completion removes the activity. Also test disabled Live Activities,
+AI failure, repeated analyses and relaunch. Local checks do not certify native
+presentation, signing or Xcode compilation.
+
+`tools/check-native-activity.cjs` passes success, code-error, unexpected-exception
+and PWA scenarios using a WKWebView bridge double in a browser. It verifies the
+Play flow sends start/stop, suppresses the native web capsule, reports disabled
+authorization and preserves PWA feedback.
+
+## Gallery import and particle background (2026-09-27)
+
+The + file button now offers text file, photo library (image/* without capture),
+and camera. Gallery and camera share a Vision import pipeline: validate file
+size/type, resize to at most 1920 pixels, send to the configured AI endpoint,
+then place extracted code into the editor with Undo support. The import sheet
+explains image transmission. The user reviews the transcription and presses
+Analyze; extraction does not invent a progress percentage or silently analyze
+unreviewed OCR. A configured image-capable model and network access are required.
+No-code, invalid-image and service-error cases preserve existing editor text.
+Controls prevent overlapping image imports/analysis. Native image extraction
+also starts/stops the existing ActivityKit bridge. PWA requests have a 90-second
+abort timeout. HEIC decoding depends on the platform; unsupported images prompt
+for JPEG/PNG rather than hanging the import.
+
+The supplied particles-bg React design is adapted to the existing dependency-free
+web architecture in sonar.js (the Sonar facade preserves existing call sites).
+It implements cyan/blue particles, pulsing radius/opacity, distance-linked lines,
+bouncing motion, desktop hover links, and bounded particle insertion on unused
+background space. Buttons and editor gestures are not intercepted. No React,
+Tailwind, shadcn or CDN is required. The old GradientWave script is no longer
+loaded or precached. The service-worker cache version is bumped for this update.
+
+Animation uses elapsed time and requestAnimationFrame, capped particle density
+and a maximum 2x backing resolution. It pauses when hidden or in Reduce Motion;
+theme changes reuse the canvas. Native/Web is synchronized from root sources.
+Stable editor/panel surfaces preserve readability over the moving background;
+the toolbar header also gets a theme-aware surface, with increased-contrast
+media-query support.
+
+Windows validation: check-gallery-particles.cjs exercises web fetch and a native
+bridge double, gallery chooser, image payload, successful import/Undo, no-code,
+server failure, invalid image, file import, both themes and Reduce Motion.
+The AI response is mocked: physical iOS photo-picker behavior, provider/model
+Vision support, actual OCR accuracy and native compilation still require device
+and service validation. The existing keyboard-layout and native activity tests
+are also run after integration.

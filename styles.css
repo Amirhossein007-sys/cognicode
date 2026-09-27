@@ -1687,3 +1687,15 @@ html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
 @media (prefers-reduced-motion: reduce) { .activity-wave i { animation: none; } }
 
 .code-area textarea::placeholder { opacity: 1; }
+
+/* Particle background adapted from particles-bg; stable reading surfaces. */
+#particles-js { background: linear-gradient(to top right, #000814, #003566, #0077b6); }
+html[data-theme="light"] #particles-js { background: linear-gradient(to top right, #e3f2fd, #90caf9, #64b5f6); }
+#particles-js::after { background: rgba(15,23,42,.40); }
+html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45); }
+.topbar { background: var(--bar-bg); }
+#sheet-import .choice { min-height: 64px; }
+@media (prefers-contrast: more) {
+  :root { --editor-bg: #0f172a; --bar-bg: #0f172a; --panel-bg: #0f172a; }
+  html[data-theme="light"] { --editor-bg: #fff; --bar-bg: #fff; --panel-bg: #fff; }
+}

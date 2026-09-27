@@ -26,7 +26,7 @@
 </head>
 <body>
 <div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/icon-180.png" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
-<div class="sonar" aria-hidden="true"><canvas></canvas></div>
+<div id="particles-js" class="sonar" aria-hidden="true"><canvas></canvas></div>
 
 <div id="app">
 
@@ -118,13 +118,14 @@
     <!-- ورودی‌های فایل مخفی و امن -->
     <input type="file" id="file-input" class="sr-only-input" accept=".js,.ts,.jsx,.tsx,.py,.swift,.html,.htm,.css,.scss,.json,.c,.cpp,.h,.cs,.java,.kt,.php,.rb,.go,.rs,.sql,.sh,.bash,.txt,text/*" hidden>
     <input type="file" id="camera-input" class="sr-only-input" accept="image/*" capture="environment" hidden>
+    <input type="file" id="gallery-input" accept="image/*" hidden>
 
     <div class="keys-scroll" id="keys-scroll">
       <!-- ابزارهای کلیپ‌بورد و فایل -->
       <button class="key sq" id="key-paste" title="چسباندن متن از کلیپ‌بورد" aria-label="چسباندن">
         <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
       </button>
-      <button class="key sq" id="key-open" title="باز کردن فایل کد از دستگاه" aria-label="باز کردن فایل کد">
+      <button class="key sq" id="key-open" title="افزودن فایل یا تصویر کد" aria-label="افزودن فایل یا تصویر کد" aria-haspopup="dialog" aria-controls="sheet-import">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
       </button>
       <button class="key sq" id="key-camera" title="اسکن تصویر کد با هوش مصنوعی" aria-label="اسکن کد با دوربین">
@@ -393,6 +394,18 @@
 </section>
 
 <!-- ═══ شیت انتخاب: هوش مصنوعی تنظیم نشده ═══ -->
+<section class="sheet" id="sheet-import" role="dialog" aria-modal="true" aria-label="افزودن کد">
+  <div class="grabber"></div>
+  <header class="sheet-head"><h2>افزودن کد</h2><button class="icon-btn" data-close aria-label="بستن">×</button></header>
+  <div class="sheet-body">
+    <p class="api-msg">تصویر برای استخراج کد به سرویس هوش مصنوعی تنظیم‌شده ارسال می‌شود. پس از ورود کد، آن را بازبینی کن و «تحلیل کد» را بزن.</p>
+    <div class="api-choices">
+      <button class="choice" id="import-file"><b>فایل کد</b><span>انتخاب فایل متنی از دستگاه</span></button>
+      <button class="choice" id="import-gallery"><b>تصویر از گالری</b><span>عکس یا اسکرین‌شات کد — نیازمند اینترنت و مدل پشتیبان تصویر</span></button>
+      <button class="choice" id="import-camera"><b>عکس با دوربین</b><span>خواندن کد از کتاب یا نمایشگر</span></button>
+    </div>
+  </div>
+</section>
 <section class="sheet" id="sheet-api" role="dialog" aria-modal="true" aria-label="انتخاب نوع بررسی">
   <div class="grabber"></div>
   <header class="sheet-head">
@@ -438,7 +451,6 @@
 
 <script src="syntax.js"></script>
 <script src="checker.js"></script>
-<script src="gradient-wave.js"></script>
 <script src="sonar.js"></script>
 <script src="app.js"></script>
 </body>
