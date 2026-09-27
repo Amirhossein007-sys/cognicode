@@ -248,7 +248,8 @@ struct WebViewContainer: UIViewRepresentable {
         /// می‌آید، به‌صورت فایل PNG موقت نوشته می‌شود و برگهٔ اشتراک iOS باز می‌شود
         /// تا «ذخیره تصویر» / «ذخیره در فایل‌ها» کار کند.
         private func presentShareSheet(pngData: Data, name: String) {
-            guard let webView = self.webView else { return }
+            // webView غیر-Optional است؛ binding شرطی روی آن کامپایل نمی‌شود.
+            let webView = self.webView
             let safeName = name.replacingOccurrences(of: "/", with: "-")
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
             do { try pngData.write(to: url, options: .atomic) } catch { return }
