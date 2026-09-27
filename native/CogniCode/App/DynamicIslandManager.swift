@@ -8,6 +8,8 @@ final class DynamicIslandManager {
     static let shared = DynamicIslandManager()
     private var currentActivity: Activity<CogniCodeActivityAttributes>?
     private var timeoutTask: Task<Void, Never>?
+    private var lastStatus = "idle"
+    private var lastError = ""
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CogniCode", category: "LiveActivity")
 
     private init() {
@@ -23,14 +25,21 @@ final class DynamicIslandManager {
     @discardableResult
     func startAnalysis(title: String) -> String {
         endAnalysis(success: false)
+        lastError = ""
         guard let plugins = Bundle.main.builtInPlugInsURL,
               FileManager.default.fileExists(atPath: plugins.appendingPathComponent("CogniCodeWidgets.appex").path) else {
             logger.error("CogniCodeWidgets.appex is missing; preserve PlugIns when signing the IPA")
-            return "unavailable"
+            lastStatus = "missing-extension"
+            return lastStatus
         }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             logger.notice("Live Activities disabled by system or user")
-            return "disabled"
+            lastStatus = "disabled"
+            return lastStatus
+        }
+        guard UIApplication.shared.applicationState == .active else {
+            lastStatus = "not-foreground"
+            return lastStatus
         }
         do {
             let activity = try Activity<CogniCodeActivityAttributes>.request(
@@ -50,11 +59,26 @@ final class DynamicIslandManager {
                 guard let self, self.currentActivity?.id == activity.id else { return }
                 self.endAnalysis(success: false)
             }
-            return "started"
+            lastStatus = "started"
+            return lastStatus
         } catch {
             logger.error("Live Activity request failed: \(String(describing: error), privacy: .public)")
-            return "unavailable"
+            let failure = error as NSError
+            lastError = "\(failure.domain) (\(failure.code)): \(failure.localizedDescription)"
+            lastStatus = "unavailable"
+            return lastStatus
         }
+    }
+
+    func diagnostics() -> [String: Any] {
+        let extensionURL = Bundle.main.builtInPlugInsURL?.appendingPathComponent("CogniCodeWidgets.appex")
+        return [
+            "status": lastStatus,
+            "error": lastError,
+            "enabled": ActivityAuthorizationInfo().areActivitiesEnabled,
+            "extensionPresent": extensionURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false,
+            "activeCount": Activity<CogniCodeActivityAttributes>.activities.filter { $0.activityState == .active }.count
+        ]
     }
 
     func endAnalysis(success: Bool = true) {
@@ -62,6 +86,7 @@ final class DynamicIslandManager {
         timeoutTask = nil
         guard let activity = currentActivity else { return }
         currentActivity = nil
+        lastStatus = "ended"
         let state = CogniCodeActivityAttributes.ContentState(
             status: success ? "بررسی کد تمام شد" : "بررسی متوقف شد یا نیاز به توجه دارد",
             isAnalyzing: false,

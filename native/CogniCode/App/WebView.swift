@@ -268,6 +268,13 @@ struct WebViewContainer: UIViewRepresentable {
                             let state = (dict["state"] as? String) ?? "done"
                             DynamicIslandManager.shared.endAnalysis(success: state != "error")
                         }
+                        if let data = try? JSONSerialization.data(withJSONObject: DynamicIslandManager.shared.diagnostics()),
+                           let json = String(data: data, encoding: .utf8) {
+                            self.webView.evaluateJavaScript(
+                                "window.__onNativeActivityDiagnostics && window.__onNativeActivityDiagnostics(\(json));",
+                                completionHandler: nil
+                            )
+                        }
                     }
                 }
                 return

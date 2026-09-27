@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v9-particles-gallery-2026';
+var CACHE = 'cognicode-v10-glass-activity-2026';
 var ASSETS = [
   './',
   './index.html',
@@ -55,5 +55,6 @@ self.addEventListener('fetch', function (e) {
     })
   );
 });
+
 
 

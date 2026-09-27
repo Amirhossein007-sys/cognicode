@@ -145,3 +145,31 @@ The AI response is mocked: physical iOS photo-picker behavior, provider/model
 Vision support, actual OCR accuracy and native compilation still require device
 and service validation. The existing keyboard-layout and native activity tests
 are also run after integration.
+
+## Glass surfaces and native activity diagnostics (2026-09-27)
+
+Editor, editing toolbar and bottom controls now use translucent theme-specific
+surfaces with a restrained 5px blur. Secondary labels/line numbers are strengthened;
+the Play gradient is darkened to support its white label. Increased contrast and
+Reduce Transparency use opaque surfaces. Both web/native resources are synced.
+
+Native ActivityKit diagnostics are now persistent in Settings: extension presence,
+user/system authorization, last request result, active activity count and the
+actual NSError domain/code/message. Missing extension, disabled permission and
+non-foreground requests are distinguished. Successful request acceptance is not
+reported as proof of Dynamic Island rendering. The panel is native-only, and
+native ActivityKit continues to end when analysis completes without a web capsule.
+
+Inspected the local downloaded unsigned IPA in Downloads/ipa's: the WidgetKit
+extension, its Assets.car, correct parent/extension identifiers and the main
+NSSupportsLiveActivities key are present. This does not prove the sideloaded copy
+retains the extension or that iOS permits/displays it. User has not yet tested
+visibility outside the owning app. There is no verified on-device root cause or
+confirmed rendering fix. iOS controls foreground/compact presentation; no public
+API is used to force a permanent music-style island inside the owning app.
+
+Validation: check-glass.cjs verifies translucent surfaces in both themes, the
+increased-contrast fallback, native diagnostics rendering and PWA isolation;
+check-native-activity.cjs covers analysis success/error/exception and PWA behavior;
+check-layout.cjs covers six screen configurations and keyboard overlay behavior.
+Native compilation and physical-device ActivityKit rendering remain unverified.

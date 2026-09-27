@@ -1699,3 +1699,34 @@ html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45
   :root { --editor-bg: #0f172a; --bar-bg: #0f172a; --panel-bg: #0f172a; }
   html[data-theme="light"] { --editor-bg: #fff; --bar-bg: #fff; --panel-bg: #fff; }
 }
+
+/* Translucent reading surfaces: retain particles through a restrained tint. */
+:root {
+  --editor-bg: rgba(10, 22, 40, .46);
+  --bar-bg: rgba(10, 22, 40, .42);
+  --txt3: #c0cfdf;
+  --c-com: #b7c9dc; --ph: #b7c9dc; --gutter-txt: #b7c9dc;
+}
+html[data-theme="light"] {
+  --editor-bg: rgba(255, 255, 255, .48);
+  --bar-bg: rgba(255, 255, 255, .46);
+  --txt3: #334155;
+  --c-com: #166534; --ph: #475569; --gutter-txt: #475569;
+}
+.editor, .keys, .bottom {
+  -webkit-backdrop-filter: blur(5px) saturate(110%);
+  backdrop-filter: blur(5px) saturate(110%);
+  border-color: rgba(186, 230, 253, .24);
+}
+html[data-theme="light"] .editor,
+html[data-theme="light"] .keys,
+html[data-theme="light"] .bottom { border-color: rgba(30, 64, 100, .20); }
+#native-activity-details { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--txt2); font-size: 12px; line-height: 1.9; }
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  :root { --editor-bg: #0f172a; --bar-bg: #0f172a; }
+  html[data-theme="light"] { --editor-bg: #f8fafc; --bar-bg: #f8fafc; }
+  .editor, .keys, .bottom { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* Keep the white Play label legible across its full translucent gradient. */
+.play { background: linear-gradient(120deg, rgba(7,89,133,.90), rgba(55,48,163,.90), rgba(91,33,182,.90)); }
+.play::before { background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,.10) 50%, transparent 68%); }
