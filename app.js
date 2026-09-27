@@ -21,22 +21,41 @@ try {
   var FA = '۰۱۲۳۴۵۶۷۸۹';
   function fa(x) { return String(x).replace(/[0-9]/g, function (d) { return FA[+d]; }); }
   function esc(s) { return Syntax.esc(String(s == null ? '' : s)); }
+  // کلاس رنگ نقطهٔ زبان — به‌جای style درون‌خطی که CSP (style-src بدون unsafe-inline) رد می‌کند
+  function ldClass(color) { return 'ld-' + String(color || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase(); }
   function countLines(s) { return s === '' ? 1 : s.split('\n').length; }
 
   /* ── وضعیت و ذخیره‌سازی ── */
   var LS_SET = 'cognicode.settings.v1';
   var LS_HIST = 'cognicode.history.v1';
-  var settings = { base: 'https://api.gapgpt.app/v1', key: '', model: 'gpt-4o-mini', hist: true, proxy: '' };
+  var LS_MIG = 'cognicode.migration.v2';
+  var DEFAULT_BASE = 'https://api.gapgpt.app/v1';
+  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-4o-mini', hist: true, proxy: '' };
   var history = [];
+  // مهاجرت نقطه‌ای تنظیمات قدیمی — فقط یک‌بار در عمر نصب اجرا می‌شود تا انتخاب
+  // بعدی خود کاربر (مثلاً OpenAI) در اجراهای بعدی بازنویسی نشود
   try {
     var savedSet = JSON.parse(localStorage.getItem(LS_SET) || '{}');
-    if (savedSet.base && (savedSet.base.indexOf('bigmodel') >= 0 || savedSet.base === 'https://api.openai.com/v1')) {
-      savedSet.base = 'https://api.gapgpt.app/v1';
-    }
-    if (savedSet.model === 'glm-4-flash') {
-      savedSet.model = 'gpt-4o-mini';
+    if (!localStorage.getItem(LS_MIG)) {
+      var migrated = false;
+      if (savedSet.base && (savedSet.base.indexOf('bigmodel') >= 0 || savedSet.base === 'https://api.openai.com/v1')) {
+        savedSet.base = DEFAULT_BASE;
+        migrated = true;
+      }
+      if (savedSet.model === 'glm-4-flash') {
+        savedSet.model = 'gpt-4o-mini';
+        migrated = true;
+      }
+      // نتیجهٔ مهاجرت باید فوری ذخیره شود وگرنه بوت بعدی مقدار قدیمی را برمی‌گرداند
+      if (migrated) {
+        try { localStorage.setItem(LS_SET, JSON.stringify(savedSet)); } catch (e2) {}
+      }
+      try { localStorage.setItem(LS_MIG, '1'); } catch (e2) {}
     }
     for (var k in savedSet) if (k in settings) settings[k] = savedSet[k];
+  } catch (e) {}
+  // تاریخچه مستقل از تنظیمات پارس می‌شود تا خراب‌بودن یکی، دیگری را پاک نکند
+  try {
     history = JSON.parse(localStorage.getItem(LS_HIST) || '[]');
     if (!Array.isArray(history)) history = [];
   } catch (e) { history = []; }
@@ -119,11 +138,17 @@ try {
     var panel = $('native-activity-settings');
     panel.hidden = false;
     var states = { idle: 'هنوز درخواستی ثبت نشده', started: 'درخواست شروع توسط iOS پذیرفته شد', ended: 'عملیات پایان یافته', disabled: 'Live Activities غیرفعال است', 'missing-extension': 'افزونه در IPA نصب‌شده وجود ندارد', 'not-foreground': 'برنامه هنگام درخواست فعال نبود', unavailable: 'iOS درخواست را رد کرد' };
+    states['background-expired'] = 'زمان اجرای پس‌زمینه تمام شد؛ برای ادامه برنامه را باز کن';
+    states['network-completed'] = 'درخواست شبکه در پس‌زمینه تمام شد؛ نتیجه در برنامه قابل مشاهده است';
+    states.timeout = 'مهلت بررسی تمام شد';
     $('native-activity-details').textContent =
       (states[report.status] || report.status) + '\n' +
       'افزونه: ' + (report.extensionPresent ? 'موجود' : 'حذف‌شده یا ناموجود') + '\n' +
       'مجوز سیستم: ' + (report.enabled ? 'فعال' : 'غیرفعال') + '\n' +
-      'فعالیت‌های فعال: ' + report.activeCount + (report.error ? '\n' + report.error : '');
+      'فعالیت‌های فعال: ' + report.activeCount +
+      (report.activityState ? '\nوضعیت ActivityKit: ' + report.activityState : '') +
+      (report.build ? '\nنسخهٔ ساخت: ' + report.build : '') +
+      (report.error ? '\n' + report.error : '');
   };
   function refreshNativeActivity() {
     var bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dynamicIslandBridge;
@@ -138,7 +163,7 @@ try {
   /* ── ارجاع به عناصر ── */
   var editorEl = $('editor'), zoomHud = $('zoom-hud'), problemsScroll = $('problems-scroll');
   var ta = $('code'), hl = $('highlight'), hlCode = $('hl-code'), gutter = $('gutter');
-  var errOv = $('err-overlay'), gutErrs = $('gutter-errs'), curLineEl = $('cur-line');
+  var errOv = $('err-overlay'), gutErrs = $('gutter-errs');
   var codeArea = $('code-area'), scanline = $('scanline');
   var stLang = $('st-lang'), stDot = $('st-dot'), stLangTxt = $('st-lang-txt'), stPos = $('st-pos'), stLines = $('st-lines');
   var stErr = $('st-err'), stAi = $('st-ai'), aiDot = document.querySelector('#st-ai .ai-dot'), stAiTxt = $('st-ai-txt');
@@ -166,8 +191,8 @@ try {
   var langMode = 'auto';      // 'auto' یا کلید زبان
   var langKey = 'text';
   var lineHeight = 25;
+  var editorPadTop = 12;      // باید با padding-top واقعی pre/textarea یکی بماند
   var analyzing = false;
-  var analyzed = true;
   var currentErrors = [];
   var currentMd = '';
 
@@ -414,6 +439,7 @@ try {
   function recomputeLineHeight() {
     var lh = parseFloat(getComputedStyle(hl).lineHeight);
     lineHeight = lh > 8 ? lh : 25;
+    editorPadTop = parseFloat(getComputedStyle(hl).paddingTop) || 0;
     document.documentElement.style.setProperty('--lh', lineHeight + 'px');
     applyErrorPositions();
     updateCaretLine();
@@ -431,19 +457,24 @@ try {
   }
   function updateEditor() {
     var code = ta.value;
-    var k = langMode === 'auto' ? Syntax.detect(code) : langMode;
-    if (k !== langKey) setLang(k);
     stLines.textContent = fa(countLines(code)) + ' خط';
     clearErrors();
     updateCaretLine();
     clearTimeout(hlTimer);
-    hlTimer = setTimeout(renderHighlight, 80);
+    // detect() روی هر کلید سنگین است (۳۴ رجکس روی کل متن) — داخل همان دیبانس
+    // ۸۰ms هایلایت اجرا می‌شود تا تایپ روان بماند
+    hlTimer = setTimeout(function () {
+      var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
+      if (k !== langKey) setLang(k);
+      renderHighlight();
+    }, 80);
   }
 
   function syncScroll() {
     hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
     gutter.scrollTop = ta.scrollTop;
     errOv.scrollTop = ta.scrollTop;
+    gutErrs.scrollTop = ta.scrollTop;
   }
 
   function updateCaretLine() {
@@ -453,7 +484,6 @@ try {
     for (var i = 0; i < pos; i++) { if (val.charCodeAt(i) === 10) { ln++; lastNl = i; } }
     var col = pos - lastNl;
     stPos.textContent = fa(ln) + ':' + fa(col);
-    if (curLineEl) curLineEl.style.display = 'none';
   }
 
   /* ── سیستم تاریخچه و واگرد / انجام دوباره اختصاصی (Undo / Redo) ── */
@@ -559,7 +589,6 @@ try {
     isTypingSession = false;
     if (snap.langMode) langMode = snap.langMode;
     if (snap.lang) setLang(snap.lang);
-    analyzed = false;
     updateEditor();
     var s = Math.min(ta.value.length, snap.start || 0);
     var e = Math.min(ta.value.length, snap.end || s);
@@ -849,7 +878,6 @@ try {
           langMode = 'auto';
         }
 
-        analyzed = false;
         updateEditor();
         updateUndoButtons();
         ta.scrollTop = 0;
@@ -902,7 +930,6 @@ try {
       lastSnapshotValue = ta.value;
       lastSnapshot = getEditorSnapshot();
       langMode = 'auto';
-      analyzed = false;
       updateEditor();
       updateUndoButtons();
       ta.scrollTop = 0;
@@ -921,7 +948,6 @@ try {
       ta.value = '';
       lastSnapshotValue = '';
       lastSnapshot = getEditorSnapshot();
-      analyzed = true;
       updateEditor();
       updateUndoButtons();
       toast('ادیتور پاک شد (با دکمه واگرد قابل بازیابی است)');
@@ -980,7 +1006,6 @@ try {
       lastSnapshotValue = extracted;
       lastSnapshot = getEditorSnapshot();
       langMode = 'auto';
-      analyzed = false;
       updateEditor();
       updateUndoButtons();
       ta.scrollTop = 0;
@@ -1226,7 +1251,6 @@ try {
       ta.value = lastFixedCode;
       lastSnapshotValue = lastFixedCode;
       lastSnapshot = getEditorSnapshot();
-      analyzed = false;
       updateEditor();
       updateUndoButtons();
       hideProblems();
@@ -1244,7 +1268,7 @@ try {
   }
 
   function jumpToLine(ln) {
-    var target = Math.max(0, (ln - 3) * lineHeight);
+    var target = Math.max(0, (ln - 3) * lineHeight + editorPadTop);
     ta.scrollTop = target;
     syncScroll();
     var f = document.createElement('div');
@@ -1459,11 +1483,11 @@ try {
   function nativeSend(url, key, bodyJson) {
     return new Promise(function (resolve, reject) {
       var id = 'r' + (++NATIVE_ID) + '_' + Date.now();
-      nativePending[id] = { resolve: resolve, reject: reject };
-      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson });
-      setTimeout(function () {
+      var timer = setTimeout(function () {
         if (nativePending[id]) { delete nativePending[id]; reject(netErr()); }
       }, 90000);
+      nativePending[id] = { resolve: resolve, reject: reject, timer: timer };
+      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson });
     });
   }
   window.__nativeAI = function (id, ok, status, text) {
@@ -1476,6 +1500,7 @@ try {
     var p = nativePending[id];
     if (!p) return;
     delete nativePending[id];
+    clearTimeout(p.timer);
     if (ok) { p.resolve({ status: status, text: text }); }
     else {
       var e = new Error(text || ('HTTP ' + status));
@@ -1485,7 +1510,7 @@ try {
   };
 
   async function chat(messages, maxTokens) {
-    var base = (settings.base || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    var base = (settings.base || DEFAULT_BASE).replace(/\/+$/, '');
     var url = /\/chat\/completions\/?$/i.test(base) ? base : (base + '/chat/completions');
     var px = (settings.proxy || '').trim();
     if (px && !chat._proxyWarned) {
@@ -1528,7 +1553,12 @@ try {
         });
         status = res.status;
         text = await res.text();
-      } catch (e) { throw netErr(); }
+      } catch (e) {
+        // دلیل واقعی شکست حفظ شود: تایم‌اوت با خطای شبکهٔ عمومی یکسان نیست
+        throw (e && e.name === 'AbortError')
+          ? new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۹۰ ثانیه‌ای)')
+          : netErr();
+      }
       finally { clearTimeout(requestTimeout); }
     }
 
@@ -1648,7 +1678,11 @@ try {
     if (analyzing || scanningImage) return;
     var code = ta.value;
     if (!code.trim()) { toast('اول چند خط کد بنویس ✍️'); return; }
-    analyzing = true; analyzed = false;
+    analyzing = true;
+    var stopSent = false;
+    function stopOnce(state) {
+      if (!stopSent) { stopSent = true; DynamicIsland.stop(state); }
+    }
     try {
     DynamicIsland.start('تحلیل هوشمند کد', useAI ? 'در حال ارتباط با هوش مصنوعی…' : 'در حال بررسی ساختار کد…');
     if (window.Sonar && window.Sonar.setPulse) {
@@ -1690,6 +1724,14 @@ try {
     var remain = 1200 - (Date.now() - t0);
     if (remain > 0) await new Promise(function (r) { setTimeout(r, remain); });
 
+    // اگر کد حین تحلیل تغییر کند، اعمال نتیجه روی شمارهٔ خطوط فعلی نادرست است —
+    // مثل مسیر importCodeImage نتیجه دور ریخته می‌شود و UI با finally ریست می‌گردد
+    if (ta.value !== code) {
+      stopOnce('done');
+      toast('کد در حین تحلیل تغییر کرد؛ نتیجهٔ این نسخه اعمال نشد — دوباره تحلیل کن', 4200);
+      return;
+    }
+
     scanline.hidden = true;
     playBtn.classList.remove('loading');
     playLabel.textContent = 'تحلیل کد';
@@ -1699,11 +1741,10 @@ try {
     var aiErrList = (ai && !ai.raw) ? normalizeErrors(ai.errors) : [];
     var all = localErrs.concat(aiErrList).concat(warns);
     var hard = all.filter(function (x) { return x.severity !== 'warning'; });
-    analyzed = true;
     setErrors(all);
 
     if (hard.length > 0) {
-      DynamicIsland.stop('error');
+      stopOnce('error');
       if (window.Sonar && window.Sonar.setPulse) {
         window.Sonar.setPulse('error');
       }
@@ -1719,7 +1760,7 @@ try {
       return;
     }
 
-    DynamicIsland.stop(aiErr ? 'error' : 'done');
+    stopOnce(aiErr ? 'error' : 'done');
     if (window.Sonar && window.Sonar.setPulse) {
       window.Sonar.setPulse('healthy');
     }
@@ -1742,7 +1783,7 @@ try {
     renderResult(md, mode, warns.length > 0, ai);
     addHistory(lastSummary(md, ai), 'ok');
     } catch (error) {
-      DynamicIsland.stop('error');
+      stopOnce('error');
       stopLoading();
       toast('بررسی کامل نشد؛ دوباره تلاش کنید');
       console.error('Analysis failed', error);
@@ -2076,7 +2117,7 @@ try {
       var b = document.createElement('button');
       b.className = 'hist';
       b.innerHTML =
-        '<i class="lang-dot" style="background:' + L.color + ';color:' + L.color + '"></i>' +
+        '<i class="lang-dot ' + ldClass(L.color) + '"></i>' +
         '<span class="hist-main">' +
         '<span class="hist-top"><span class="hist-name">' + esc(h.name) + '</span>' +
         (h.type === 'err' ? '<span class="hist-badge">خطادار</span>' : '') +
@@ -2098,7 +2139,6 @@ try {
         lastSnapshotValue = ta.value;
         lastSnapshot = getEditorSnapshot();
         langMode = 'auto';
-        analyzed = false;
         updateEditor();
         updateUndoButtons();
         ta.scrollTop = 0; syncScroll();
@@ -2122,12 +2162,11 @@ try {
     langListEl.innerHTML = '';
     var auto = document.createElement('button');
     auto.className = 'lang-item' + (langMode === 'auto' ? ' sel' : '');
-    auto.innerHTML = '<span class="lang-dot" style="background:#7a5cff;color:#7a5cff"></span>تشخیص خودکار' +
+    auto.innerHTML = '<span class="lang-dot ld-7a5cff"></span>تشخیص خودکار' +
       (langMode === 'auto' ? '<b class="tick">✓</b>' : '');
     auto.addEventListener('click', function () {
       haptic('selection');
       langMode = 'auto';
-      analyzed = true;
       updateEditor();
       clearErrors();
       closeSheets();
@@ -2139,13 +2178,12 @@ try {
       var L = Syntax.LANGS[k];
       var b = document.createElement('button');
       b.className = 'lang-item' + (langMode === k ? ' sel' : '');
-      b.innerHTML = '<span class="lang-dot" style="background:' + L.color + ';color:' + L.color + '"></span>' +
+      b.innerHTML = '<span class="lang-dot ' + ldClass(L.color) + '"></span>' +
         L.label + '<span class="ext">.' + L.ext + '</span>' +
         (langMode === k ? '<b class="tick">✓</b>' : '');
       b.addEventListener('click', function () {
         haptic('selection');
         langMode = k;
-        analyzed = true;
         updateEditor();
         clearErrors();
         closeSheets();
@@ -2449,7 +2487,6 @@ try {
   }
 
   /* ── شروع ── */
-  try { errOv.appendChild(curLineEl); } catch (e) {}
   setEditorZoom(editorFontSize, false);
   recomputeLineHeight();
   updateAiStatus();

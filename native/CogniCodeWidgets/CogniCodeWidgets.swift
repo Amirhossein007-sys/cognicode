@@ -1,6 +1,25 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import UIKit
+
+// Archive only small, presentation-sized images in the remote widget view.
+// Decode/rasterize once per process, never on each body evaluation.
+private enum ActivityArtwork {
+    static let minimal = thumbnail(size: 20)
+    static let compact = thumbnail(size: 24)
+    static let expanded = thumbnail(size: 32)
+    static let lockScreen = thumbnail(size: 40)
+
+    private static func thumbnail(size: CGFloat) -> UIImage? {
+        guard let source = UIImage(named: "ActivityLogo") else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: format).image { _ in
+            source.draw(in: CGRect(x: 0, y: 0, width: size, height: size))
+        }
+    }
+}
 
 @main
 struct CogniCodeWidgetsBundle: WidgetBundle {
@@ -10,12 +29,16 @@ struct CogniCodeWidgetsBundle: WidgetBundle {
 private struct ActivityLogo: View {
     var size: CGFloat = 24
     var body: some View {
-        Image("ActivityLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.25))
-            .accessibilityLabel("کوگنی کد")
+        let artwork = size > 32 ? ActivityArtwork.lockScreen : (size > 24 ? ActivityArtwork.expanded : (size >= 24 ? ActivityArtwork.compact : ActivityArtwork.minimal))
+        Group {
+            if let artwork {
+                Image(uiImage: artwork).renderingMode(.original).resizable().scaledToFit()
+            } else {
+                Image(systemName: "curlybraces.square.fill").foregroundStyle(.cyan)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("کوگنی کد")
     }
 }
 
@@ -27,7 +50,6 @@ private struct AnalysisIndicator: View {
         Image(systemName: state.isAnalyzing ? "waveform" : (state.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill"))
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(state.isAnalyzing ? Color.cyan : (state.failed ? Color.orange : Color.green))
-            .contentTransition(.symbolEffect(.replace))
             .accessibilityLabel(state.isAnalyzing ? "در حال بررسی کد" : (state.failed ? "نیاز به توجه" : "بررسی تمام شد"))
     }
 }
@@ -55,11 +77,14 @@ struct CogniCodeLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) { ActivityLogo(size: 32) }
                 DynamicIslandExpandedRegion(.trailing) { AnalysisIndicator(state: context.state) }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.isStale ? "برای مشاهدهٔ نتیجه برنامه را باز کنید" : context.state.status)
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .padding(.bottom, 6)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("کوگنی کد").font(.headline)
+                        Text(context.isStale ? "برای مشاهدهٔ نتیجه برنامه را باز کنید" : context.state.status)
+                            .font(.subheadline)
+                            .lineLimit(2)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.bottom, 6)
                 }
             } compactLeading: {
                 ActivityLogo()

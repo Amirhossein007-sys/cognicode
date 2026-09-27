@@ -1,8 +1,10 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v10-glass-activity-2026';
-var ASSETS = [
+var CACHE = 'cognicode-v12-fixes-2026';
+
+/* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
+var PRECACHE = [
   './',
   './index.html',
   './styles.css',
@@ -12,8 +14,6 @@ var ASSETS = [
   './app.js',
   './manifest.webmanifest',
   './apple-touch-icon.png',
-  './apple-touch-icon-precomposed.png',
-  './favicon.png',
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -23,9 +23,18 @@ var ASSETS = [
   './fonts/Vazirmatn-ExtraBold.woff2'
 ];
 
+/* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
+   هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
+var FRESH_NAMES = ['index.html', 'styles.css', 'syntax.js', 'checker.js', 'sonar.js', 'app.js', 'manifest.webmanifest'];
+
+function isFresh(url) {
+  var name = url.pathname.split('/').pop();
+  return url.pathname.endsWith('/') || FRESH_NAMES.indexOf(name) >= 0;
+}
+
 self.addEventListener('install', function (e) {
   e.waitUntil(
-    caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); })
+    caches.open(CACHE).then(function (c) { return c.addAll(PRECACHE); }).then(function () { return self.skipWaiting(); })
   );
 });
 
@@ -44,6 +53,20 @@ self.addEventListener('fetch', function (e) {
     e.respondWith(fetch(e.request).catch(function () { return caches.match('./index.html'); }));
     return;
   }
+  if (isFresh(url)) {
+    // شبکه اول؛ فقط وقتی آفلاین بود به کش برمی‌گردیم
+    e.respondWith(
+      fetch(e.request).then(function (res) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        return res;
+      }).catch(function () {
+        return caches.match(e.request).then(function (hit) { return hit || Response.error(); });
+      })
+    );
+    return;
+  }
+  // فونت/آیکون: کش اول، در نبودش شبکه + ذخیره برای دفعات بعد
   e.respondWith(
     caches.match(e.request).then(function (hit) {
       if (hit) return hit;
@@ -55,6 +78,3 @@ self.addEventListener('fetch', function (e) {
     })
   );
 });
-
-
-

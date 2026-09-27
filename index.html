@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
+<!-- CSP: file: برای اجرای داخل WKWebView نیتیو لازم است؛ connect-src https: برای
+     endpoint قابل‌تنظیم کاربر عمداً باز است. style-src بدون unsafe-inline است —
+     هر استایل پویا باید با کلاس (مثل .ld-*) اعمال شود، نه style درون‌خطی -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; font-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'self' https:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f172a">
@@ -12,16 +15,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="CogniCode">
+<meta name="apple-mobile-web-app-title" content="کوگنی کد">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
-<link rel="apple-touch-icon-precomposed" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+<link rel="preload" href="fonts/Vazirmatn-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -62,7 +65,6 @@
         <div class="gutter-errs" id="gutter-errs" aria-hidden="true"></div>
       </div>
       <div class="code-area" id="code-area">
-        <div class="cur-line" id="cur-line" aria-hidden="true"></div>
         <div class="err-overlay" id="err-overlay" aria-hidden="true"></div>
         <pre id="highlight" aria-hidden="true"><code id="hl-code"></code></pre>
         <textarea id="code" dir="ltr" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" wrap="off" enterkeyhint="return" placeholder="کدت را اینجا بنویس یا بچسبان..."></textarea>
@@ -293,7 +295,7 @@
   <div class="sheet-body social-card-body">
     <p class="social-hint">تصویر آماده برای اشتراک‌گذاری در لینکدین، توییتر و تلگرام با بالاترین وضوح</p>
     <div class="social-preview-wrap">
-      <canvas id="social-canvas" width="1200" height="720"></canvas>
+      <canvas id="social-canvas" width="1200" height="720" role="img" aria-label="پیش‌نمایش کارت اشتراک‌گذاری کد"></canvas>
     </div>
     <div class="social-actions-bar">
       <button class="social-btn main" id="btn-social-download">

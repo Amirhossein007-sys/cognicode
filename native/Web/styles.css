@@ -247,7 +247,7 @@ html[data-theme="light"] .zoom-hud {
   user-select: none;
   -webkit-user-select: none;
 }
-.gutter-errs { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.gutter-errs { position: absolute; inset: 0; overflow: hidden; pointer-events: none; padding-top: 12px; /* برابر padding-top ردیف اعداد خط */ }
 .gutter-errs i {
   position: absolute; left: 6px; width: 4.5px; height: 4.5px; border-radius: 50%;
   transform: translateY(calc(var(--lh) / 2 - 2px));
@@ -296,9 +296,9 @@ html[data-theme="light"] .zoom-hud {
 }
 .code-area textarea::selection { background: var(--sel); }
 
-/* لایه‌های خط جاری و خطاها */
-.cur-line, .err-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-.cur-line { display: none !important; }
+/* لایهٔ خطاها — padding-top باید برابر padding-top متن (۱۲px) بماند تا نوار خطاها
+   دقیقاً روی خط خودشان بنشینند */
+.err-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; padding-top: 12px; }
 .err-overlay { z-index: 1; }
 .err-line {
   position: absolute; left: 0; right: 0; height: var(--lh);
@@ -416,7 +416,6 @@ html[data-theme="light"] .zoom-hud {
   width: 14px;
   height: 14px;
 }
-.keys-scroll::-webkit-scrollbar { display: none; }
 .key {
   flex: 0 0 auto;
   min-width: 32px;
@@ -775,8 +774,6 @@ html[data-theme="light"] .mf-desc {
 }
 
 /* سربرگ نتیجه */
-.res-meta { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
-/* سربرگ نتیجه با تگ‌های کپسولی (Pill Badges) */
 .res-meta { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .verdict {
   font-size: 12px; font-weight: 800; padding: 5px 13px; border-radius: 9999px;
@@ -1143,7 +1140,11 @@ html.screen-compact .bottom {
   margin-bottom: max(6px, env(safe-area-inset-bottom));
 }
 @media (prefers-reduced-motion: reduce) {
-  .aurora i, .play::before, .play, .scanline, .pulse-logo, .sk i { animation: none !important; }
+  /* همهٔ انیمیشن‌های بی‌نهایت و ورودی‌ها خاموش می‌شوند؛ اسپینرهای وضعیت (rot)
+     عمداً می‌مانند چون تنها بازخورد «در حال کار» بودن هستند */
+  .aurora i, .play::before, .play, .scanline, .pulse-logo, .sk i,
+  .key.arm, .icon-btn.arm, .magic-fix-card, .mf-sparkle,
+  .ai-dot.testing, .ripple-fx, .md > * { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
 
@@ -1251,6 +1252,10 @@ html[data-theme="light"] .p-count { background: rgba(220, 38, 38, 0.10); color: 
 html[data-theme="light"] .p-item.error .sev { color: #b91c1c; }
 html[data-theme="light"] .p-item.warning .sev { color: #92400e; }
 html[data-theme="light"] .p-close:active, html[data-theme="light"] .hist-del:active { color: #b91c1c; }
+/* حفره‌های کنتراست تم روشن: در حالت تاریک روی زمینهٔ تیره خوانا بودند، اینجا بازنویسی می‌شوند */
+html[data-theme="light"] .lang-item.sel { color: #0f172a; background: rgba(2, 132, 199, 0.12); }
+html[data-theme="light"] .lang-item:active { background: rgba(15, 23, 42, 0.08); }
+html[data-theme="light"] .key.danger { color: #b91c1c; }
 html[data-theme="light"] .mode-badge.ai { color: #0369a1; background: rgba(2, 132, 199, 0.10); border-color: rgba(2, 132, 199, 0.30); }
 html[data-theme="light"] .md h2 {
   background: linear-gradient(90deg, #0284c7, #2563eb);
@@ -1708,8 +1713,10 @@ html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45
   --c-com: #b7c9dc; --ph: #b7c9dc; --gutter-txt: #b7c9dc;
 }
 html[data-theme="light"] {
-  --editor-bg: rgba(255, 255, 255, .48);
-  --bar-bg: rgba(255, 255, 255, .46);
+  --editor-bg: rgba(255, 255, 255, .22);
+  --bar-bg: rgba(255, 255, 255, .24);
+  --c-str: #991b1b; --c-num: #065f46; --c-type: #155e75;
+  --c-fn: #854d0e; --c-attr: #075985; --c-prop: #075985;
   --txt3: #334155;
   --c-com: #166534; --ph: #475569; --gutter-txt: #475569;
 }
@@ -1720,13 +1727,61 @@ html[data-theme="light"] {
 }
 html[data-theme="light"] .editor,
 html[data-theme="light"] .keys,
-html[data-theme="light"] .bottom { border-color: rgba(30, 64, 100, .20); }
+html[data-theme="light"] .bottom {
+  border-color: rgba(30, 64, 100, .24);
+  -webkit-backdrop-filter: blur(2px) saturate(115%);
+  backdrop-filter: blur(2px) saturate(115%);
+}
 #native-activity-details { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--txt2); font-size: 12px; line-height: 1.9; }
 @media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
   :root { --editor-bg: #0f172a; --bar-bg: #0f172a; }
   html[data-theme="light"] { --editor-bg: #f8fafc; --bar-bg: #f8fafc; }
-  .editor, .keys, .bottom { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .editor, .keys, .bottom,
+  html[data-theme="light"] .editor,
+  html[data-theme="light"] .keys,
+  html[data-theme="light"] .bottom { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 /* Keep the white Play label legible across its full translucent gradient. */
 .play { background: linear-gradient(120deg, rgba(7,89,133,.90), rgba(55,48,163,.90), rgba(91,33,182,.90)); }
 .play::before { background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,.10) 50%, transparent 68%); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   رنگ نقطه‌های زبان به‌صورت کلاس — جایگزین style درون‌خطی که CSP
+   (style-src بدون unsafe-inline) رد می‌کند. تولیدشده از LANGS در syntax.js.
+   ═══════════════════════════════════════════════════════════════════ */
+.ld-7a5cff { background:#7a5cff; color:#7a5cff; }
+.ld-f05138 { background:#F05138; color:#F05138; }
+.ld-3572a5 { background:#3572A5; color:#3572A5; }
+.ld-f1e05a { background:#f1e05a; color:#f1e05a; }
+.ld-3178c6 { background:#3178c6; color:#3178c6; }
+.ld-b07219 { background:#b07219; color:#b07219; }
+.ld-9babca { background:#9babca; color:#9babca; }
+.ld-f34b7d { background:#f34b7d; color:#f34b7d; }
+.ld-178600 { background:#178600; color:#178600; }
+.ld-00add8 { background:#00ADD8; color:#00ADD8; }
+.ld-dea584 { background:#dea584; color:#dea584; }
+.ld-4f5d95 { background:#4F5D95; color:#4F5D95; }
+.ld-701516 { background:#701516; color:#701516; }
+.ld-a97bff { background:#A97BFF; color:#A97BFF; }
+.ld-00b4ab { background:#00B4AB; color:#00B4AB; }
+.ld-e34c26 { background:#e34c26; color:#e34c26; }
+.ld-563d7c { background:#563d7c; color:#563d7c; }
+.ld-e38c00 { background:#e38c00; color:#e38c00; }
+.ld-cbcb41 { background:#cbcb41; color:#cbcb41; }
+.ld-89e051 { background:#89e051; color:#89e051; }
+.ld-438eff { background:#438eff; color:#438eff; }
+.ld-c22d40 { background:#c22d40; color:#c22d40; }
+.ld-0298c3 { background:#0298c3; color:#0298c3; }
+.ld-5c7fbf { background:#5c7fbf; color:#5c7fbf; }
+.ld-198ce7 { background:#198CE7; color:#198CE7; }
+.ld-a270ba { background:#a270ba; color:#a270ba; }
+.ld-8f7dff { background:#8f7dff; color:#8f7dff; }
+.ld-a074c4 { background:#a074c4; color:#a074c4; }
+.ld-e16737 { background:#e16737; color:#e16737; }
+.ld-4298b8 { background:#4298b8; color:#4298b8; }
+.ld-378bba { background:#378BBA; color:#378BBA; }
+.ld-945db7 { background:#945db7; color:#945db7; }
+.ld-6d9cc4 { background:#6d9cc4; color:#6d9cc4; }
+.ld-9aa7bd { background:#9aa7bd; color:#9aa7bd; }
+.ld-b0916a { background:#b0916a; color:#b0916a; }
+.ld-8e8e93 { background:#8e8e93; color:#8e8e93; }

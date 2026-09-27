@@ -94,6 +94,37 @@ outdated content, and restart cleanup ends abandoned activities. This does not
 add a server/APNs background progress system.
 
 Apple controls presentation: https://developer.apple.com/design/human-interface-guidelines/live-activities
+
+## دور بهینه‌سازی و رفع باگ موتور — ۲۰۲۶/۰۹/۲۷
+
+پس از بازبینی صفر تا صد کل برنامه، همهٔ یافته‌ها پیاده شد — بدون هیچ تغییری در
+طراحی و ظاهر (شرط صریح کاربر) و بدون فیکس صفحه‌های کوچک (به درخواست کاربر):
+
+- نقطه‌های خطای گاتر اکنون با اسکرول کد همراهی می‌کنند (syncScroll) و اورلی خطا
+  با padding-top ۱۲px دقیقاً هم‌تراز متن است؛ jumpToLine نیز پدینگ واقعی را لحاظ می‌کند.
+- رنگ نقطه‌های زبان با کلاس `.ld-*` اعمال می‌شود؛ CSP بدون unsafe-inline نایل‌استایل
+  را رد می‌کرد و نقطه‌ها بی‌رنگ رندر می‌شدند. ۳۶ کلاس رنگ از LANGS تولید شد.
+- سرویس‌ورکر v12: network-first برای کد و مانیفست (پایان تلهٔ کش کهنه)،
+  cache-first فقط برای فونت/آیکون، حذف بایت‌های تکراری (favicon.png و precomposed).
+- گارد تحلیل-کهنه در runAnalysis (کد وسط تحلیل تغییر کند نتیجه اعمال نمی‌شود)،
+  stopOnce برای Live Activity، کنسل تایمر ۹۰ثانیه‌ای nativeSend، پیام تایم‌اوت مجزا.
+- مهاجرت تنظیمات one-shot شد (با ذخیرهٔ فوری نتیجه) تا انتخاب بعدی کاربر حفظ شود؛
+  پارس تاریخچه از تنظیمات جدا شد تا خرابی یکی دیگری را پاک نکند.
+- detect() به داخل دیبانس ۸۰ms هایلایت منتقل شد؛ رجکس‌های تشخیص css/python کران‌دار
+  شدند (رفع حالت چندجمله‌ای روی ورودی‌های بزرگ).
+- چکر: کاراکتر-لیترال C-خانواده/Go/R، رجکس-لیترال js/ts/go با heuristics کاراکتر
+  قبلی، ترنسپوز متلب، multiline درست گرووی، شمارش خط با ادامهٔ رشته، خطاهای EOF
+  خارج از سقف ۲۵تایی، گارد null برای lintWarnings/codeOnlyLines.
+- reduced-motion کامل شد (armPulse/glowPulse/sparkleRotate/dotBlink/ripplePop/mdRise)
+  و سه حفرهٔ کنتراست تم روشن بسته شد (.lang-item.sel/:active، .key.danger).
+- WebView.swift: وضعیت Live Activity به‌صورت لیترال JSON تزریق می‌شود نه interpolation خام.
+- پاک‌سازی: ۹ فایل یتیم حذف شد (۶ PNG پس‌زمینه، favicon، precomposed،
+  gradient-wave.js ×۲) و sync-native.ps1 به‌روز شد. متغیر مرده analyzed و
+  المنت/CSS مرده cur-line حذف شدند.
+
+راستی‌آزمایی مرورگر (Chromium، ویوپورت 393×852): ۱۶ تست موتور بررسی/تشخیص،
+سینک اسکرول، رنگ نقطه‌ها، مهاجرت دو-سناریویی، کش v12 — همه سبز. اسکرین‌شات
+تم تاریک/روشن با قبل مقایسه شد و طراحی تغییری نکرده است.
 The owning app cannot force permanent foreground Dynamic Island visibility or
 the system music player's continuously animated equalizer. Do not remove PlugIns
 when signing/installing the IPA. With Live Activities enabled, validate on an
@@ -173,3 +204,39 @@ increased-contrast fallback, native diagnostics rendering and PWA isolation;
 check-native-activity.cjs covers analysis success/error/exception and PWA behavior;
 check-layout.cjs covers six screen configurations and keyboard overlay behavior.
 Native compilation and physical-device ActivityKit rendering remain unverified.
+
+## Light glass / black-island investigation — build 2
+
+Only light-theme glass is changed: editor opacity .22, toolbar opacity .24,
+backdrop blur 2px. Dark glass retains .46/.42 and 5px blur. Light syntax colors
+for numbers, types, functions, strings and attributes are darkened after contrast
+sampling against the rendered blue glass. Accessibility opaque fallbacks remain.
+
+The reported black expanded island is consistent with an activity whose widget
+content did not render, but no extension crash log or physical-device trace is
+available to prove the cause. Rendering mitigations: remove symbol replacement
+transition, rasterize/cache logo images once at exactly 20/24/32/40pt (3x), provide
+a system-symbol fallback, and include an explicit app title in expanded content.
+No glassEffect is added to the system island. The app's glass panels are HTML in
+WKWebView; SwiftUI Liquid Glass modifiers cannot apply to individual DOM panels.
+
+The coordinator is main-actor isolated; ActivityKit start no longer takes an extra
+DispatchQueue hop before the AI request captures its activity ID. Analysis gets
+a bounded UIKit background task. When the associated native network request
+finishes while the app is backgrounded, native code ends only that activity,
+without waiting for suspended JavaScript. This means network response received,
+not a claim that the returned code has no errors; result rendering occurs on
+return. Expiration releases the background task and closes the activity; late
+callbacks cannot close a newer session. This is finite runtime, not APNs or an
+unlimited background job. Force-quitting is not supported as continued analysis.
+
+App and extension build numbers are now 2, shown in native diagnostics alongside
+the actual ActivityKit state. The bundle verifier checks matching build numbers,
+compiled Live Activities support and the extension executable. Device validation:
+install build 2 preserving PlugIns; start an AI analysis, go Home before it ends,
+inspect compact/expanded views and completion, and capture diagnostics plus iOS
+version if the island remains blank. Xcode compilation/device rendering and
+background execution timing remain unverified on this Windows host.
+
+Validation: JS syntax, source plist verification, glass/dynamic-contrast browser
+checks, and native-bridge success/error/exception/PWA regression checks passed.

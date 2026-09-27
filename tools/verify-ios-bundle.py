@@ -37,6 +37,7 @@ def verify(bundle=None):
     with (ROOT / "native/CogniCodeWidgets/Info.plist").open("rb") as stream:
         widget_source = plistlib.load(stream)
     assert widget_source.get("CFBundleIdentifier") == "$(PRODUCT_BUNDLE_IDENTIFIER)"
+    assert widget_source.get("CFBundleVersion") == expected.get("CFBundleVersion"), "App/extension build versions must match"
     if bundle is None:
         print("Source launch configuration verified")
         return
@@ -55,6 +56,9 @@ def verify(bundle=None):
     with (widget / "Info.plist").open("rb") as stream:
         widget_info = plistlib.load(stream)
     verify_identifiers(actual.get("CFBundleIdentifier"), widget_info.get("CFBundleIdentifier"))
+    assert actual.get("NSSupportsLiveActivities") is True, "Compiled app lost Live Activities support"
+    assert widget_info.get("CFBundleVersion") == actual.get("CFBundleVersion"), "Compiled app/extension build versions differ"
+    assert (widget / widget_info["CFBundleExecutable"]).is_file(), "Missing widget executable"
     assert widget_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
     assert (widget / "Assets.car").is_file(), "Missing Live Activity logo assets"
     for source_file in (ROOT / "native/Web").rglob("*"):

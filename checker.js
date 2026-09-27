@@ -11,19 +11,21 @@ window.Checker = (function () {
   var FA = '۰۱۲۳۴۵۶۷۸۹';
   function fa(x) { return String(x).replace(/[0-9]/g, function (d) { return FA[+d]; }); }
 
-  /* ── پیکربندی اسکن هر زبان ── */
-  var CLIKE = { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true };
+  /* ── پیکربندی اسکن هر زبان ──
+     CLIKE: ' برای کاراکتر-لیترال C-خانواده ('"') اضافه شد تا پرانتز/براکت داخل
+     آن به‌عنوان کد شمرده نشود. regex: برای شناسایی /.../ در js/ts/go. */
+  var CLIKE = { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true };
   var CONF = {
     swift:      { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true, triple: '"""' },
-    javascript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'] },
-    typescript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'] },
+    javascript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
+    typescript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     java:       CLIKE,
     c:          CLIKE,
     cpp:        CLIKE,
     csharp:     CLIKE,
     kotlin:     CLIKE,
     dart:       CLIKE,
-    go:         { line: '//', block: ['/*', '*/'], quotes: ['"', '`'], escape: true, multiline: ['`'] },
+    go:         { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     rust:       { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true },
     php:        CLIKE,
     ruby:       { line: '#', block: null, quotes: ['"'], escape: true },
@@ -36,15 +38,17 @@ window.Checker = (function () {
     text:       null,
     objectivec: CLIKE,
     scala:      CLIKE,
-    groovy:     { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, multiline: ["'"] },
+    /* گرووی: کوتیشن‌های تکی/دوتایی تک‌خطی‌اند؛ فقط حالت سه‌گانه چندخطی است */
+    groovy:     { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     solidity:   CLIKE,
     perl:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
     lua:        { line: '--', block: null, quotes: ['"', "'"], escape: true },
-    r:          { line: '#', block: null, quotes: ['"'], escape: true },
+    r:          { line: '#', block: null, quotes: ['"', "'"], escape: true },
     julia:      { line: '#', block: null, quotes: ['"'], escape: true },
     haskell:    { line: '--', block: ['{-', '-}'], quotes: ['"'], escape: true },
     elixir:     { line: '#', block: null, quotes: ['"', "'"], escape: true },
-    matlab:     { line: '%', block: null, quotes: ["'"], escape: false },
+    /* متلب: ' بعد از اتم (شناسه/عدد/براکت بسته) ترنسپوز است نه شروع رشته */
+    matlab:     { line: '%', block: null, quotes: ["'"], escape: false, aposAfterAtom: true },
     vb:         { line: "'", block: null, quotes: ['"'], escape: false },
     pascal:     { line: '//', block: ['{', '}'], quotes: ["'"], escape: false },
     fsharp:     { line: '//', block: ['(*', '*)'], quotes: ['"'], escape: true, triple: ['"""'] },
@@ -54,6 +58,47 @@ window.Checker = (function () {
   var PAIRS = { ')': '(', ']': '[', '}': '{' };
   var CLOSER = { '(': ')', '[': ']', '{': '}' };
 
+  /* ── هلپرهای رجکس-لیترال (js/ts/go) و ترنسپوز متلب ──
+     تشخیص تقسیم یا شروع رجکس با «کاراکثر معنادار قبلی»: بعد از شناسه/عدد/براکت
+     بسته تقسیم است؛ بعد از اپراتور یا کلیدواژه، شروع رجکس. */
+  var REGEX_PREV_OPS = '(,=:[!&|?;{}+-*%~^<>';
+  var REGEX_KEYWORDS = /^(?:return|typeof|instanceof|in|of|new|delete|void|case|do|else|yield|await|throw)$/;
+  function regexLiteralStart(code, i) {
+    var j = i - 1;
+    while (j >= 0 && (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')) j--;
+    if (j < 0) return true; // شروع فایل
+    var c = code[j];
+    if (REGEX_PREV_OPS.indexOf(c) >= 0) return true;
+    if (/[A-Za-z0-9_$]/.test(c)) {
+      var k = j;
+      while (k >= 0 && /[A-Za-z0-9_$]/.test(code[k])) k--;
+      return REGEX_KEYWORDS.test(code.slice(k + 1, j + 1));
+    }
+    return false;
+  }
+  function regexLiteralEnd(code, i) {
+    var j = i + 1, inClass = false;
+    while (j < code.length) {
+      var c = code[j];
+      if (c === '\\') { j += 2; continue; }
+      if (c === '\n') return -1; // رجکس نمی‌تواند خط بشکند → تقسیم است
+      if (inClass) { if (c === ']') inClass = false; }
+      else if (c === '[') inClass = true;
+      else if (c === '/') {
+        j++;
+        while (j < code.length && /[a-z]/i.test(code[j])) j++; // فلگ‌ها
+        return j;
+      }
+      j++;
+    }
+    return -1;
+  }
+  function prevAtomEnd(code, i) {
+    var j = i - 1;
+    while (j >= 0 && (code[j] === ' ' || code[j] === '\t')) j--;
+    return j >= 0 && /[A-Za-z0-9_\)\]\}.'"]/.test(code[j]);
+  }
+
   /* ── بررسی ساختاری: براکت، رشته، کامنت ── */
   function staticCheck(code, langKey) {
     var conf = CONF[langKey];
@@ -62,6 +107,12 @@ window.Checker = (function () {
 
     function err(ln, cl, msg, hint) {
       if (errors.length < 25) errors.push({ line: ln, column: cl, severity: 'error', message: msg, hint: hint || '' });
+    }
+
+    // خطاهای ساختاری انتهای فایل (کامنت/رشته/براکت بازمانده) مهم‌ترین‌ها هستند
+    // و نباید قربانی سقف ضد-اسپم ۲۵تایی خطاهای میانی شوند
+    function errAlways(ln, cl, msg, hint) {
+      errors.push({ line: ln, column: cl, severity: 'error', message: msg, hint: hint || '' });
     }
 
     var stack = [];
@@ -95,7 +146,12 @@ window.Checker = (function () {
           state = 'bcom'; blockEnd = conf.block[1]; sLine = line; sCol = col;
           i += conf.block[0].length; col += conf.block[0].length; continue;
         }
+        if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
+          var reEnd = regexLiteralEnd(code, i);
+          if (reEnd > 0) { col += (reEnd - i); i = reEnd; continue; }
+        }
         if (conf.quotes.indexOf(ch) >= 0) {
+          if (conf.aposAfterAtom && prevAtomEnd(code, i)) { i++; col++; continue; } // ترنسپوز، نه رشته
           sLine = line; sCol = col;
           var isTriple = false;
           if (conf.triple) {
@@ -134,7 +190,12 @@ window.Checker = (function () {
       }
 
       if (state === 'str') {
-        if (conf.escape && ch === '\\') { i += 2; col += 2; continue; }
+        if (conf.escape && ch === '\\') {
+          // خط م continuado: newline مصرف‌شده باید شمارندهٔ خط را هم جلو ببرد
+          if (code[i + 1] === '\n') { line++; col = 1; i += 2; }
+          else { i += 2; col += 2; }
+          continue;
+        }
         if (ch === quote) { state = 'code'; }
         i++; col++;
         continue;
@@ -147,12 +208,12 @@ window.Checker = (function () {
       }
     }
 
-    if (state === 'bcom') err(sLine, sCol, 'کامنت بلوکی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'با «' + blockEnd + '» ببندش');
-    if (state === 'tstr') err(sLine, sCol, 'رشتهٔ چندخطی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'علامت پایانی ' + tripleMark + ' را اضافه کن');
-    if (state === 'str') err(sLine, sCol, 'رشته‌ای که در خط ' + fa(sLine) + ' با «' + quote + '» باز شده بسته نشده', 'کوتیشن پایانی را اضافه کن');
+    if (state === 'bcom') errAlways(sLine, sCol, 'کامنت بلوکی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'با «' + blockEnd + '» ببندش');
+    if (state === 'tstr') errAlways(sLine, sCol, 'رشتهٔ چندخطی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'علامت پایانی ' + tripleMark + ' را اضافه کن');
+    if (state === 'str') errAlways(sLine, sCol, 'رشته‌ای که در خط ' + fa(sLine) + ' با «' + quote + '» باز شده بسته نشده', 'کوتیشن پایانی را اضافه کن');
     for (var k = 0; k < stack.length && k < 6; k++) {
       var o = stack[k];
-      err(o.line, o.col, '«' + o.ch + '» بازشده در خط ' + fa(o.line) + ' هرگز بسته نشد', 'جای «' + CLOSER[o.ch] + '» را پیدا و اضافه کن');
+      errAlways(o.line, o.col, '«' + o.ch + '» بازشده در خط ' + fa(o.line) + ' هرگز بسته نشد', 'جای «' + CLOSER[o.ch] + '» را پیدا و اضافه کن');
     }
     return errors;
   }
@@ -169,6 +230,7 @@ window.Checker = (function () {
 
   function lintWarnings(code, langKey) {
     var out = [], seen = {};
+    if (!code) return out;
     var lines = code.split('\n');
     for (var i = 0; i < lines.length && out.length < 10; i++) {
       for (var j = 0; j < LINT.length; j++) {
@@ -187,6 +249,7 @@ window.Checker = (function () {
   /* ── جداکردن «فقط کد»: کامنت‌ها و رشته‌ها حذف می‌شوند تا متن عادی داخلشان گول نزند ── */
   function codeOnlyLines(code, langKey) {
     var conf = CONF[langKey];
+    if (!code) return [];
     var lines = code.split('\n');
     if (!conf) return lines;
     var out = [];
@@ -202,7 +265,12 @@ window.Checker = (function () {
       if (state === 'code') {
         if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
         if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
+        if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
+          var reEnd = regexLiteralEnd(code, i);
+          if (reEnd > 0) { out[line] += code.slice(i, reEnd); i = reEnd; continue; }
+        }
         if (conf.quotes.indexOf(ch) >= 0) {
+          if (conf.aposAfterAtom && prevAtomEnd(code, i)) { out[line] += ch; i++; continue; } // ترنسپوز، نه رشته
           var isTriple = false;
           if (conf.triple) {
             var marks = Array.isArray(conf.triple) ? conf.triple : [conf.triple];

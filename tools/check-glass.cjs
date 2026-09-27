@@ -15,7 +15,7 @@ const assert = require('node:assert/strict');
         const color = await page.locator(selector).evaluate(el => getComputedStyle(el).backgroundColor);
         assert.match(color, /^rgba\(/);
         const alpha = Number(color.match(/,\s*([\d.]+)\)$/)[1]);
-        assert.ok(alpha >= .4 && alpha <= .5, color);
+        assert.ok(theme === 'light' ? alpha >= .2 && alpha <= .25 : alpha >= .4 && alpha <= .5, color);
       }
       await page.screenshot({ path: path.resolve(__dirname, `../glass-${theme}.png`) });
     }

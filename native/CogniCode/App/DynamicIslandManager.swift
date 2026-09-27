@@ -8,6 +8,8 @@ final class DynamicIslandManager {
     static let shared = DynamicIslandManager()
     private var currentActivity: Activity<CogniCodeActivityAttributes>?
     private var timeoutTask: Task<Void, Never>?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    var activityID: String? { currentActivity?.id }
     private var lastStatus = "idle"
     private var lastError = ""
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CogniCode", category: "LiveActivity")
@@ -51,13 +53,23 @@ final class DynamicIslandManager {
                 pushType: nil
             )
             currentActivity = activity
+            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish code analysis") { [weak self] in
+                // UIKit grants a bounded window, not continuous background runtime.
+                Task { @MainActor in
+                    guard let self, self.currentActivity?.id == activity.id else { return }
+                    let expiredTask = self.backgroundTask
+                    self.backgroundTask = .invalid
+                    self.endAnalysis(success: false, reason: "background-expired")
+                    if expiredTask != .invalid { UIApplication.shared.endBackgroundTask(expiredTask) }
+                }
+            }
             logger.info("Analysis Live Activity requested: \(activity.id, privacy: .public)")
             // The web AI request times out at 90 seconds. Bound orphaned activities
             // if the web process fails to send stop; this is not background execution.
             timeoutTask = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(120)) } catch { return }
                 guard let self, self.currentActivity?.id == activity.id else { return }
-                self.endAnalysis(success: false)
+                self.endAnalysis(success: false, reason: "timeout")
             }
             lastStatus = "started"
             return lastStatus
@@ -77,16 +89,27 @@ final class DynamicIslandManager {
             "error": lastError,
             "enabled": ActivityAuthorizationInfo().areActivitiesEnabled,
             "extensionPresent": extensionURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false,
-            "activeCount": Activity<CogniCodeActivityAttributes>.activities.filter { $0.activityState == .active }.count
+            "activeCount": Activity<CogniCodeActivityAttributes>.activities.filter { $0.activityState == .active }.count,
+            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
+            "activityState": currentActivity.map { String(describing: $0.activityState) } ?? "none"
         ]
     }
 
-    func endAnalysis(success: Bool = true) {
+    /// A late network completion must never close a newer analysis session.
+    func networkFinished(activityID: String?, success: Bool) {
+        guard let activityID, currentActivity?.id == activityID,
+              UIApplication.shared.applicationState == .background else { return }
+        endAnalysis(success: success, reason: "network-completed")
+    }
+
+    func endAnalysis(success: Bool = true, reason: String = "ended") {
         timeoutTask?.cancel()
         timeoutTask = nil
         guard let activity = currentActivity else { return }
         currentActivity = nil
-        lastStatus = "ended"
+        lastStatus = reason
+        let task = backgroundTask
+        backgroundTask = .invalid
         let state = CogniCodeActivityAttributes.ContentState(
             status: success ? "بررسی کد تمام شد" : "بررسی متوقف شد یا نیاز به توجه دارد",
             isAnalyzing: false,
@@ -95,6 +118,7 @@ final class DynamicIslandManager {
         // Capture this activity so a delayed end cannot close the next analysis.
         Task {
             await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate)
+            if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
         }
     }
 }

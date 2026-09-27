@@ -152,6 +152,7 @@ struct WebViewContainer: UIViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let webView: WKWebView
         let keyboardManager = NativeKeyboardManager()
@@ -256,29 +257,34 @@ struct WebViewContainer: UIViewRepresentable {
 
             if message.name == "dynamicIslandBridge" {
                 if let dict = message.body as? [String: Any], let action = dict["action"] as? String {
-                    DispatchQueue.main.async {
-                        if action == "start" {
-                            let title = (dict["title"] as? String) ?? "تحلیل کد هوش مصنوعی"
-                            let status = DynamicIslandManager.shared.startAnalysis(title: title)
+                    if action == "start" {
+                        let title = (dict["title"] as? String) ?? "تحلیل کد هوش مصنوعی"
+                        let status = DynamicIslandManager.shared.startAnalysis(title: title)
+                        // وضعیت به‌صورت لیترال رشتهٔ JSON تزریق می‌شود تا کاراکترهای
+                        // خاص هرگز ساختار JS را نشکنند
+                        if let d = try? JSONSerialization.data(withJSONObject: [status]),
+                           let j = String(data: d, encoding: .utf8), j.hasPrefix("["), j.hasSuffix("]") {
+                            let literal = String(j.dropFirst().dropLast())
                             self.webView.evaluateJavaScript(
-                                "window.__onNativeActivityStatus && window.__onNativeActivityStatus('\(status)');",
-                                completionHandler: nil
-                            )
-                        } else if action == "stop" {
-                            let state = (dict["state"] as? String) ?? "done"
-                            DynamicIslandManager.shared.endAnalysis(success: state != "error")
-                        }
-                        if let data = try? JSONSerialization.data(withJSONObject: DynamicIslandManager.shared.diagnostics()),
-                           let json = String(data: data, encoding: .utf8) {
-                            self.webView.evaluateJavaScript(
-                                "window.__onNativeActivityDiagnostics && window.__onNativeActivityDiagnostics(\(json));",
+                                "window.__onNativeActivityStatus && window.__onNativeActivityStatus(\(literal));",
                                 completionHandler: nil
                             )
                         }
+                    } else if action == "stop" {
+                        let state = (dict["state"] as? String) ?? "done"
+                        DynamicIslandManager.shared.endAnalysis(success: state != "error")
+                    }
+                    if let data = try? JSONSerialization.data(withJSONObject: DynamicIslandManager.shared.diagnostics()),
+                       let json = String(data: data, encoding: .utf8) {
+                        self.webView.evaluateJavaScript(
+                            "window.__onNativeActivityDiagnostics && window.__onNativeActivityDiagnostics(\(json));",
+                            completionHandler: nil
+                        )
                     }
                 }
                 return
             }
+
 
             if message.name == "themeBridge" {
                 if let obj = message.body as? [String: Any], let dark = obj["dark"] as? Bool {
@@ -320,6 +326,7 @@ struct WebViewContainer: UIViewRepresentable {
                 request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
             }
             request.timeoutInterval = 90
+            let analysisActivityID = DynamicIslandManager.shared.activityID
 
             URLSession.shared.dataTask(with: request) { data, response, error in
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -334,6 +341,7 @@ struct WebViewContainer: UIViewRepresentable {
                 guard let json = try? JSONSerialization.data(withJSONObject: payload),
                       let jsArgs = String(data: json, encoding: .utf8) else { return }
                 DispatchQueue.main.async {
+                    DynamicIslandManager.shared.networkFinished(activityID: analysisActivityID, success: ok)
                     self.webView.evaluateJavaScript("window.__nativeAI.apply(null, \(jsArgs));", completionHandler: nil)
                 }
             }.resume()
