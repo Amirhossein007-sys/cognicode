@@ -624,6 +624,12 @@ try {
     syncScroll();
   }
 
+  /* رهایی از قفل Tab (WCAG 2.1.2): ادیتور Tab را برای تورفتگی می‌گیرد، پس Escape
+     قفل را برای یک Tab باز می‌کند تا کاربر با کیبورد سخت‌افزاری بتواند از ادیتور
+     به نوار ابزار و بقیهٔ کنترل‌ها برود */
+  var tabNavReleased = false;
+  ta.addEventListener('blur', function () { tabNavReleased = false; });
+
   /* اتولاین: ورود جدید با حفظ تورفتگی و میانبرهای کیبورد */
   ta.addEventListener('keydown', function (e) {
     var isMod = e.ctrlKey || e.metaKey;
@@ -647,7 +653,14 @@ try {
       return;
     }
 
-    if (e.key === 'Tab') { e.preventDefault(); insertText('    '); ensureCaretVisible(); return; }
+    if (e.key === 'Escape') { tabNavReleased = true; toast('حالت پیمایش فعال شد — Tab برای رفتن به نوار ابزار'); return; }
+    if (e.key === 'Tab') {
+      if (tabNavReleased) { tabNavReleased = false; return; } // فوکوس آزاد؛ Tab را مهار نکن
+      e.preventDefault();
+      insertText('    ');
+      ensureCaretVisible();
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       var s0 = ta.selectionStart;
@@ -1094,14 +1107,18 @@ try {
     var total = countLines(ta.value);
     currentErrors.forEach(function (er) {
       if (er.line < 1 || er.line > total) return;
+      // editorPadTop لازم است: فرزند position:absolute نسبت به padding box والد
+      // چیده می‌شود و padding-top والد رویش اثر ندارد؛ بدون این مقدار، نشانگر خطا
+      // به اندازهٔ padding-top متن (۱۲px) بالاتر از خط واقعی می‌افتد
+      var y = (er.line - 1) * lineHeight + editorPadTop;
       var d = document.createElement('div');
       d.className = 'err-line' + (er.severity === 'warning' ? ' warn' : '');
-      d.style.top = ((er.line - 1) * lineHeight) + 'px';
+      d.style.top = y + 'px';
       d.style.height = lineHeight + 'px';
       errOv.appendChild(d);
       var g = document.createElement('i');
       g.className = er.severity === 'warning' ? 'warn' : 'err';
-      g.style.top = ((er.line - 1) * lineHeight) + 'px';
+      g.style.top = y + 'px';
       gutErrs.appendChild(g);
     });
   }
@@ -1273,7 +1290,7 @@ try {
     syncScroll();
     var f = document.createElement('div');
     f.className = 'flash-line';
-    f.style.top = ((ln - 1) * lineHeight) + 'px';
+    f.style.top = ((ln - 1) * lineHeight + editorPadTop) + 'px';
     errOv.appendChild(f);
     setTimeout(function () { if (f.parentNode) f.remove(); }, 1100);
   }
@@ -1433,7 +1450,11 @@ try {
     root.dataset.theme = dark ? 'dark' : 'light';
     if (themeMeta) themeMeta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
-    if (statusBarMeta) statusBarMeta.setAttribute('content', 'default');
+    // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
+    // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
+    // هندسهٔ default). black-translucent عمداً استفاده نمی‌شود چون viewport را زیر
+    // نوار وضعیت می‌برد و چیدمان بالای صفحه را جابه‌جا می‌کند.
+    if (statusBarMeta) statusBarMeta.setAttribute('content', dark ? 'black' : 'default');
     try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) {}
     if (nativeAvailable() && window.webkit.messageHandlers.themeBridge) {
       window.webkit.messageHandlers.themeBridge.postMessage({ dark: dark });
@@ -1491,12 +1512,6 @@ try {
     });
   }
   window.__nativeAI = function (id, ok, status, text) {
-    if (Array.isArray(id)) {
-      text = id[3];
-      status = id[2];
-      ok = id[1];
-      id = id[0];
-    }
     var p = nativePending[id];
     if (!p) return;
     delete nativePending[id];
@@ -1527,13 +1542,18 @@ try {
         url = px.replace(/\/+$/, '') + '/?u=' + encodeURIComponent(url);
       }
     }
-    var bodyJson = JSON.stringify({
-      model: settings.model || 'gpt-4o-mini',
-      messages: messages,
-      temperature: 0.2,
-      max_tokens: maxTokens || 2200,
-      stream: false
-    });
+    // مدل‌های استدلالی (o1/o3/… و gpt-5) پارامترهای temperature و max_tokens را رد
+    // می‌کنند و به‌جای max_tokens، max_completion_tokens می‌خواهند؛ فرستادن بدنهٔ
+    // ثابت باعث خطای ۴۰۰ برای این مدل‌ها می‌شد
+    var model = settings.model || 'gpt-4o-mini';
+    var body = { model: model, messages: messages, stream: false };
+    if (/^(?:o[1-9]|gpt-5)/i.test(model)) {
+      body.max_completion_tokens = maxTokens || 2200;
+    } else {
+      body.temperature = 0.2;
+      body.max_tokens = maxTokens || 2200;
+    }
+    var bodyJson = JSON.stringify(body);
 
     var status, text;
     if (nativeAvailable()) {
@@ -1760,11 +1780,9 @@ try {
       return;
     }
 
-    stopOnce(aiErr ? 'error' : 'done');
     if (window.Sonar && window.Sonar.setPulse) {
       window.Sonar.setPulse('healthy');
     }
-    haptic('success');
     hideProblems();
     var md, mode;
     if (ai) {
@@ -1782,6 +1800,11 @@ try {
     stopLoading();
     renderResult(md, mode, warns.length > 0, ai);
     addHistory(lastSummary(md, ai), 'ok');
+    // اعلام وضعیت Live Activity فقط بعد از رندر کامل نتیجه انجام می‌شود؛ اگر رندر
+    // استثنا بدهد، catch می‌تواند وضعیت «خطا» را اعلام کند — چون stopOnce تنها
+    // یک‌بار پیام می‌فرستد و اعلام زودهنگام، خطا را پشت «تمام شد» پنهان می‌کرد
+    haptic('success');
+    stopOnce(aiErr ? 'error' : 'done');
     } catch (error) {
       stopOnce('error');
       stopLoading();
@@ -2032,9 +2055,22 @@ try {
   if (btnSocialDownload && socialCanvas) {
     btnSocialDownload.addEventListener('click', function () {
       haptic('success');
+      var name = 'cognicode-' + langKey + '-' + Date.now() + '.png';
+      var dataUrl = socialCanvas.toDataURL('image/png');
+      // در WKWebView ناوبریِ دانلود بدون WKDownloadDelegate رها می‌شود و <a download>
+      // هیچ فایلی نمی‌سازد (بی‌صدا). پس در اپ نصبی تصویر از پل نیتیو می‌رود و برگهٔ
+      // اشتراک iOS با گزینهٔ «ذخیره تصویر» باز می‌شود.
+      var saveBridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.saveImage;
+      if (saveBridge) {
+        try {
+          saveBridge.postMessage({ data: dataUrl.split(',')[1] || '', name: name });
+          toast('برای ذخیره، «ذخیره تصویر» را از برگهٔ بازشده انتخاب کن', 4200);
+          return;
+        } catch (_) {}
+      }
       var a = document.createElement('a');
-      a.download = 'cognicode-' + langKey + '-' + Date.now() + '.png';
-      a.href = socialCanvas.toDataURL('image/png');
+      a.download = name;
+      a.href = dataUrl;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2268,8 +2304,10 @@ try {
   $('cfg-eye').addEventListener('click', function () {
     var isPw = cfgKey.type === 'password';
     cfgKey.type = isPw ? 'text' : 'password';
-    document.querySelector('#cfg-eye .eye-on').hidden = isPw;
-    document.querySelector('#cfg-eye .eye-off').hidden = !isPw;
+    // hidden فقط روی HTMLElement وجود دارد؛ روی <svg> یک expando می‌سازد و attribute
+    // را ست نمی‌کند، پس آیکن هرگز عوض نمی‌شد. toggleAttribute درست عمل می‌کند.
+    document.querySelector('#cfg-eye .eye-on').toggleAttribute('hidden', isPw);
+    document.querySelector('#cfg-eye .eye-off').toggleAttribute('hidden', !isPw);
   });
 
   cfgTest.addEventListener('click', async function () {

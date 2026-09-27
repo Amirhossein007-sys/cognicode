@@ -247,7 +247,7 @@ html[data-theme="light"] .zoom-hud {
   user-select: none;
   -webkit-user-select: none;
 }
-.gutter-errs { position: absolute; inset: 0; overflow: hidden; pointer-events: none; padding-top: 12px; /* برابر padding-top ردیف اعداد خط */ }
+.gutter-errs { position: absolute; inset: 0; overflow: hidden; pointer-events: none; /* جبران padding-top ردیف اعداد در JS انجام می‌شود */ }
 .gutter-errs i {
   position: absolute; left: 6px; width: 4.5px; height: 4.5px; border-radius: 50%;
   transform: translateY(calc(var(--lh) / 2 - 2px));
@@ -296,9 +296,10 @@ html[data-theme="light"] .zoom-hud {
 }
 .code-area textarea::selection { background: var(--sel); }
 
-/* لایهٔ خطاها — padding-top باید برابر padding-top متن (۱۲px) بماند تا نوار خطاها
-   دقیقاً روی خط خودشان بنشینند */
-.err-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; padding-top: 12px; }
+/* لایهٔ خطاها — نوارهای خطا position:absolute هستند و نسبت به padding box این والد
+   چیده می‌شوند، پس padding-top اینجا هیچ اثری ندارد. جبران فاصلهٔ بالای متن در JS
+   با editorPadTop انجام می‌شود (app.js → applyErrorPositions). */
+.err-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .err-overlay { z-index: 1; }
 .err-line {
   position: absolute; left: 0; right: 0; height: var(--lh);
@@ -751,9 +752,19 @@ html[data-theme="light"] .mf-desc {
   border-radius: 26px 26px 0 0;
   box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.35);
   transform: translateY(105%);
-  transition: transform 0.46s var(--sheet-ease);
+  /* صفحهٔ بسته نباید در درخت دسترس‌پذیری و ترتیب فوکوس بماند. فقط transform کافی
+     نیست: عنصرِ نامرئی همچنان برای VoiceOver و Tab قابل‌دسترسی است. visibility
+     با تأخیر صفر تا پایان انیمیشن بستن، حرکت خروج را حفظ می‌کند. */
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.46s var(--sheet-ease), visibility 0s linear 0.46s;
 }
-.sheet.open { transform: translateY(0); }
+.sheet.open {
+  transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s, 0s;
+}
 .grabber { width: 40px; height: 5px; border-radius: 3px; background: var(--grabber); margin: 9px auto 2px; flex: 0 0 auto; }
 .sheet-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -1676,7 +1687,8 @@ html[data-theme="light"] { --editor-bg: rgba(255,255,255,.96); --txt3: #475569; 
 html[data-theme="light"] .sonar { background: linear-gradient(140deg,#f8fafc,#bae6fd,#e0e7ff); }
 .sonar::after { content: ''; position: absolute; inset: 0; background: rgba(15,23,42,.55); }
 html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
-.editor { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* بلور سطوح در بخش «شیشه» پایین‌تر تعریف می‌شود (.editor/.keys/.bottom → 5px تیره،
+   2px روشن) و حالت بدون‌بلور در media query کاهش‌شفافیت/افزایش‌کنتراست می‌آید. */
 .analysis-activity { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 6px); left: 50%; transform: translateX(-50%); z-index: 2000; direction: ltr; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 24px); padding: 8px 14px; border-radius: 28px; background: #0f172a; color: #f8fafc; box-shadow: 0 4px 20px #0005; pointer-events: none; font-size: 12px; }
 .analysis-activity img { width: 26px; height: 26px; border-radius: 8px; }
 .activity-wave { display: flex; align-items: center; gap: 2px; height: 22px; color: #67e8f9; }

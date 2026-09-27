@@ -19,7 +19,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>MinimumOSVersion</key>
 	<string>18.0</string>
 	<key>UILaunchStoryboardName</key>
@@ -38,10 +38,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- با UIViewControllerBasedStatusBarAppearance=true، کلید UIStatusBarStyle نادیده
+	     گرفته می‌شود؛ ظاهر نوار وضعیت از overrideUserInterfaceStyle پنجره می‌آید
+	     (پل themeBridge) و در نتیجه با تم روشن/تاریک برنامه هماهنگ می‌ماند. -->
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>UIStatusBarStyle</key>
-	<string>UIStatusBarStyleLightContent</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

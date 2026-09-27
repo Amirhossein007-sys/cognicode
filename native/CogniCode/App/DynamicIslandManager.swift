@@ -55,11 +55,14 @@ final class DynamicIslandManager {
             currentActivity = activity
             backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Finish code analysis") { [weak self] in
                 // UIKit grants a bounded window, not continuous background runtime.
+                // Suspension must NOT kill the activity: the user watches the island
+                // during the analysis. Flip it to honest waiting content with a
+                // near-term stale date; networkFinished or reopening reconciles it.
                 Task { @MainActor in
                     guard let self, self.currentActivity?.id == activity.id else { return }
                     let expiredTask = self.backgroundTask
                     self.backgroundTask = .invalid
-                    self.endAnalysis(success: false, reason: "background-expired")
+                    self.markWaitingAfterBackgroundExpiry(activity: activity)
                     if expiredTask != .invalid { UIApplication.shared.endBackgroundTask(expiredTask) }
                 }
             }
@@ -102,6 +105,22 @@ final class DynamicIslandManager {
         endAnalysis(success: success, reason: "network-completed")
     }
 
+    /// iOS suspended the process after the bounded background window. The AI
+    /// request may still finish at the network layer, so the activity stays on
+    /// the island with waiting content and goes stale soon after; a real
+    /// completion (networkFinished) or reopening the app still reconciles it.
+    private func markWaitingAfterBackgroundExpiry(activity: Activity<CogniCodeActivityAttributes>) {
+        guard currentActivity?.id == activity.id else { return }
+        lastStatus = "background-expired"
+        let state = CogniCodeActivityAttributes.ContentState(
+            status: "برای دیدن نتیجهٔ بررسی برنامه را باز کن",
+            isAnalyzing: true
+        )
+        Task {
+            await activity.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(60)))
+        }
+    }
+
     func endAnalysis(success: Bool = true, reason: String = "ended") {
         timeoutTask?.cancel()
         timeoutTask = nil
@@ -116,8 +135,10 @@ final class DynamicIslandManager {
             failed: !success
         )
         // Capture this activity so a delayed end cannot close the next analysis.
+        // Keep the final state briefly visible on the island/lock screen
+        // instead of vanishing the instant the activity ends.
         Task {
-            await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate)
+            await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(4)))
             if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
         }
     }

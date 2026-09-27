@@ -23,7 +23,7 @@ const assert = require('node:assert/strict');
       await page.waitForTimeout(1400);
       let initialBounds;
       for (const keyboard of [0, 320, 380, 0, 320, 0]) {
-        await page.evaluate(k => window.__onNativeKeyboardChange(k, 0.15, 7), keyboard);
+        await page.evaluate(k => window.__onNativeKeyboardChange(k), keyboard);
         await page.waitForTimeout(200);
         const bounds = await page.evaluate(() => {
           const rect = s => {

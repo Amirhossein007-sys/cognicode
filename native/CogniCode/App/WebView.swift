@@ -101,26 +101,25 @@ final class NativeKeyboardManager: NSObject {
 
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
-              let endFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-              let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else { return }
+              let endFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
 
         guard let webView = webView, let window = webView.window else { return }
         let windowFrame = window.convert(endFrame, from: window.screen.coordinateSpace)
         let localFrame = webView.convert(windowFrame, from: window)
         let overlap = webView.bounds.intersection(localFrame)
         let rawHeight = overlap.isNull ? 0 : overlap.height
-        let curve = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? 7
 
-        notifyWeb(height: rawHeight, duration: duration, curve: curve)
+        notifyWeb(height: rawHeight)
     }
 
     @objc private func keyboardWillHide(_ notification: Notification) {
-        let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        notifyWeb(height: 0, duration: duration, curve: 7)
+        notifyWeb(height: 0)
     }
 
-    private func notifyWeb(height: CGFloat, duration: Double, curve: UInt) {
-        let js = "window.__onNativeKeyboardChange && window.__onNativeKeyboardChange(\(height), \(duration), \(curve));"
+    private func notifyWeb(height: CGFloat) {
+        // فقط ارتفاع توسط وب مصرف می‌شود؛ duration/curve پیش‌تر فرستاده می‌شد ولی
+        // سمت JS خوانده نمی‌شد و کد مرده بود
+        let js = "window.__onNativeKeyboardChange && window.__onNativeKeyboardChange(\(height));"
         DispatchQueue.main.async {
             self.webView?.evaluateJavaScript(js, completionHandler: nil)
         }
@@ -157,7 +156,7 @@ struct WebViewContainer: UIViewRepresentable {
         let webView: WKWebView
         let keyboardManager = NativeKeyboardManager()
         static let messageHandlerNames = [
-            "aiBridge", "themeBridge", "hapticBridge", "dynamicIslandBridge", "keyboardBridge"
+            "aiBridge", "themeBridge", "hapticBridge", "dynamicIslandBridge", "keyboardBridge", "saveImage"
         ]
 
         override init() {
@@ -213,12 +212,17 @@ struct WebViewContainer: UIViewRepresentable {
             }
         }
 
-        func isIpLiteral(_ host: String) -> Bool {
+        /// IP-literal و نام‌های محلی مسدود می‌شوند تا پل نیتیو نتواند به سرویس‌های
+        /// داخلیِ دستگاه/شبکه درخواست بزند (endpoint فقط باید یک سرویس https عمومی باشد).
+        func isBlockedHost(_ host: String) -> Bool {
             var v4 = in_addr()
             var v6 = in6_addr()
-            return host.withCString { c in
-                inet_pton(AF_INET, c, &v4) == 1 || inet_pton(AF_INET6, c, &v6) == 1
+            if host.withCString({ inet_pton(AF_INET, $0, &v4) == 1 || inet_pton(AF_INET6, $0, &v6) == 1 }) {
+                return true
             }
+            let lower = host.lowercased()
+            return lower == "localhost" || lower.hasSuffix(".localhost")
+                || lower.hasSuffix(".local") || lower.hasSuffix(".internal")
         }
 
         func applySystemTheme(dark: Bool) {
@@ -237,6 +241,24 @@ struct WebViewContainer: UIViewRepresentable {
                     self.webView.underPageBackgroundColor = bgColor
                 }
             }
+        }
+
+        /// WKWebView یک ناوبریِ دانلود (`<a download>` روی data: URL) را بدون
+        /// WKDownloadDelegate رها می‌کند و هیچ فایلی ساخته نمی‌شود. پس تصویر از پل
+        /// می‌آید، به‌صورت فایل PNG موقت نوشته می‌شود و برگهٔ اشتراک iOS باز می‌شود
+        /// تا «ذخیره تصویر» / «ذخیره در فایل‌ها» کار کند.
+        private func presentShareSheet(pngData: Data, name: String) {
+            guard let webView = self.webView else { return }
+            let safeName = name.replacingOccurrences(of: "/", with: "-")
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+            do { try pngData.write(to: url, options: .atomic) } catch { return }
+            guard let root = webView.window?.rootViewController else { return }
+            var top = root
+            while let presented = top.presentedViewController { top = presented }
+            let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            controller.popoverPresentationController?.sourceView = webView
+            controller.popoverPresentationController?.sourceRect = webView.bounds
+            top.present(controller, animated: true)
         }
 
         func userContentController(_ userContentController: WKUserContentController,
@@ -293,6 +315,16 @@ struct WebViewContainer: UIViewRepresentable {
                 return
             }
 
+            if message.name == "saveImage" {
+                if let obj = message.body as? [String: Any],
+                   let base64 = obj["data"] as? String,
+                   let data = Data(base64Encoded: base64) {
+                    let name = (obj["name"] as? String) ?? "cognicode-card.png"
+                    DispatchQueue.main.async { self.presentShareSheet(pngData: data, name: name) }
+                }
+                return
+            }
+
             guard message.name == "aiBridge",
                   let obj = message.body as? [String: Any],
                   let id = obj["id"] as? String else { return }
@@ -305,7 +337,7 @@ struct WebViewContainer: UIViewRepresentable {
                   comps.user == nil, comps.password == nil,
                   comps.port == nil || comps.port == 443,
                   let host = comps.host, !host.isEmpty,
-                  !isIpLiteral(host),
+                  !isBlockedHost(host),
                   body.contains("\"messages\"") else {
                 let payload: [Any] = [id, false, 400, "درخواست به دلیل محدودیت‌های امنیتی شبکه رد شد"]
                 if let json = try? JSONSerialization.data(withJSONObject: payload),

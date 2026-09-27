@@ -240,3 +240,82 @@ background execution timing remain unverified on this Windows host.
 
 Validation: JS syntax, source plist verification, glass/dynamic-contrast browser
 checks, and native-bridge success/error/exception/PWA regression checks passed.
+
+## Dynamic Island live-activity persistence fix — build 3 (2026-09-27)
+
+گزارش کاربر (iOS 27، نصب با Sideloadly، Live Activities فعال در تنظیمات):
+هنگام تحلیل و خروج از برنامه، آیلند هیچ چیزی نشان نمی‌داد و با لمس طولانی
+به یک نوار سیاه خالی دراز می‌شد (اسکرین‌شات ثبت شده).
+
+دو علت مستقل پیدا شد:
+
+۱. باگ کد — اصلاح شد: هندلر انقضای background task در DynamicIslandManager
+Activity را حدود ۳۰ ثانیه بعد از خروج از برنامه کاملاً می‌بست (background-expired)
+و آیلند خالی می‌شد، حتی اگر اکستنشن سالم بود. اکنون تعلیق پروسه Activity را
+نمی‌کشد: محتوای صادقانهٔ «برای دیدن نتیجهٔ بررسی برنامه را باز کن» با staleDate
+۶۰ ثانیه‌ای جایگزین می‌شود و networkFinished یا بازکردن برنامه آن را جمع می‌کند.
+همچنین پایان تحلیل با dismissalPolicy ‏.after(4s) چند ثانیه قابل‌دیدن می‌ماند
+نه اینکه همان لحظه محو شود.
+
+۲. رندر به امضای اکستنشن وابسته است: آرتیفکت CI با tools/inspect-ipa.ps1
+بازرسی شد؛ PlugIns/CogniCodeWidgets.appex با فایل اجرایی و Assets.car موجود است.
+امضای اپکس تودرتو توسط Sideloadly همان حالت شناخته‌شدهٔ «اکستنشن کشته‌شده در
+اجرا» را می‌سازد: Activity ثبت می‌شود، رندر هرگز انجام نمی‌شود و نتیجه همان
+آیلند سیاه خالیِ کش‌آمده است. کد و UI ویجت نیازی به تغییر نداشتند و
+تغییری هم نکردند.
+
+Build اپ و اکستنشن به ۳ ارتقا یافت تا پنل دیاگنوستیک نصب جدید را تأیید کند.
+رویهٔ دستگاه: اجرای گردش کار Build CogniCode IPA، دانلود CogniCode-ipa، امضا
+با حفظ PlugIns (Sideloadly یا 3uTools؛ در صورت تکرار مشکل SideStore/AltStore یا
+سرتیفیکیت کامل)، حذف و نصب مجدد، چک «نسخهٔ ساخت: ۳» در پنل دیاگنوستیک، شروع
+تحلیل، خروج در چند ثانیهٔ اول و دیدن لوگو/موج در آیلند و محتوای expanded با
+لمس طولانی. اگر در همان ثانیه‌های اول آیلند خالی بود و پنل «افزونه: موجود» و
+«فعالیت‌های فعال: ۱» می‌گفت، امضای اپکس خراب است؛ راه حل تعویض روش امضاست نه
+تغییر کد.
+
+## اعمال گزارش بازبینی CODE-REVIEW-2026-09-27 — 2026/09/28
+
+گزارش بازبینی خط‌به‌خط راستی‌آزمایی شد (تطبیق با کد، فایل‌به‌فایل) و موارد
+تأییدشده اعمال شدند — بدون هیچ تغییری در طراحی و ظاهر:
+
+- A1 هم‌ترازی نوار/نقطهٔ خطا: editorPadTop به top حساب‌شده اضافه شد و
+  padding-top بی‌اثرِ والد از .err-overlay و .gutter-errs حذف شد (فرزندِ
+  position:absolute به padding box چیده می‌شود و padding والد رویش اثر ندارد).
+- A2 آیکن چشم با toggleAttribute (hidden روی SVGElement تعریف نشده است).
+- A3 اعلام وضعیت Live Activity بعد از رندر منتقل شد؛ اگر رندر استثنا بدهد
+  catch وضعیت «خطا» را می‌فرستد — سناریوی native-exception سبز می‌شود.
+- A4 شیت‌های بسته visibility:hidden + pointer-events:none با تأخیر ترنزیشن
+  گرفتند (VoiceOver/Tab دیگر محتوای شیت بسته را نمی‌بیند؛ بصری تغییری نیست).
+- A5 رهایی قفل Tab با Escape (الگوی VS Code) — tabNavReleased با blur ریست
+  می‌شود.
+- A6 ذخیرهٔ PNG کارت در اپ نیتیو حالا از پل saveImage می‌رود: فایل موقت PNG
+  نوشته و برگهٔ اشتراک iOS باز می‌شود؛ در PWA همان دانلود قبلی.
+- B1 مدل‌های استدلالی (o1/o3… و gpt-5) به‌جای temperature/max_tokens بدنهٔ
+  max_completion_tokens می‌گیرند.
+- B2 مقدار enterkeyhint به «enter» اصلاح شد.
+- B3 نوار وضعیت PWA در تم تاریک «black» می‌شود (خوانا؛ بدون ریسک هم‌پوشانی
+  black-translucent).
+- B4 preload فونت حذف شد (خطای CORS از file:// و قرمزی check-gradient رفع).
+- C: کلید مردهٔ UIStatusBarStyle از plist حذف شد، measure.ps1 (مسیر شخصیِ
+  خارج از مخزن) پاک شد، .gitignore اضافه شد، serve.ps1 پیش‌فرض روی Loopback
+  رفت (با -Lan شبکه‌ای)، پل AI حالا localhost/.localhost/.local/.internal و
+  IP-literal را رد می‌کند (isBlockedHost)، notifyWeb فقط ارتفاع می‌فرستد و
+  شاخهٔ مردهٔ Array.isArray در __nativeAI حذف شد.
+
+دو تصحیح نسبت به خودِ گزارش: (۱) مورد «.editor backdrop-filter:none تناقض
+مستندات» نادرست بود — آن خط (۱۶۷۹) قبل از قوانین blur (۱۷۲۳ به بعد) است و
+cascade قانون بعدی را اعمال می‌کند؛ بلور ادیتور فعال است و فقط کد مرده است،
+دست نخورد. (۲) در DeviceIntelligence فقط کلاس device-pro حذف شد؛ device-max
+در styles.css مصرف دارد و --device-model/--device-screen-class قراردادِ
+assertشدهٔ check-device-script هستند (CI همین تست را اجرا می‌کند) — حذفشان
+CI را قرمز می‌کرد، پس ماندند.
+
+عمداً تغییر نکرد: viewport بدون زوم (تصمیم عمدی قبلی)، کلید API در
+localStorage (هشدار در UI موجود)، نام JetBrains Mono در فونت‌استک (بی‌ضرر)،
+ctx.direction روی canvas کارت (اعمالش چیدمان متن مختلط را تغییر می‌دهد و
+بدون بازبینی بصری مجاز نیست).
+
+اعتبارسنجی در ویندوز: Node/مرورگر در این محیط نیست؛ منطق تست‌ها با کد تطبیق
+داده شد (native-exception اکنون «error» می‌فرستد، check-gradient بدون خطای
+فونت سبز می‌شود) و هر دو Info.plist از نظر XML معتبرند. اجرای واقعی مجموعه
+تست با مرحلهٔ «Verify device JavaScript» در CI انجام می‌شود.

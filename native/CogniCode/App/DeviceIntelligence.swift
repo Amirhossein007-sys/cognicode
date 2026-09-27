@@ -221,7 +221,9 @@ final class DeviceIntelligence {
                 doc.classList.add("ios-" + device.iOSVersion.split('.')[0]);
                 doc.classList.add("device-" + modelSlug);
                 doc.classList.add("screen-" + device.screenClass);
-                if (device.isPro) doc.classList.add("device-pro");
+                // device-pro هیچ مصرفی در CSS/JS/تست‌ها نداشت و حذف شد؛ اما
+                // device-max در styles.css مصرف دارد و --device-model/
+                // --device-screen-class قرارداد تأییدشدهٔ check-device-script هستند
                 if (device.isMax) doc.classList.add("device-max");
                 if (device.hasDynamicIsland) doc.classList.add("has-dynamic-island");
                 if (device.hasNotch) doc.classList.add("has-notch");

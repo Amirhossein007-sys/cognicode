@@ -1,10 +1,18 @@
+param(
+    [switch]$Lan
+)
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $scriptDir
 
-$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, 8791)
+# پیش‌فرض فقط روی loopback: origin «http://localhost» یک secure context است، پس
+# سرویس‌ورکر، کلیپ‌بورد و Web Share در تست PWA کار می‌کنند. با -Lan روی کل
+# شبکه باز می‌شود (بدون احراز هویت) و آن origin دیگر secure context نیست.
+$bindIp = if ($Lan) { [System.Net.IPAddress]::Any } else { [System.Net.IPAddress]::Loopback }
+$listener = [System.Net.Sockets.TcpListener]::new($bindIp, 8791)
 $listener.Start()
-Write-Output "serving $root on http://0.0.0.0:8791/ (LAN reachable)"
+if ($Lan) { Write-Output "serving $root on http://0.0.0.0:8791/ (LAN reachable — insecure context for remote devices)" }
+else { Write-Output "serving $root on http://localhost:8791/ (use -Lan to expose on the LAN)" }
 
 $mimes = @{
   '.html' = 'text/html; charset=utf-8'
