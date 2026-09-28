@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v13-visual-2026';
+var CACHE = 'cognicode-v14-visual-2026';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
