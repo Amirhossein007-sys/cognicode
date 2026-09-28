@@ -131,34 +131,8 @@ try {
   window.__onNativeActivityStatus = function (status) {
     if (status === 'disabled') toast('Live Activities در تنظیمات آیفون غیرفعال است');
     else if (status === 'missing-extension') toast('افزونهٔ Live Activity در نصب موجود نیست؛ IPA را بدون حذف PlugIns نصب کن', 6500);
-    else if (status === 'not-foreground') toast('برای شروع Live Activity برنامه باید باز و فعال باشد');
     else if (status === 'unavailable') toast('Live Activity شروع نشد؛ بررسی کد ادامه دارد');
   };
-  window.__onNativeActivityDiagnostics = function (report) {
-    var panel = $('native-activity-settings');
-    panel.hidden = false;
-    var states = { idle: 'هنوز درخواستی ثبت نشده', started: 'درخواست شروع توسط iOS پذیرفته شد', ended: 'عملیات پایان یافته', disabled: 'Live Activities غیرفعال است', 'missing-extension': 'افزونه در IPA نصب‌شده وجود ندارد', 'not-foreground': 'برنامه هنگام درخواست فعال نبود', unavailable: 'iOS درخواست را رد کرد' };
-    states['background-expired'] = 'زمان اجرای پس‌زمینه تمام شد؛ برای ادامه برنامه را باز کن';
-    states['network-completed'] = 'درخواست شبکه در پس‌زمینه تمام شد؛ نتیجه در برنامه قابل مشاهده است';
-    states.timeout = 'مهلت بررسی تمام شد';
-    $('native-activity-details').textContent =
-      (states[report.status] || report.status) + '\n' +
-      'افزونه: ' + (report.extensionPresent ? 'موجود' : 'حذف‌شده یا ناموجود') + '\n' +
-      'مجوز سیستم: ' + (report.enabled ? 'فعال' : 'غیرفعال') + '\n' +
-      'فعالیت‌های فعال: ' + report.activeCount +
-      (report.activityState ? '\nوضعیت ActivityKit: ' + report.activityState : '') +
-      (report.build ? '\nنسخهٔ ساخت: ' + report.build : '') +
-      (report.error ? '\n' + report.error : '');
-  };
-  function refreshNativeActivity() {
-    var bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dynamicIslandBridge;
-    if (!bridge) return;
-    $('native-activity-settings').hidden = false;
-    try { bridge.postMessage({ action: 'status' }); } catch (_) {
-      $('native-activity-details').textContent = 'ارتباط با بخش نیتیو برقرار نشد';
-    }
-  }
-  $('native-activity-refresh').addEventListener('click', refreshNativeActivity);
 
   /* ── ارجاع به عناصر ── */
   var editorEl = $('editor'), zoomHud = $('zoom-hud'), problemsScroll = $('problems-scroll');
@@ -1306,7 +1280,6 @@ try {
 
   /* ── شیت‌ها ── */
   function openSheet(id) {
-    if (id === 'sheet-settings') refreshNativeActivity();
     Array.prototype.forEach.call(document.querySelectorAll('.sheet.open'), function (s) { s.classList.remove('open'); });
     $(id).classList.add('open');
     backdrop.classList.add('show');
@@ -1698,6 +1671,12 @@ try {
     if (analyzing || scanningImage) return;
     var code = ta.value;
     if (!code.trim()) { toast('اول چند خط کد بنویس ✍️'); return; }
+    // تشخیص زبان ۸۰ms دیبانس شده است؛ اگر تحلیل در همان تیکِ ورودی شروع شود
+    // (پیست و بلافاصله اجرا، یا واردکردن برنامه‌ای کد) langKey هنوز «text» است و
+    // موتور یک خطای نادرست «زبان کد تشخیص داده نشد» اضافه می‌کند — در حالی که
+    // نشانگر زبان همان لحظه زبان درست را نشان می‌دهد. پس قبل از بررسی، همگام می‌کنیم.
+    var wanted = langMode === 'auto' ? Syntax.detect(code) : langMode;
+    if (wanted !== langKey) setLang(wanted);
     analyzing = true;
     var stopSent = false;
     function stopOnce(state) {

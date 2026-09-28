@@ -42,54 +42,29 @@ private struct ActivityLogo: View {
     }
 }
 
-private struct AnalysisIndicator: View {
-    let state: CogniCodeActivityAttributes.ContentState
-    var body: some View {
-        // ActivityKit controls animation cadence. Do not use timers or pretend
-        // to play audio to obtain the system's Now Playing animation.
-        Image(systemName: state.isAnalyzing ? "waveform" : (state.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill"))
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(state.isAnalyzing ? Color.cyan : (state.failed ? Color.orange : Color.green))
-            .accessibilityLabel(state.isAnalyzing ? "در حال بررسی کد" : (state.failed ? "نیاز به توجه" : "بررسی تمام شد"))
-    }
-}
-
+/// The island presents the app logo and nothing else. Analysis progress,
+/// errors and results live inside the app; the island only signals that
+/// CogniCode is working, which is what the owner asked for.
 struct CogniCodeLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: CogniCodeActivityAttributes.self) { context in
-            HStack(spacing: 12) {
+        ActivityConfiguration(for: CogniCodeActivityAttributes.self) { _ in
+            HStack {
+                Spacer(minLength: 0)
                 ActivityLogo(size: 40)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("کوگنی کد").font(.headline)
-                    Text(context.isStale ? "برای مشاهدهٔ نتیجه برنامه را باز کنید" : context.state.status)
-                        .font(.subheadline)
-                        .lineLimit(2)
-                }
-                Spacer(minLength: 8)
-                AnalysisIndicator(state: context.state)
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(.white)
             .padding(16)
             .activityBackgroundTint(Color(red: 15/255, green: 23/255, blue: 42/255))
             .activitySystemActionForegroundColor(.white)
-        } dynamicIsland: { context in
+        } dynamicIsland: { _ in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { ActivityLogo(size: 32) }
-                DynamicIslandExpandedRegion(.trailing) { AnalysisIndicator(state: context.state) }
-                DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("کوگنی کد").font(.headline)
-                        Text(context.isStale ? "برای مشاهدهٔ نتیجه برنامه را باز کنید" : context.state.status)
-                            .font(.subheadline)
-                            .lineLimit(2)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.bottom, 6)
+                DynamicIslandExpandedRegion(.center) {
+                    ActivityLogo(size: 32)
                 }
             } compactLeading: {
                 ActivityLogo()
             } compactTrailing: {
-                AnalysisIndicator(state: context.state).frame(width: 24)
+                ActivityLogo(size: 20)
             } minimal: {
                 ActivityLogo(size: 20)
             }

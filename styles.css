@@ -1744,7 +1744,6 @@ html[data-theme="light"] .bottom {
   -webkit-backdrop-filter: blur(2px) saturate(115%);
   backdrop-filter: blur(2px) saturate(115%);
 }
-#native-activity-details { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--txt2); font-size: 12px; line-height: 1.9; }
 @media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
   :root { --editor-bg: #0f172a; --bar-bg: #0f172a; }
   html[data-theme="light"] { --editor-bg: #f8fafc; --bar-bg: #f8fafc; }

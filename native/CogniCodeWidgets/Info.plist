@@ -18,8 +18,17 @@
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
+	<!-- CFBundleVersion باید با اپ اصلی یکسان بماند؛ verify-ios-bundle.py
+	     نابرابری را در CI رد می‌کند. -->
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
+	<!-- بدون این کلید، WidgetKit بدنهٔ Dynamic Island را رندر نمی‌کند و نتیجه
+	     همان نوار سیاه خالی دراز است — حتی وقتی Activity با موفقیت ثبت شده باشد.
+	     کلید روی اپ اصلی کافی نیست؛ خودِ اکستنشن صاحبِ ActivityConfiguration است. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

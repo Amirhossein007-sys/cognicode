@@ -319,3 +319,84 @@ ctx.direction روی canvas کارت (اعمالش چیدمان متن مختل�
 داده شد (native-exception اکنون «error» می‌فرستد، check-gradient بدون خطای
 فونت سبز می‌شود) و هر دو Info.plist از نظر XML معتبرند. اجرای واقعی مجموعه
 تست با مرحلهٔ «Verify device JavaScript» در CI انجام می‌شود.
+
+## ریشهٔ واقعی باگ Dynamic Island — کلید گمشدهٔ plist اکستنشن — build 4 (2026/09/28)
+
+درخواست کاربر: آیلند فقط باید باز شود، فقط لوگو نشان دهد و کار کند؛ پنل
+«وضعیت Live Activity» در تنظیمات هم حذف شود؛ و علت کارنکردن آیلند پیدا شود.
+
+### علت پیدا شد — و علتِ قبلی نادرست تشخیص داده شده بود
+
+`CogniCodeWidgets/Info.plist` هیچ‌کدام از این کلیدها را نداشت:
+
+- `NSSupportsLiveActivities`
+- `NSSupportsLiveActivitiesFrequentUpdates`
+
+`NSSupportsLiveActivities` فقط در Info.plist اپ اصلی بود. کافی نیست: صاحب
+`ActivityConfiguration` خودِ اکستنشن است و WidgetKit بدون این کلید بدنهٔ آیلند
+را رندر نمی‌کند. نتیجه، رفتار دقیقاً همان است که کاربر گزارش کرده بود — Activity
+با موفقیت ثبت می‌شود (`started`، «فعالیت‌های فعال: ۱») اما آیلند سیاه و خالی
+می‌ماند.
+
+این باگِ قطعی و درون‌مخزنی است. تشخیص قبلی در بخش «build 3» که همه‌چیز را به
+«امضای اپکس توسط Sideloadly» نسبت داده بود، ناقص بود: آن سناریو هم ممکن است
+رخ دهد، ولی اول باید کلید plist درست شود. هر دو plist اکنون بازرسی و تست شدند.
+
+### تغییرات
+
+1. `CogniCodeWidgets/Info.plist`: افزودن `NSSupportsLiveActivities=true` و
+   `NSSupportsLiveActivitiesFrequentUpdates=true`؛ `CFBundleVersion` → ۴.
+2. `CogniCode/Info.plist` و `project.yml` (هر دو target): نسخهٔ build → ۴.
+3. `DynamicIslandManager.swift` ساده شد برای چرخهٔ عمرِ قابل‌اتکا:
+   - `backgroundTask` و `markWaitingAfterBackgroundExpiry` حذف شدند — منبع اصلی
+     پایان‌یافتنِ زودهنگام و آیلندِ خالی پس از خروج از برنامه.
+   - شرط `applicationState == .active` از `startAnalysis` حذف شد (مسیر
+     `not-foreground` حذف شد).
+   - `staleDate` از ۱۲۰ ثانیه به `nil` رفت؛ آیلند تا فراخوانی `stop` زنده می‌ماند.
+   - `endAnalysis` با `dismissalPolicy: .immediate` (بدون پنجرهٔ ۴ ثانیه‌ای
+     بی‌محتوای باقی‌مانده).
+   - `networkFinished` شرط `applicationState == .background` را از دست داد.
+   - مهلت ایمنی از ۱۲۰ به ۶۰۰ ثانیه رفت (صرفاً برای جلوگیری از آیلندِ معلق).
+   - `diagnostics()` حفظ شد ولی بدون UI؛ فقط برای لاگ.
+   - هدر `UIKit` چون دیگر `UIBackgroundTask` مصرف نمی‌شود هنوز لازم است
+     (`UIApplication` ارجاعی نمانده — فقط `ActivityAuthorizationInfo`).
+4. ویجت فقط لوگو: `AnalysisIndicator` (waveform/checkmark) و همهٔ متن‌های وضعیت
+   از compact/expanded/minimal حذف شدند. `expanded` اکنون فقط `.center` با لوگو.
+5. پنل «وضعیت Live Activity» از تنظیمات کامل حذف شد:
+   - `index.html`: بلوک `native-activity-settings` حذف شد.
+   - `app.js`: `__onNativeActivityDiagnostics` و `refreshNativeActivity` و
+     فراخوانی‌اش در `openSheet` حذف شدند؛ پیام `not-foreground` از
+     `__onNativeActivityStatus` حذف شد.
+   - `styles.css`: قانون مردهٔ `#native-activity-details` حذف شد.
+   - `WebView.swift`: تزریق `__onNativeActivityDiagnostics` حذف شد (کد مرده).
+   - **توست خطا نگه داشته شد** (تصمیم کاربر): اگر آیلند باز نشد، اپ دلیلش را
+     (`disabled` / `missing-extension` / `unavailable`) نشان می‌دهد.
+6. `tools/check-glass.cjs`: assert روی پنل حذف‌شده جایگزین شد با
+   `count() === 0` برای «پنل از تنظیمات حذف شده».
+
+### اعتبارسنجی اجراشده در ویندوز (نه فقط تطبیق کد)
+
+Playwright + کروم سیستمی، `NODE_PATH` روی workspace مدیریت‌شده:
+
+- `check-native-activity.cjs` → PASS ×۴ (native-success/error/exception/pwa)
+- `check-glass.cjs` → PASS (هر دو تم، کنتراست بالا، ایزولاسیون PWA)
+- `check-layout.cjs` → PASS ×۶ (هر شش اندازه + کیبورد)
+- `check-device-script.cjs` → PASS
+- `check-gradient.cjs` → PASS ×۲
+- `check-gallery-particles.cjs` → PASS ×۲
+- `verify-ios-bundle.py` → «Source launch configuration verified»
+- بازرسی plist با `plistlib`: کلیدهای اکستنشن موجود، نسخهٔ build هر دو = ۴
+
+### آنچه هنوز تأییدنشده می‌ماند — صادقانه
+
+- **ترجمه و کامپایل Swift تست نشده است.** این محیط Swift/Xcode ندارد؛
+  `CogniCodeWidgets.swift` و `DynamicIslandManager.swift` فقط بازرسی چشمی شدند.
+  صحت `DynamicIslandExpandedRegion(.center)` در زمان کامپایل تأیید می‌شود.
+- **رندر واقعی روی دستگاه تست نشده است.** دو ریسک باقی است: (۱) iOS رفتار
+  آیلند در حالت foreground را خودش کنترل می‌کند و نمایش دائمی تضمین نمی‌شود؛
+  (۲) اگر Sideloadly امضای اکستنشن را خراب کند، حتی با plist درست هم رندر
+  نمی‌شود. برای همین توست‌های خطا نگه داشته شدند تا این دو حالت قابل‌تفکیک باشند.
+- رویهٔ دستگاه: گردش کار Build CogniCode IPA را اجرا کن، `CogniCode-ipa` را
+  **با حفظ PlugIns** امضا و نصب کن، سپس «بررسی کد» بزن و ببین لوگو در آیلند
+  ظاهر می‌شود.
+

@@ -1,1 +1,1 @@
-﻿/* no service worker inside the native app */
+/* no service worker inside the native app */
