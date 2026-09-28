@@ -34,7 +34,8 @@ private struct ActivityLogo: View {
             if let artwork {
                 Image(uiImage: artwork).renderingMode(.original).resizable().scaledToFit()
             } else {
-                Image(systemName: "curlybraces.square.fill").foregroundStyle(.cyan)
+                Image(systemName: "curlybraces.square.fill")
+                    .foregroundStyle(Color(red: 101.0/255.0, green: 200.0/255.0, blue: 237.0/255.0))
             }
         }
         .frame(width: size, height: size)
@@ -54,7 +55,7 @@ struct CogniCodeLiveActivity: Widget {
                 Spacer(minLength: 0)
             }
             .padding(16)
-            .activityBackgroundTint(Color(red: 15/255, green: 23/255, blue: 42/255))
+            .activityBackgroundTint(Color(red: 13.0/255.0, green: 27.0/255.0, blue: 45.0/255.0))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { _ in
             DynamicIsland {
@@ -68,7 +69,7 @@ struct CogniCodeLiveActivity: Widget {
             } minimal: {
                 ActivityLogo(size: 20)
             }
-            .keylineTint(.cyan)
+            .keylineTint(Color(red: 101.0/255.0, green: 200.0/255.0, blue: 237.0/255.0))
         }
     }
 }

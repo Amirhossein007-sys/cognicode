@@ -1421,7 +1421,7 @@ try {
       setTimeout(function () { root.classList.remove('theme-anim'); }, 200);
     }
     root.dataset.theme = dark ? 'dark' : 'light';
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0d1b2d' : '#eef3f8');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
     // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
     // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
@@ -1889,29 +1889,29 @@ try {
 
     var isLightMode = document.documentElement.dataset.theme === 'light';
 
-    // ۱. پس‌زمینه بیرونی شفق قطبی
+    // ۱. پس‌زمینه آرام، هماهنگ با دو تم برنامه
     var bgGrad = ctx.createLinearGradient(0, 0, W, H);
     if (isLightMode) {
-      bgGrad.addColorStop(0, '#e0f2fe');
-      bgGrad.addColorStop(0.5, '#ede9fe');
-      bgGrad.addColorStop(1, '#f1f5f9');
+      bgGrad.addColorStop(0, '#eaf1f7');
+      bgGrad.addColorStop(0.5, '#eef3f8');
+      bgGrad.addColorStop(1, '#e9eef7');
     } else {
-      bgGrad.addColorStop(0, '#090d16');
-      bgGrad.addColorStop(0.4, '#0f172a');
-      bgGrad.addColorStop(1, '#1e1b4b');
+      bgGrad.addColorStop(0, '#0b192b');
+      bgGrad.addColorStop(0.4, '#0d1b2d');
+      bgGrad.addColorStop(1, '#182b49');
     }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // اورب‌های درخشان نوری
+    // نورهای ملایم پس‌زمینه
     var rad1 = ctx.createRadialGradient(250, 180, 20, 250, 180, 500);
-    rad1.addColorStop(0, isLightMode ? 'rgba(56, 189, 248, 0.28)' : 'rgba(14, 165, 233, 0.35)');
+    rad1.addColorStop(0, isLightMode ? 'rgba(56, 141, 190, 0.12)' : 'rgba(40, 126, 168, 0.17)');
     rad1.addColorStop(1, 'transparent');
     ctx.fillStyle = rad1;
     ctx.fillRect(0, 0, W, H);
 
     var rad2 = ctx.createRadialGradient(960, 520, 20, 960, 520, 480);
-    rad2.addColorStop(0, isLightMode ? 'rgba(147, 51, 234, 0.20)' : 'rgba(99, 102, 241, 0.32)');
+    rad2.addColorStop(0, isLightMode ? 'rgba(96, 105, 172, 0.09)' : 'rgba(89, 100, 177, 0.15)');
     rad2.addColorStop(1, 'transparent');
     ctx.fillStyle = rad2;
     ctx.fillRect(0, 0, W, H);
@@ -1919,19 +1919,19 @@ try {
     // ۲. کادر پنجره کد استایل macOS
     var cardX = 80, cardY = 60, cardW = 1040, cardH = 600, radius = 22;
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-    ctx.shadowBlur = 45;
-    ctx.shadowOffsetY = 22;
+    ctx.shadowColor = isLightMode ? 'rgba(30, 63, 91, 0.16)' : 'rgba(0, 0, 0, 0.30)';
+    ctx.shadowBlur = 32;
+    ctx.shadowOffsetY = 16;
     ctx.beginPath();
     roundRect(ctx, cardX, cardY, cardW, cardH, radius);
-    ctx.fillStyle = isLightMode ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.88)';
+    ctx.fillStyle = isLightMode ? '#ffffff' : '#102136';
     ctx.fill();
     ctx.restore();
 
     // حاشیه شیشه‌ای Rim Lighting
     ctx.beginPath();
     roundRect(ctx, cardX, cardY, cardW, cardH, radius);
-    ctx.strokeStyle = isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.16)';
+    ctx.strokeStyle = isLightMode ? 'rgba(29, 56, 83, 0.17)' : 'rgba(190, 211, 233, 0.20)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -1951,7 +1951,7 @@ try {
 
     // عنوان پنجره
     var langObj = Syntax.LANGS[langKey] || { label: 'کد', file: 'code.txt', color: '#38bdf8' };
-    ctx.fillStyle = isLightMode ? '#0f172a' : '#f8fafc';
+    ctx.fillStyle = isLightMode ? '#10243a' : '#f8fafc';
     ctx.font = 'bold 17px -apple-system, "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('CogniCode  •  ' + langObj.file, cardX + cardW / 2, cardY + 34);
@@ -1982,7 +1982,7 @@ try {
     ctx.textAlign = 'right';
     for (var i = 0; i < codeLines.length; i++) {
       var y = startY + i * lineH;
-      ctx.fillStyle = isLightMode ? '#94a3b8' : '#64748b';
+      ctx.fillStyle = isLightMode ? '#50677c' : '#a9bfd2';
       ctx.font = '500 16px "JetBrains Mono", ui-monospace, monospace';
       ctx.fillText(String(i + 1), cardX + 50, y);
     }
@@ -1993,7 +1993,7 @@ try {
       var y = startY + i * lineH;
       var text = codeLines[i];
       if (text.length > 68) text = text.slice(0, 68) + '…';
-      ctx.fillStyle = isLightMode ? '#1e293b' : '#e2e8f0';
+      ctx.fillStyle = isLightMode ? '#10243a' : '#e2e8f0';
       ctx.fillText(text, cardX + 75, y);
     }
 
@@ -2007,7 +2007,7 @@ try {
     ctx.stroke();
 
     ctx.font = '700 14px "Vazirmatn", -apple-system, sans-serif';
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillStyle = isLightMode ? '#086995' : '#65c8ed';
     ctx.textAlign = 'right';
     ctx.fillText('✨ کوگنی‌کد', cardX + cardW - 46, footY + 29);
 
@@ -2018,7 +2018,7 @@ try {
     ctx.fillText(sumTxt, cardX + cardW - 130, footY + 29);
 
     ctx.font = '600 12px -apple-system, "Segoe UI", sans-serif';
-    ctx.fillStyle = isLightMode ? '#94a3b8' : '#64748b';
+    ctx.fillStyle = isLightMode ? '#50677c' : '#a9bfd2';
     ctx.textAlign = 'left';
     ctx.fillText('cognicode.app  •  iOS & Web 2026', cardX + 44, footY + 29);
   }
