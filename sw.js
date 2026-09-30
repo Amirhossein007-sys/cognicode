@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v14-visual-2026';
+var CACHE = 'cognicode-v13-brain-2026';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -15,6 +15,7 @@ var PRECACHE = [
   './manifest.webmanifest',
   './apple-touch-icon.png',
   './icons/icon-180.png',
+  './icons/analysis-brain.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',

@@ -16,8 +16,8 @@ window.Sonar = (() => {
   function draw(delta = 0) {
     time += delta;
     ctx.clearRect(0, 0, width, height);
-    const dot = light ? '8,105,149' : '101,200,237';
-    const line = light ? '8,105,149' : '101,200,237';
+    const dot = light ? '2,119,189' : '0,245,255';
+    const line = light ? '2,136,209' : '0,217,255';
     for (const p of particles) {
       p.x += p.vx * delta; p.y += p.vy * delta;
       if (p.x < 0 || p.x > width) { p.vx *= -1; p.x = Math.max(0, Math.min(width, p.x)); }

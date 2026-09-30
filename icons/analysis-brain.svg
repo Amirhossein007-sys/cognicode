@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="brain" x1="16" y1="20" x2="83" y2="78" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8BF3FF"/>
+      <stop offset=".48" stop-color="#43C7F4"/>
+      <stop offset="1" stop-color="#B6A0FF"/>
+    </linearGradient>
+    <linearGradient id="core" x1="25" y1="18" x2="78" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#143B50"/>
+      <stop offset="1" stop-color="#111B3B"/>
+    </linearGradient>
+  </defs>
+  <path d="M50 19c-4-5-11-6-16-2-9-2-17 5-16 14-8 4-10 13-5 20-4 8 1 17 9 19 0 9 9 15 17 11 5 7 11 5 11-2 0 7 6 9 11 2 8 4 17-2 17-11 8-2 13-11 9-19 5-7 3-16-5-20 1-9-7-16-16-14-5-4-12-3-16 2Z" fill="url(#core)" stroke="url(#brain)" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M50 19v60M34 17c-2 5 1 10 7 11m-23 3c7 0 12 5 12 12m-17 8c6-3 13-1 16 5m-7 14c6-5 13-3 17 2m11-44c-7-5-14-1-15 6m-5 9c5-5 13-3 15 3m-16 10c5-3 12-1 15 4m-12 10c2-6 8-9 13-7M66 17c2 5-1 10-7 11m23 3c-7 0-12 5-12 12m17 8c-6-3-13-1-16 5m7 14c-6-5-13-3-17 2M50 28c7-5 14-1 15 6m5 9c-5-5-13-3-15 3m16 10c-5-3-12-1-15 4m12 10c-2-6-8-9-13-7" stroke="url(#brain)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M30 43 35 34m-6 22 8 4m24-32 5 6m5 22-8 4" stroke="#D6F9FF" stroke-opacity=".8" stroke-width="1.3" stroke-linecap="round"/>
+  <circle cx="35" cy="34" r="2.3" fill="#C5FBFF"/>
+  <circle cx="37" cy="60" r="2.2" fill="#8DE9FF"/>
+  <circle cx="66" cy="34" r="2.3" fill="#BAE7FF"/>
+  <circle cx="63" cy="60" r="2.2" fill="#C6B6FF"/>
+</svg>

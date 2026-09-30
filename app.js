@@ -411,10 +411,19 @@ try {
   }
 
   function recomputeLineHeight() {
-    var lh = parseFloat(getComputedStyle(hl).lineHeight);
+    var cs = getComputedStyle(hl);
+    var lh = parseFloat(cs.lineHeight);
     lineHeight = lh > 8 ? lh : 25;
-    editorPadTop = parseFloat(getComputedStyle(hl).paddingTop) || 0;
+    editorPadTop = parseFloat(cs.paddingTop) || 0;
     document.documentElement.style.setProperty('--lh', lineHeight + 'px');
+    // ردیف شماره‌ها باید دقیقاً همان هندسهٔ عمودی متن را داشته باشد وگرنه هنگام
+    // اسکرول از خطوط جدا می‌شود. مقادیر از خودِ متن خوانده می‌شوند (نه هاردکد در
+    // CSS) تا با هیچ ویرایش دیگری از هم دور نیفتند: ارتفاع سرریزِ گتر باید
+    // بایت‌به‌بایت با scrollHeight متن یکی باشد تا max scrollTop یکسان در بیاید.
+    if (gutter) {
+      gutter.style.paddingTop = editorPadTop + 'px';
+      gutter.style.paddingBottom = (parseFloat(cs.paddingBottom) || 0) + 'px';
+    }
     applyErrorPositions();
     updateCaretLine();
   }
@@ -447,8 +456,13 @@ try {
   function syncScroll() {
     hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
     gutter.scrollTop = ta.scrollTop;
-    errOv.scrollTop = ta.scrollTop;
-    gutErrs.scrollTop = ta.scrollTop;
+    // دو لایهٔ نشانگر اسکرول‌کننده نیستند: فرزندانشان position:absolute‌اند و هیچ
+    // سرریز اسکرول‌پذیری نمی‌سازند، پس scrollTop رویشان همیشه صفر می‌ماند و نوار
+    // خطا و نقطهٔ گتر هنگام اسکرول لیز می‌خوردند. به‌جای آن کل لایه را به‌اندازهٔ
+    // اسکرول متن بالا می‌بریم؛ بریدن نهایی را والدشان انجام می‌دهد.
+    var shift = 'translateY(' + (-ta.scrollTop) + 'px)';
+    errOv.style.transform = shift;
+    gutErrs.style.transform = shift;
   }
 
   function updateCaretLine() {
@@ -984,8 +998,8 @@ try {
           { type: 'image_url', image_url: { url: base64 } }
         ]
       }], 6000);
-      var extracted = String(res.content || '').trim();
-      extracted = extracted.replace(/^```[a-zA-Z0-9_-]*\n?/, '').replace(/\n?```$/, '').trim();
+      var extracted = String(res.message.content || '').trim();
+      extracted = stripCodeFence(extracted);
       if (!extracted || extracted === 'NO_CODE_FOUND') { toast('کد خوانایی در تصویر پیدا نشد'); return; }
       if (ta.value !== originalCode) { toast('متن ادیتور تغییر کرده؛ برای حفظ تغییرات، تصویر را دوباره انتخاب کن'); return; }
       saveSnapshot();
@@ -1364,7 +1378,11 @@ try {
     return out;
   }
 
-  /* ── هوش مصنوعی ── */
+  /* ── هوش مصنوعی ──
+     دو درخواست جدا: یکی برای بررسی (خروجی کوچک) و یکی برای بازنویسی کد. قبلاً هر
+     دو در یک پاسخ بودند و برای اینکه fixedCode هم جا شود max_tokens بالا می‌رفت؛
+     نتیجه این بود که پاسخ فایل‌های بلند وسط JSON بریده می‌شد، JSON.parse می‌شکست و
+     اپ به‌جای گزارش، متن خام را نشان می‌داد و دکمهٔ اصلاح هم ظاهر نمی‌شد. */
   var SYSTEM_PROMPT = [
     'تو «کوگنی کد (CogniCode)» هستی: یک بازبین و تحلیل‌گر کد دقیق. تو هرگز کد را اجرا نمی‌کنی و پیشنهاد اجرا هم نمی‌دهی؛ فقط به‌صورت استاتیک کد را می‌خوانی.',
     '',
@@ -1374,27 +1392,91 @@ try {
     '  "language": "swift یا python یا javascript یا typescript یا java یا c یا cpp یا csharp یا go یا rust یا php یا ruby یا kotlin یا dart یا html یا css یا sql یا json یا bash یا other",',
     '  "valid": true یا false,',
     '  "errors": [ { "line": 3, "column": 7, "severity": "error" یا "warning", "message": "توضیح کوتاه و روان فارسی از ایراد", "hint": "راهنمای رفع به فارسی" } ],',
-    '  "advice": "وقتی خطا وجود دارد: یک توصیه کوتاه و مناسبِ شرایط که کاربر را برای شروع رفع خطا راهنمایی کند؛ اگر کد سالم است رشته خالی",',
-    '  "fixedCode": "اگر کد خطا، باگ یا نقص دارد: نسخهٔ کاملاً اصلاح‌شده، بی‌نقص و آمادهٔ کار را با حفظ دقیق هدف و کاربرد کد کاربر در این فیلد قرار بده (فقط کد خام بدون توضیح اضافه). اگر کد از ابتدا کاملاً سالم است همین رشته کد اصلی را برگردان.",',
-    '  "fixExplanation": "یک یا دو جمله فارسی روشن و آموزنده که به کاربر بگوید چه مشکلی وجود داشت و چطور اصلاح شد تا کاربر یاد بگیرد چه اتفاقی افتاده است.",',
+    '  "advice": "وقتی ایراد وجود دارد: یک توصیه کوتاه و مناسبِ شرایط که کاربر را برای شروع رفع راهنمایی کند؛ اگر کد سالم است رشته خالی",',
+    '  "fixExplanation": "یک یا دو جمله فارسی روشن که بگوید چه ایرادی وجود دارد و اصلاح درست چیست؛ اگر کد سالم است رشته خالی",',
     '  "explanation": {',
     '    "summary": "۲ تا ۴ جمله ساده و روشن که یک برنامه‌نویس تازه‌کار بفهمد این کد چه می‌کند",',
     '    "steps": ["رفتار کد را گام‌به‌گام و کوتاه توضیح بده"],',
     '    "uses": ["به چه دردی می‌خورد؛ کاربردهای واقعی و موقعیت‌هایی که این کد به کار می‌آید"],',
-    '    "notes": ["نکات مهم، محدودیت‌ها و ریسک‌ها؛ اگر کد ناقص یا مبهم است همین‌جا بگو"]',
+    '    "notes": ["نکات مهم، محدودیت‌ها و ریسک‌ها؛ اگر کد مبهم است همین‌جا بگو"]',
     '  }',
     '}',
     '',
     'قواعد مهم:',
-    '- هدف کد کاربر را درک کن. اگر کد هرگونه خطای سینتکسی، منطقی، متغیر تعریف‌نشده، یا خطای ساختاری دارد، در fixedCode کد کامل، پاکیزه و بدون باگ را قرار بده تا دکمهٔ «اصلاح جادویی» بتواند فوراً آن را جایگزین کند.',
-    '- در fixExplanation دقیقاً بگو چه اصلاحاتی انجام دادی تا کاربر دقیق بداند چه شده است.',
-    '- اگر کد سالم است: valid=true، errors آرایه خالی، advice خالی، و fixedCode برابر همان کد کاربر باشد.',
+    '- در این پاسخ کد اصلاح‌شده را ننویس؛ فقط ایرادها و توضیح. بازنویسی کد در مرحلهٔ جداگانه‌ای انجام می‌شود.',
+    '- فقط ایرادی را گزارش کن که در همین متنِ داده‌شده قابل اثبات است. حدس، سلیقه و «شاید بهتر باشد» را خطا ننویس.',
+    '- اگر در پیام کاربر گفته شده بخشی از فایل حذف شده است، ناقص‌بودنِ کد را به‌عنوان خطا ثبت نکن.',
     '- خطای قطعی نگارشی/ساختاری را severity:error بده و شماره خط و ستون را دقیق بنویس. موارد مشکوک یا بد-پرکتیک را severity:warning بده.',
-    '- اگر کد ناقص است، خط ۱ را error کن با پیام «کد ناقص است» و در fixedCode نسخهٔ کامل‌شده را بگذار.',
-    '- advice را فقط وقتی خطا هست پر کن و از شرایط خود کاربر بگو.',
+    '- اگر واقعاً بخش‌های پایانیِ همین متن ناتمام مانده، آن را error کن با پیام «کد ناتمام است» و شمارهٔ آخرین خط.',
+    '- advice را فقط وقتی ایراد هست پر کن و از شرایط خود کاربر بگو.',
     '- explanation را همیشه به فارسی روان بنویس؛ اصطلاحات فنی می‌توانند انگلیسی بمانند.',
     '- هیچ متنی خارج از JSON ننویس؛ حتی یک کلمه.'
   ].join('\n');
+
+  /* ── آماده‌سازی کد برای مدل ──
+     پیش‌تر فقط ۱۲۰۰۰ کاراکتر اول فرستاده می‌شد؛ فایل‌های بلندتر وسط خط بریده
+     می‌شدند و مدل صادقانه «کد ناقص است» گزارش می‌کرد (کاربر فکر می‌کرد تحلیل
+     واقعی نیست). حالا سقف خیلی بالاتر است و اگر فایل از آن هم بزرگ‌تر بود، سر و
+     ته فایل فرستاده می‌شود و بریدگی صریحاً هم به مدل و هم به کاربر اعلام می‌شود. */
+  var MAX_CODE_CHARS = 48000;
+  var CODE_TAIL_CHARS = 8000;
+  function clipForAI(code) {
+    if (code.length <= MAX_CODE_CHARS) return { text: code, truncated: false, dropped: 0 };
+    var head = code.slice(0, MAX_CODE_CHARS - CODE_TAIL_CHARS);
+    var tail = code.slice(-CODE_TAIL_CHARS);
+    var dropped = code.length - head.length - tail.length;
+    return {
+      text: head + '\n/* … [CogniCode] ' + dropped + ' کاراکتر از میانهٔ فایل برای محدودیت طول حذف شد … */\n' + tail,
+      truncated: true,
+      dropped: dropped
+    };
+  }
+
+  function buildCodeMessage(clip) {
+    var head = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
+    if (clip.truncated) {
+      head += 'توجه: فایل بزرگ‌تر از سقف ارسال است؛ بخشی از میانهٔ فایل حذف شده و کد زیر ' +
+        'عمداً ناقص است. به‌خاطر این حذف، هیچ ایرادی با عنوان «کد ناقص» یا «بسته نشدن ' +
+        'بخش‌ها» ثبت نکن و فقط ایرادهای قابل‌اثبات در همین متن را گزارش بده.\n';
+    }
+    return head + '\nکد:\n```\n' + clip.text + '\n```';
+  }
+
+  /* ── ترمیم JSON ──
+     اگر پاسخ مدل با سقف طول بریده شود، JSON ناتمام می‌ماند و JSON.parse می‌شکند.
+     این تابع رشتهٔ نیمه‌بریده را با بستن رشته/براکت‌های باز ترمیم می‌کند تا
+     errors/advice/explanation از دست نروند. */
+  function repairTruncatedJson(s) {
+    var t = String(s || '').trim();
+    if (!t) return null;
+    var out = '', inStr = false, escaped = false, stack = [];
+    for (var i = 0; i < t.length; i++) {
+      var ch = t.charAt(i);
+      out += ch;
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === '{' || ch === '[') stack.push(ch);
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+    if (inStr) out += '"';
+    out = out.replace(/,\s*$/, '');
+    for (var j = stack.length - 1; j >= 0; j--) out += (stack[j] === '{' ? '}' : ']');
+    return out;
+  }
+
+  function salvageJson(raw) {
+    var t = String(raw || '').trim();
+    if (!t) return null;
+    try { var o = JSON.parse(t); if (o && typeof o === 'object') return o; } catch (_) {}
+    var fixed = repairTruncatedJson(t);
+    if (fixed) {
+      try { var o2 = JSON.parse(fixed); if (o2 && typeof o2 === 'object') return o2; } catch (_) {}
+    }
+    return null;
+  }
 
   function netErr() { var e = new Error('network'); e.network = true; return e; }
 
@@ -1421,7 +1503,7 @@ try {
       setTimeout(function () { root.classList.remove('theme-anim'); }, 200);
     }
     root.dataset.theme = dark ? 'dark' : 'light';
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0d1b2d' : '#eef3f8');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
     // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
     // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
@@ -1568,27 +1650,79 @@ try {
     var data;
     try { data = JSON.parse(text); } catch (e4) { throw netErr(); }
     var c = ((data || {}).choices || [])[0] || {};
-    return c.message || {};
+    // finish_reason هم برگردانده می‌شود: 'length' یعنی پاسخ به سقف توکن خورده و
+    // بریده است — باید به کاربر گفته شود، نه اینکه متن نیمه‌کاره به‌عنوان نتیجه
+    // معتبر نمایش داده شود.
+    return { message: c.message || {}, finishReason: c.finish_reason || '' };
   }
 
-  async function askAI(code) {
-    var langLabel = Syntax.LANGS[langKey].label;
-    var fence = '```';
-    var content = 'زبان کد: ' + langLabel + '\n\nکد:\n' + fence + '\n' + code.slice(0, 12000) + '\n' + fence;
-    var msg = await chat([
+  async function askAI(code, clip) {
+    var r = await chat([
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: content }
-    ], 2400);
-    var txt = String(msg.content || '').trim();
+      { role: 'user', content: buildCodeMessage(clip) }
+    ], 1600);
+    var txt = String(r.message.content || '').trim();
     var t = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     var s = t.indexOf('{'), e2 = t.lastIndexOf('}');
-    if (s >= 0 && e2 > s) {
-      try {
-        var obj = JSON.parse(t.slice(s, e2 + 1));
-        if (obj && typeof obj === 'object' && ('valid' in obj || obj.errors || obj.explanation)) return obj;
-      } catch (e3) {}
+    if (s >= 0) {
+      var obj = salvageJson(e2 > s ? t.slice(s, e2 + 1) : t.slice(s)) || salvageJson(t.slice(s));
+      if (obj && typeof obj === 'object' && ('valid' in obj || obj.errors || obj.explanation)) return obj;
     }
-    return { raw: txt };
+    // JSON سالم در نیامد: علت را با خودِ متن خام برمی‌گردانیم تا UI به‌جای ریختن
+    // JSON خام داخل گزارش، پیام روشن و قابل‌فهم نشان دهد.
+    return {
+      raw: txt,
+      parseNote: r.finishReason === 'length'
+        ? 'پاسخ مدل به سقف طول خورد و نیمه‌کاره ماند. یک‌بار دیگر «تحلیل کد» را بزن.'
+        : 'مدل به‌جای JSON ساختاریافته، متن آزاد برگرداند.'
+    };
+  }
+
+  /* ── اصلاح کد (درخواست جدا) ──
+     خروجی این درخواست فقط خودِ کد است، پس تمام بودجهٔ توکن صرف بازنویسی می‌شود و
+     دیگر لازم نیست نگران جا شدنِ کد داخل یک فیلد JSON باشیم. */
+  var FIX_SYSTEM_PROMPT = [
+    'تو «کوگنی کد (CogniCode)» هستی: یک اصلاح‌گر کد دقیق و محافظه‌کار.',
+    '',
+    'قواعد قطعی:',
+    '- فقط و فقط کد اصلاح‌شده را برگردان. هیچ توضیح، هیچ مقدمه و هیچ بلوک ``` ننویس.',
+    '- هدف، رفتار و کاربرد کد کاربر را مو‌به‌مو حفظ کن. فقط ایرادها را برطرف کن و آنچه ایراد ندارد بازنویسی نکن.',
+    '- زبان، سبک نام‌گذاری و ترتیب بخش‌های فایل را دست‌نخورده نگه دار.',
+    '- در پایان همهٔ بخش‌ها باید درست بسته شده باشند؛ کد باید کامل و آمادهٔ استفاده باشد.',
+    '- هیچ بخشی را حذف نکن مگر اینکه خودش ایراد باشد.',
+    '- اگر کد از قبل سالم است، همان کد را بدون هیچ تغییری برگردان.'
+  ].join('\n');
+
+  function stripCodeFence(s) {
+    var t = String(s || '').trim();
+    var m = t.match(/^```[a-zA-Z0-9+#._-]*[ \t]*\n([\s\S]*?)\n?```$/);
+    if (m) return m[1].trim();
+    return t.replace(/^```[a-zA-Z0-9+#._-]*[ \t]*\n?/, '').replace(/\n?```[ \t]*$/, '').trim();
+  }
+
+  async function askAIFix(code, issues, clip) {
+    var errLines = (issues || []).slice(0, 12).map(function (e) {
+      return '- خط ' + e.line + ' (' + (e.severity === 'warning' ? 'هشدار' : 'خطا') + '): ' + e.message;
+    }).join('\n');
+    var prompt = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
+    if (errLines) prompt += '\nایرادهایی که باید برطرف شوند:\n' + errLines + '\n';
+    if (clip.truncated) {
+      prompt += '\nتوجه: بخشی از میانهٔ فایل برای محدودیت طول حذف شده است؛ فقط ایرادهای ' +
+        'همین متن را برطرف کن و کد را کامل برگردان.\n';
+    }
+    prompt += '\nکد:\n' + clip.text;
+    // بودجهٔ خروجی از حجم خود کد تخمین زده می‌شود (کد تقریباً ۳ کاراکتر بر توکن)
+    var budget = Math.min(16000, Math.max(1500, Math.ceil(clip.text.length / 3) + 600));
+    var r = await chat([
+      { role: 'system', content: FIX_SYSTEM_PROMPT },
+      { role: 'user', content: prompt }
+    ], budget);
+    if (r.finishReason === 'length') {
+      var e1 = new Error('fix-truncated'); e1.fixTruncated = true; throw e1;
+    }
+    var out = stripCodeFence(r.message.content);
+    if (!out) { var e2 = new Error('fix-empty'); e2.fixEmpty = true; throw e2; }
+    return out;
   }
 
   function normalizeErrors(list) {
@@ -1646,6 +1780,12 @@ try {
     resLoading.hidden = true;
     resBody.hidden = false;
     resVerdict.style.visibility = '';
+  }
+  // توقف چرخش پیام‌های بارگذاری و نشاندن یک پیام مشخص (مثلاً هنگام مرحلهٔ اصلاح کد)
+  function setLoadingText(msg) {
+    clearInterval(loadTimer);
+    loadTimer = null;
+    if (resStatus) resStatus.textContent = msg;
   }
 
   /* ── جریان تحلیل ── */
@@ -1708,9 +1848,12 @@ try {
         hint: 'کد واقعی وارد کن یا از تب فایل / نوار پایین، زبان را دستی انتخاب کن'
       });
     }
+    // آماده‌سازی یک‌بارِ متنِ ارسالی: هم تحلیل و هم اصلاح از همین استفاده می‌کنند تا
+    // هر دو مرحله دقیقاً یک تصویر از کد را ببینند
+    var clip = clipForAI(code);
     if (useAI) {
       try {
-        ai = await askAI(code);
+        ai = await askAI(code, clip);
         aiConnected = true;
         updateAiStatus();
       } catch (e) {
@@ -1718,6 +1861,7 @@ try {
         aiConnected = false;
         updateAiStatus();
       }
+      if (clip.truncated) toast('فایل بزرگ است؛ بخشی از میانهٔ کد برای تحلیل حذف شد', 4600);
     }
 
     var remain = 1200 - (Date.now() - t0);
@@ -1731,15 +1875,41 @@ try {
       return;
     }
 
+    var aiErrList = (ai && !ai.raw) ? normalizeErrors(ai.errors) : [];
+    var all = localErrs.concat(aiErrList).concat(warns);
+    var hard = all.filter(function (x) { return x.severity !== 'warning'; });
+    var adv = (ai && !ai.raw && ai.advice) ? String(ai.advice) : null;
+    var fixExp = (ai && !ai.raw && ai.fixExplanation) ? String(ai.fixExplanation) : null;
+
+    /* ── مرحلهٔ دوم: اصلاح کد (درخواست جداگانه با بودجهٔ بالا) ──
+       جدا کردن این مرحله دو چیز را تضمین می‌کند: پاسخِ تحلیل کوچک می‌ماند و بریده
+       نمی‌شود، و تمام بودجهٔ خروجی صرف خودِ کد اصلاح‌شده می‌شود. درخواست فقط وقتی
+       زده می‌شود که واقعاً چیزی برای اصلاح باشد (خطای سخت، یا نظر خود مدل). */
+    var aiFound = !!(ai && !ai.raw && (ai.valid === false || (Array.isArray(ai.errors) && ai.errors.length > 0)));
+    var fixCode = null;
+    if (useAI && ai && !ai.raw && (hard.length > 0 || aiFound)) {
+      setLoadingText('در حال اصلاح کد با هوش مصنوعی…');
+      try {
+        var candidate = await askAIFix(code, all, clip);
+        if (candidate && candidate.trim() && candidate.trim() !== code.trim()) fixCode = candidate;
+      } catch (eFix) {
+        if (eFix && eFix.fixTruncated) toast('پاسخ مدل برای اصلاح کامل کافی نبود؛ کد تغییر نکرد', 4600);
+        else if (!(eFix && eFix.fixEmpty)) toast('اصلاح خودکار انجام نشد — ' + aiErrorText(eFix), 4600);
+      }
+      // کد ممکن است حین مرحلهٔ اصلاح عوض شده باشد؛ اعمال نتیجه روی نسخهٔ قدیمی خطرناک است
+      if (ta.value !== code) {
+        stopOnce('done');
+        toast('کد در حین تحلیل تغییر کرد؛ نتیجهٔ این نسخه اعمال نشد — دوباره تحلیل کن', 4200);
+        return;
+      }
+    }
+
     scanline.hidden = true;
     playBtn.classList.remove('loading');
     playLabel.textContent = 'تحلیل کد';
     playBtn.disabled = false;
     analyzing = false;
 
-    var aiErrList = (ai && !ai.raw) ? normalizeErrors(ai.errors) : [];
-    var all = localErrs.concat(aiErrList).concat(warns);
-    var hard = all.filter(function (x) { return x.severity !== 'warning'; });
     setErrors(all);
 
     if (hard.length > 0) {
@@ -1749,10 +1919,7 @@ try {
       }
       stopLoading();
       closeSheets();
-      var adv = (ai && !ai.raw && ai.advice) ? String(ai.advice) : null;
-      var fCode = (ai && !ai.raw && ai.fixedCode) ? String(ai.fixedCode) : null;
-      var fExp = (ai && !ai.raw && ai.fixExplanation) ? String(ai.fixExplanation) : null;
-      showProblems(all, adv, fCode, fExp);
+      showProblems(all, adv, fixCode, fixExp);
       haptic('error');
       toast('کد خطا دارد ⚠️ — روی هر مورد بزن تا خطش را ببینی');
       addHistory('کد دارای ' + fa(hard.length) + ' خطا', 'err');
@@ -1762,12 +1929,26 @@ try {
     if (window.Sonar && window.Sonar.setPulse) {
       window.Sonar.setPulse('healthy');
     }
-    hideProblems();
+    // اگر اصلاح واقعی وجود دارد، دکمهٔ «اعمال اصلاحات» باید در دسترس باشد — نه فقط
+    // وقتی خطای سخت هست. پنل مشکلات زیر شیت نتیجه باز می‌ماند تا با بستن شیت، کارت
+    // اصلاح جادویی دیده شود.
+    if (fixCode) showProblems(all, adv, fixCode, fixExp);
+    else hideProblems();
     var md, mode;
     if (ai) {
-      if (ai.explanation) { md = explanationToMd(ai.explanation, warns); }
-      else { md = ai.raw || 'توضیحی برگردانده نشد؛ دوباره تلاش کن.'; }
-      mode = 'ai';
+      if (ai.raw) {
+        // قبلاً همین‌جا متن خام JSON داخل گزارش ریخته می‌شد؛ حالا علت گفته می‌شود
+        md = '> ⚠️ **گزارش هوش مصنوعی خوانا نبود.** ' + (ai.parseNote || '') + '\n\n' +
+          Checker.localExplain(code, langKey, warns);
+        mode = 'local';
+      } else if (ai.explanation) {
+        md = explanationToMd(ai.explanation, warns);
+        mode = 'ai';
+      } else {
+        md = '> ⚠️ **مدل توضیحی برنگرداند.** یک‌بار دیگر «تحلیل کد» را بزن.\n\n' +
+          Checker.localExplain(code, langKey, warns);
+        mode = 'local';
+      }
     } else if (aiErr) {
       md = '> ⚠️ **اتصال به هوش مصنوعی ناموفق بود:** ' + aiErrorText(aiErr) + '\n\n' + Checker.localExplain(code, langKey, warns);
       mode = 'local';
@@ -1778,6 +1959,7 @@ try {
     currentMd = md;
     stopLoading();
     renderResult(md, mode, warns.length > 0, ai);
+    if (fixCode) toast('✨ نسخهٔ بهبودیافتهٔ کد آماده است — پنل «مشکلات» را ببین', 4800);
     addHistory(lastSummary(md, ai), 'ok');
     // اعلام وضعیت Live Activity فقط بعد از رندر کامل نتیجه انجام می‌شود؛ اگر رندر
     // استثنا بدهد، catch می‌تواند وضعیت «خطا» را اعلام کند — چون stopOnce تنها
@@ -1839,8 +2021,19 @@ try {
     for (var i = 0; i < kids.length; i++) kids[i].style.setProperty('--i', i);
     resFile.textContent = Syntax.LANGS[langKey].file;
     if (mode === 'ai') {
-      resVerdict.textContent = hasWarns ? '✓ کد سالم است (با هشدار)' : '✓ کد سالم است';
-      resVerdict.className = hasWarns ? 'verdict warn' : 'verdict ok';
+      // حکم خودِ مدل جدی گرفته می‌شود: اگر مدل کد را ناسالم دانسته ولی ایراد «سخت»
+      // ثبت نکرده، نوشتن «کد سالم است» همان تناقضی بود که گزارش را غیرواقعی نشان
+      // می‌داد (در سقوطِ JSON، حکم مدل کاملاً نادیده گرفته می‌شد).
+      if (ai && ai.valid === false) {
+        resVerdict.textContent = '⚠️ نیاز به اصلاح دارد';
+        resVerdict.className = 'verdict warn';
+      } else if (hasWarns) {
+        resVerdict.textContent = '✓ کد سالم است (با هشدار)';
+        resVerdict.className = 'verdict warn';
+      } else {
+        resVerdict.textContent = '✓ کد سالم است';
+        resVerdict.className = 'verdict ok';
+      }
       resMode.textContent = 'هوش مصنوعی · ' + (settings.model || '');
       resMode.className = 'mode-badge ai';
     } else {
@@ -1889,29 +2082,29 @@ try {
 
     var isLightMode = document.documentElement.dataset.theme === 'light';
 
-    // ۱. پس‌زمینه آرام، هماهنگ با دو تم برنامه
+    // ۱. پس‌زمینه بیرونی شفق قطبی
     var bgGrad = ctx.createLinearGradient(0, 0, W, H);
     if (isLightMode) {
-      bgGrad.addColorStop(0, '#eaf1f7');
-      bgGrad.addColorStop(0.5, '#eef3f8');
-      bgGrad.addColorStop(1, '#e9eef7');
+      bgGrad.addColorStop(0, '#e0f2fe');
+      bgGrad.addColorStop(0.5, '#ede9fe');
+      bgGrad.addColorStop(1, '#f1f5f9');
     } else {
-      bgGrad.addColorStop(0, '#0b192b');
-      bgGrad.addColorStop(0.4, '#0d1b2d');
-      bgGrad.addColorStop(1, '#182b49');
+      bgGrad.addColorStop(0, '#090d16');
+      bgGrad.addColorStop(0.4, '#0f172a');
+      bgGrad.addColorStop(1, '#1e1b4b');
     }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // نورهای ملایم پس‌زمینه
+    // اورب‌های درخشان نوری
     var rad1 = ctx.createRadialGradient(250, 180, 20, 250, 180, 500);
-    rad1.addColorStop(0, isLightMode ? 'rgba(56, 141, 190, 0.12)' : 'rgba(40, 126, 168, 0.17)');
+    rad1.addColorStop(0, isLightMode ? 'rgba(56, 189, 248, 0.28)' : 'rgba(14, 165, 233, 0.35)');
     rad1.addColorStop(1, 'transparent');
     ctx.fillStyle = rad1;
     ctx.fillRect(0, 0, W, H);
 
     var rad2 = ctx.createRadialGradient(960, 520, 20, 960, 520, 480);
-    rad2.addColorStop(0, isLightMode ? 'rgba(96, 105, 172, 0.09)' : 'rgba(89, 100, 177, 0.15)');
+    rad2.addColorStop(0, isLightMode ? 'rgba(147, 51, 234, 0.20)' : 'rgba(99, 102, 241, 0.32)');
     rad2.addColorStop(1, 'transparent');
     ctx.fillStyle = rad2;
     ctx.fillRect(0, 0, W, H);
@@ -1919,19 +2112,19 @@ try {
     // ۲. کادر پنجره کد استایل macOS
     var cardX = 80, cardY = 60, cardW = 1040, cardH = 600, radius = 22;
     ctx.save();
-    ctx.shadowColor = isLightMode ? 'rgba(30, 63, 91, 0.16)' : 'rgba(0, 0, 0, 0.30)';
-    ctx.shadowBlur = 32;
-    ctx.shadowOffsetY = 16;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    ctx.shadowBlur = 45;
+    ctx.shadowOffsetY = 22;
     ctx.beginPath();
     roundRect(ctx, cardX, cardY, cardW, cardH, radius);
-    ctx.fillStyle = isLightMode ? '#ffffff' : '#102136';
+    ctx.fillStyle = isLightMode ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.88)';
     ctx.fill();
     ctx.restore();
 
     // حاشیه شیشه‌ای Rim Lighting
     ctx.beginPath();
     roundRect(ctx, cardX, cardY, cardW, cardH, radius);
-    ctx.strokeStyle = isLightMode ? 'rgba(29, 56, 83, 0.17)' : 'rgba(190, 211, 233, 0.20)';
+    ctx.strokeStyle = isLightMode ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.16)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -1951,7 +2144,7 @@ try {
 
     // عنوان پنجره
     var langObj = Syntax.LANGS[langKey] || { label: 'کد', file: 'code.txt', color: '#38bdf8' };
-    ctx.fillStyle = isLightMode ? '#10243a' : '#f8fafc';
+    ctx.fillStyle = isLightMode ? '#0f172a' : '#f8fafc';
     ctx.font = 'bold 17px -apple-system, "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('CogniCode  •  ' + langObj.file, cardX + cardW / 2, cardY + 34);
@@ -1982,7 +2175,7 @@ try {
     ctx.textAlign = 'right';
     for (var i = 0; i < codeLines.length; i++) {
       var y = startY + i * lineH;
-      ctx.fillStyle = isLightMode ? '#50677c' : '#a9bfd2';
+      ctx.fillStyle = isLightMode ? '#94a3b8' : '#64748b';
       ctx.font = '500 16px "JetBrains Mono", ui-monospace, monospace';
       ctx.fillText(String(i + 1), cardX + 50, y);
     }
@@ -1993,7 +2186,7 @@ try {
       var y = startY + i * lineH;
       var text = codeLines[i];
       if (text.length > 68) text = text.slice(0, 68) + '…';
-      ctx.fillStyle = isLightMode ? '#10243a' : '#e2e8f0';
+      ctx.fillStyle = isLightMode ? '#1e293b' : '#e2e8f0';
       ctx.fillText(text, cardX + 75, y);
     }
 
@@ -2007,7 +2200,7 @@ try {
     ctx.stroke();
 
     ctx.font = '700 14px "Vazirmatn", -apple-system, sans-serif';
-    ctx.fillStyle = isLightMode ? '#086995' : '#65c8ed';
+    ctx.fillStyle = '#38bdf8';
     ctx.textAlign = 'right';
     ctx.fillText('✨ کوگنی‌کد', cardX + cardW - 46, footY + 29);
 
@@ -2018,7 +2211,7 @@ try {
     ctx.fillText(sumTxt, cardX + cardW - 130, footY + 29);
 
     ctx.font = '600 12px -apple-system, "Segoe UI", sans-serif';
-    ctx.fillStyle = isLightMode ? '#50677c' : '#a9bfd2';
+    ctx.fillStyle = isLightMode ? '#94a3b8' : '#64748b';
     ctx.textAlign = 'left';
     ctx.fillText('cognicode.app  •  iOS & Web 2026', cardX + 44, footY + 29);
   }

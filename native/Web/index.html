@@ -10,7 +10,7 @@
      هر استایل پویا باید با کلاس (مثل .ld-*) اعمال شود، نه style درون‌خطی -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; font-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'self' https:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#0d1b2d">
+<meta name="theme-color" content="#0f172a">
 <meta name="color-scheme" content="dark light">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/icon-180.png" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
+<div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/analysis-brain.svg" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
 <div id="particles-js" class="sonar" aria-hidden="true"><canvas></canvas></div>
 
 <div id="app">
@@ -261,7 +261,7 @@
   </header>
   <div class="sheet-body">
     <div class="loading" id="res-loading">
-      <img class="pulse-logo" src="icons/icon-192.png" alt="" width="66" height="66">
+      <div class="brain-loader" aria-hidden="true"><img src="icons/analysis-brain.svg" alt="" width="78" height="78"></div>
       <p class="load-status" id="res-status">در حال خواندن کد…</p>
       <div class="sk"><i></i><i></i><i></i><i></i></div>
     </div>
@@ -456,4 +456,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
