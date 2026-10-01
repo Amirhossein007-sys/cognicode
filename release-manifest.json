@@ -1,0 +1,24 @@
+{
+  "version": "1.1.0",
+  "build": "5",
+  "revision": "2026.10.02.1",
+  "webResources": {
+    "index.html": "3b5b9dce3db9ef0a6d063ce135272693f80afff62b7bbaad60130b7cd9a1f83c",
+    "styles.css": "ae59a886b73bf62a70be89cab3ca901e02da2aacae6f2b45396106a66a2aedbb",
+    "manifest.webmanifest": "789e3ff5cbdce7a029a028fa65d9fb74a1ffe965c925279a0618ea1ad6b08b2f",
+    "apple-touch-icon.png": "e1442b772f91073bc00098d6ce64a4f94c3a8ffd2512eb04d919fe84cea050e0",
+    "icons/icon-180.png": "e1442b772f91073bc00098d6ce64a4f94c3a8ffd2512eb04d919fe84cea050e0",
+    "icons/icon-192.png": "36cbb0a4ad0513fc4bdff75a06de184787ea48ac6a49c7a67afc19a48d06a0cd",
+    "icons/icon-512.png": "ce534ff8fcb16958b3d7a35a4e953ed1dc607d7ffb594c4e1c136885bb376abf",
+    "icons/analysis-brain.svg": "c57efc359703351da417a22dac60d918cbdaf2d8feef9f14cda0b511d9f707ef",
+    "launch.js": "6500c2084d04aa663525cacbb4913b3ce5370fd7acde7a7ffb6222221038d1f1",
+    "syntax.js": "4b4a98f17c92ac42f790fefdc630b4ca237061d8808108b44b3439097bc48664",
+    "checker.js": "68a446593a6c95f9cc0728a6c64537fb77fccfa21e376e07d060ee8458012280",
+    "sonar.js": "0529d9e873876a4740618d76cfe8d45b93b2629b607ef5d2d77ec808a7899d12",
+    "orbital-clock.js": "598f3a4221130e8754c3f1e840a47a08b7bb4b9721b5de203e6910c230f30fa3",
+    "app.js": "cd615c67beb2076710beb5905cdfa026664e6704232c5cff048bf81355f2de5b",
+    "fonts/YekanBakh-Regular.ttf": "6c9b44758600ea587e9146e6de2bd74b63baa9e9aa7bc9ba63f611bc3580cb40",
+    "fonts/YekanBakh-Bold.ttf": "cbd6e74612c9e82daee644f629f426ce34da24f8315cdbbe81948c2bd9a701a5",
+    "icons/maskable-512.png": "bb741443c2a57948a8757269ad72839be3d3d6ef1d632e34834e1badd63c3b55"
+  }
+}

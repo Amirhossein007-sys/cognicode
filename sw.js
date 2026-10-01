@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v14-orbital-2026';
+var CACHE = 'cognicode-v18-yekan-bakh';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -12,6 +12,7 @@ var PRECACHE = [
   './checker.js',
   './sonar.js',
   './orbital-clock.js',
+  './launch.js',
   './app.js',
   './manifest.webmanifest',
   './apple-touch-icon.png',
@@ -20,14 +21,13 @@ var PRECACHE = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
-  './fonts/Vazirmatn-Regular.woff2',
-  './fonts/Vazirmatn-Bold.woff2',
-  './fonts/Vazirmatn-ExtraBold.woff2'
+  './fonts/YekanBakh-Regular.ttf',
+  './fonts/YekanBakh-Bold.ttf'
 ];
 
 /* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
    هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
-var FRESH_NAMES = ['index.html', 'styles.css', 'syntax.js', 'checker.js', 'sonar.js', 'orbital-clock.js', 'app.js', 'manifest.webmanifest'];
+var FRESH_NAMES = ['index.html', 'styles.css', 'syntax.js', 'checker.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
 
 function isFresh(url) {
   var name = url.pathname.split('/').pop();

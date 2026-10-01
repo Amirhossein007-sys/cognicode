@@ -44,7 +44,7 @@ def verify(bundle=None):
     bundle = Path(bundle)
     with (bundle / "Info.plist").open("rb") as stream:
         actual = plistlib.load(stream)
-    for key in ("UILaunchStoryboardName", "UILaunchScreen", "UIRequiresFullScreen",
+    for key in ("CFBundleShortVersionString", "CFBundleVersion", "UILaunchStoryboardName", "UILaunchScreen", "UIRequiresFullScreen",
                 "UISupportedInterfaceOrientations", "NSCameraUsageDescription",
                 "NSPhotoLibraryUsageDescription"):
         assert actual.get(key) == expected[key], f"Compiled plist lost or changed {key}"

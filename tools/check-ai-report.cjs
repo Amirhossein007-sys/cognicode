@@ -89,6 +89,7 @@ async function scenario(browser, opts) {
     magicFixHidden: document.getElementById('magic-fix-card').hidden,
     problemsHidden: document.getElementById('problems').hidden,
     diffLines: document.querySelectorAll('#diff-viewer-body .diff-line').length,
+    wave: document.querySelector('.brain-marquee').dataset.state,
   }));
   await page.close();
   return { seen, state };
@@ -114,6 +115,7 @@ const RAW_JSON_MARKER = '"explanation"';
       assert.ok(state.bodyText.includes('این کد چه می‌کند'), 'report must render the structured explanation');
       assert.equal(state.verdict, '✓ کد سالم است');
       assert.equal(state.magicFixHidden, true, 'no fix was proposed, so no fix button');
+      assert.equal(state.wave, 'healthy');
     });
 
     // ── 2. Real error: a second (fix) call runs and the magic-fix button appears
@@ -124,6 +126,7 @@ const RAW_JSON_MARKER = '"explanation"';
       assert.equal(state.magicFixHidden, false, 'magic-fix button must be visible when a real fix exists');
       assert.equal(state.problemsHidden, false, 'problems panel must be open so the fix card is reachable');
       assert.ok(state.diffLines > 0, 'split diff must be rendered for the proposed fix');
+      assert.equal(state.wave, 'error');
     });
 
     // ── 3. Reply truncated by max_tokens: the repair step must recover it, and raw
@@ -134,7 +137,7 @@ const RAW_JSON_MARKER = '"explanation"';
         'a truncated reply must not be rendered as raw JSON');
       assert.ok(state.problemsText.includes('کد ناقص است'),
         'the repair step must recover the errors from a truncated reply');
-      assert.equal(state.magicFixHidden, false, 'a recovered error must still offer the fix');
+      assert.equal(state.magicFixHidden, true, 'an incomplete report must not propose a rewrite');
     });
 
     // ── 4. Unparseable reply: explain it, never dump it
@@ -144,9 +147,32 @@ const RAW_JSON_MARKER = '"explanation"';
         'an unparseable reply must not be echoed into the report');
       assert.ok(state.bodyText.includes('خوانا نبود'), 'the report must say the AI reply was unreadable');
       assert.equal(state.magicFixHidden, true, 'no fix may be offered from an unreadable reply');
+      assert.equal(state.wave, 'idle');
     });
 
     // ── 5. Long file: the model must receive the file, not the first 12000 chars
+    await check('empty response: no healthy verdict or green waveform', async () => {
+      const { state } = await scenario(browser, { analysisBody: '' });
+      assert.equal(state.wave, 'idle');
+      assert.equal(state.verdict, '⚠️ بررسی کامل تأیید نشد');
+    });
+    await check('invalid schema: no healthy verdict or green waveform', async () => {
+      const { state } = await scenario(browser, { analysisBody: '{"valid":true,"errors":[]}' });
+      assert.equal(state.wave, 'idle');
+      assert.equal(state.verdict, '⚠️ بررسی کامل تأیید نشد');
+    });
+    await check('incomplete healthy report: no green waveform', async () => {
+      const { state } = await scenario(browser, { analysisBody: ANALYSIS_OK, analysisFinish: 'length' });
+      assert.equal(state.wave, 'idle');
+      assert.equal(state.verdict, '⚠️ بررسی کامل تأیید نشد');
+    });
+    await check('oversized code: explicit limit, no silently omitted code or green verdict', async () => {
+      const { seen, state } = await scenario(browser, { code: 'const value = 1;\n'.repeat(3000), analysisBody: ANALYSIS_OK });
+      assert.equal(seen.length, 0);
+      assert.equal(state.wave, 'idle');
+      assert.equal(state.verdict, '⚠️ بررسی کامل تأیید نشد');
+      assert.ok(state.bodyText.includes('۴۸۰۰۰'));
+    });
     await check('long file: whole file reaches the model', async () => {
       const { seen } = await scenario(browser, { analysisBody: ANALYSIS_OK, code: BIG_CODE });
       assert.ok(seen[0].userChars > 20000,
@@ -161,6 +187,7 @@ const RAW_JSON_MARKER = '"explanation"';
       assert.equal(state.magicFixHidden, false,
         'the fix button must appear whenever a real fix exists, even without hard errors');
       assert.equal(state.verdict, '⚠️ نیاز به اصلاح دارد', 'the model verdict must be reflected, not overridden');
+      assert.equal(state.wave, 'error');
     });
 
     // ── 7. Fix reply itself truncated: never offer a half-written file

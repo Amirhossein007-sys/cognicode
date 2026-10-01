@@ -15,7 +15,9 @@ const assert = require('node:assert/strict');
           page.on('pageerror', error => errors.push(error.message));
           // 20:30 UTC is midnight in Tehran (including the Persian new year).
           await page.clock.install({ time: new Date('2026-03-20T20:30:00Z') });
+          await page.clock.setFixedTime(new Date('2026-03-20T20:30:00Z'));
           await page.goto(pathToFileURL(path.resolve(__dirname, '..', source)).href);
+          await page.locator('#launch-splash').waitFor({ state: 'hidden' });
           await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
           await page.evaluate(() => document.fonts.ready);
           const bounds = await page.evaluate(() => {
@@ -27,7 +29,7 @@ const assert = require('node:assert/strict');
               header: rect('.topbar'), clock: rect('.orbital-clock'), brand: rect('.brand'), actions: rect('.top-actions'),
               wave: rect('.brain-marquee'), editor: rect('.editor'), play: rect('.play'), bottom: rect('.bottom'),
               date: document.querySelector('.orbital-date').textContent,
-              expected: new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
+              expected: new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', month: 'long', day: 'numeric' }).format(new Date()),
               hand: document.querySelector('.orbital-hour').getAttribute('transform'),
               label: document.querySelector('.orbital-clock svg').getAttribute('aria-label')
             };

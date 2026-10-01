@@ -9,11 +9,13 @@
     return clock.querySelector('.orbital-' + name);
   });
   var dateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-    timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit'
+    timeZone: 'Asia/Tehran', month: 'long', day: 'numeric'
   });
   var fullDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
     timeZone: 'Asia/Tehran', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
+  var weekdayFormat = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', weekday: 'long' });
+  var yearFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric' });
   var timeFormat = new Intl.DateTimeFormat('fa-IR', {
     timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
@@ -42,7 +44,9 @@
     markers.forEach(function (marker, index) {
       marker.classList.toggle('orbital-active', Math.floor(hours) === index);
     });
+    var weekday = weekdayFormat.format(now);
     dateLabel.textContent = dateFormat.format(now);
+    clock.querySelector('.orbital-weekday').textContent = weekday + ' · ' + yearFormat.format(now);
     dateLabel.dateTime = tehran.toISOString().slice(0, 10);
     dateLabel.title = fullDateFormat.format(now);
     dateLabel.setAttribute('aria-label', 'تاریخ شمسی تهران، ' + dateLabel.title);

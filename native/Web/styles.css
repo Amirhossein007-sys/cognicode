@@ -3,22 +3,34 @@
    ═══════════════════════════════════════════════ */
 
 @font-face {
-  font-family: 'Vazirmatn';
-  src: url('fonts/Vazirmatn-Regular.woff2') format('woff2');
-  font-weight: 400;
+  font-family: 'Yekan Bakh';
+  src: url('fonts/YekanBakh-Regular.ttf') format('truetype');
+  font-weight: 100 500;
+  font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Vazirmatn';
-  src: url('fonts/Vazirmatn-Bold.woff2') format('woff2');
-  font-weight: 600 700;
+  font-family: 'Yekan Bakh';
+  src: url('fonts/YekanBakh-Bold.ttf') format('truetype');
+  font-weight: 600 900;
+  font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Vazirmatn';
-  src: url('fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
-  font-weight: 800 900;
+  font-family: 'Yekan Bakh Persian';
+  src: url('fonts/YekanBakh-Regular.ttf') format('truetype');
+  font-weight: 100 500;
+  font-style: normal;
   font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+@font-face {
+  font-family: 'Yekan Bakh Persian';
+  src: url('fonts/YekanBakh-Bold.ttf') format('truetype');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
 }
 
 :root {
@@ -40,8 +52,8 @@
   --yellow: #fbbf24;
   --red: #ef4444;
   --grad: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 32%, #6366f1 70%, #8b5cf6 100%);
-  --fa: 'Vazirmatn', -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', 'Cascadia Mono', 'Consolas', monospace;
+  --fa: 'Yekan Bakh', -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Yekan Bakh Persian', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', 'Cascadia Mono', 'Consolas', monospace;
   --editor-font-size: 16px;
   --mono-size: var(--editor-font-size, 16px);
   --lh: 25px;
@@ -1823,6 +1835,24 @@ html[data-theme="light"] .bottom {
 .ld-b0916a { background:#b0916a; color:#b0916a; }
 .ld-8e8e93 { background:#8e8e93; color:#8e8e93; }
 
+/* Use the app's existing particle background, with no second canvas or network. */
+html.launch-pending body > :not(#launch-splash):not(#particles-js) { visibility: hidden; }
+.launch-splash {
+  position: fixed; inset: 0; z-index: 3000;
+  display: grid; place-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) max(24px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 24px) max(24px, env(safe-area-inset-left, 0px));
+  color: #f8fafc; color-scheme: dark;
+}
+.launch-content { display: flex; flex-direction: column; align-items: center; gap: 24px; width: 100%; text-align: center; }
+.launch-brain {
+  display: block; width: 164px; height: 164px;
+  filter: drop-shadow(0 0 24px rgba(56,189,248,.24));
+  animation: launchBreath 2.4s ease-in-out infinite;
+}
+.launch-content p { font-size: 20px; line-height: 1.6; font-weight: 800; text-shadow: 0 2px 12px #0005; }
+@keyframes launchBreath { 50% { transform: scale(1.035); filter: drop-shadow(0 0 32px rgba(56,189,248,.38)); } }
+@media (prefers-reduced-motion: reduce) { .launch-brain { animation: none; } }
+
 /* Compact orbital header. Equal side columns keep the clock truly centered. */
 .topbar {
   display: grid;
@@ -1862,6 +1892,9 @@ html[data-theme="light"] .orbital-clock {
 .orbital-second { stroke: var(--orb-primary); stroke-width: 1.5; }
 .orbital-center { fill: currentColor; stroke: none; }
 .orbital-date { font-size: 12px; line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.orbital-calendar { display: flex; align-items: center; flex-direction: column; padding: 2px 6px; border-radius: 9px; background: var(--orb-face); border: 1px solid var(--orb-marker); width: 94px; }
+.orbital-weekday { font-size: 9px; line-height: 12px; color: var(--orb-primary); }
+.orbital-calendar .orbital-date { font-size: 11px; line-height: 16px; font-weight: 700; }
 .brain-marquee {
   flex: 0 0 30px; height: 30px; min-height: 30px;
   margin: 2px 14px 4px; border: 1px solid #334155; border-radius: 10px;
@@ -1872,6 +1905,12 @@ html[data-theme="light"] .brain-marquee { background: #f8fafc; color: #0369a1; b
 .brain-marquee-track { display: flex; width: 200%; height: 100%; animation: brainMarquee 12s linear infinite; }
 .brain-marquee-track svg { width: 50%; height: 100%; flex: 0 0 50%; stroke-width: 1.5; }
 .brain-marquee-track path { vector-effect: non-scaling-stroke; }
+.brain-marquee { transition: color .3s ease, border-color .3s ease; }
+.brain-marquee[data-state="healthy"] { color: #6ee7b7; border-color: #34d399; }
+.brain-marquee[data-state="error"] { color: #fda4af; border-color: #fb7185; }
+html[data-theme="light"] .brain-marquee[data-state="healthy"] { color: #047857; border-color: #059669; }
+html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; border-color: #e11d48; }
+.brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
 @keyframes brainMarquee { to { transform: translateX(-50%); } }
 /* Keep the existing flex editor and all its overlay/scroll metrics intact. */
 .bottom .play { width: 94%; margin-inline: auto; height: 44px; font-size: 15px; border-radius: 14px; }
