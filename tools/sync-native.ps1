@@ -8,7 +8,7 @@ $web = Join-Path $root 'native/Web'
 
 if (-not (Test-Path $web)) { New-Item -ItemType Directory -Path $web | Out-Null }
 
-$files = @('index.html', 'styles.css', 'syntax.js', 'checker.js', 'sonar.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
+$files = @('index.html', 'styles.css', 'syntax.js', 'checker.js', 'sonar.js', 'orbital-clock.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
 foreach ($f in $files) {
     $src = Join-Path $root $f
     if (Test-Path $src) {
@@ -27,5 +27,4 @@ $swPath = Join-Path $web 'sw.js'
 Set-Content -Path $swPath -Value '/* no service worker inside the native app */' -Encoding UTF8
 
 Write-Output 'native/Web synced'
-
 
