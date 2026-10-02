@@ -436,6 +436,8 @@ window.Checker = (function () {
     staticCheck: staticCheck,
     looksLikeCodeCheck: looksLikeCodeCheck,
     lintWarnings: lintWarnings,
-    localExplain: localExplain
+    localExplain: localExplain,
+    /* CONF برای موتور Malwatch: تشخیص کامنت/رشتهٔ هر زبان (رشته‌ها حفظ می‌شوند) */
+    CONF: CONF
   };
 })();
