@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+7">
+<meta name="cognicode-release" content="1.1.0+10">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -49,17 +49,26 @@
         <span>CogniCode · هوش مصنوعی کد برای آیفون</span>
       </div>
     </div>
-    <div class="orbital-clock" id="orbital-clock">
-      <svg viewBox="0 0 100 100" role="img" aria-label="ساعت تهران">
-        <circle class="orbital-face" cx="50" cy="50" r="47"/>
-        <circle class="orbital-ring" cx="50" cy="50" r="32"/>
-        <g class="orbital-markers"></g>
-        <path class="orbital-hour" d="M50 50V26"/>
-        <path class="orbital-minute" d="M50 50V17"/>
-        <path class="orbital-second" d="M50 56V12"/>
-        <circle class="orbital-center" cx="50" cy="50" r="2.5"/>
-      </svg>
-      <div class="orbital-calendar"><span class="orbital-weekday"></span><time class="orbital-date" dir="rtl" aria-label="تاریخ شمسی تهران"></time></div>
+    <!-- Compact clock adapted from the supplied Pipboy/CRT design. -->
+    <div class="pipboy-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
+      <div class="pipboy-chassis">
+        <span class="pip-screw tl" aria-hidden="true"></span><span class="pip-screw tr" aria-hidden="true"></span>
+        <span class="pip-screw bl" aria-hidden="true"></span><span class="pip-screw br" aria-hidden="true"></span>
+        <div class="pip-crt-screen">
+          <div class="pip-screen-glass" aria-hidden="true"></div><div class="pip-scanlines" aria-hidden="true"></div>
+          <div class="pip-clock-content">
+            <div class="pip-top-bar" dir="ltr" aria-hidden="true"><span>TEHRAN</span><span class="pip-line"></span><span>UTC+03:30</span></div>
+            <div class="pip-clock-main">
+              <span class="pip-clock-badge" aria-hidden="true">CLK</span>
+              <div class="pip-clock-display">
+                <div class="pip-terminal-block"><time class="pip-time" dir="ltr" aria-label="ساعت تهران"><span class="pip-hours">--</span><span class="pip-colon" aria-hidden="true">:</span><span class="pip-minutes">--</span></time></div>
+                <time class="pip-date" dir="ltr" aria-label="تاریخ شمسی تهران">----/--/--</time>
+              </div>
+              <span class="pip-hazard" aria-hidden="true"><span></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="top-actions">
       <button class="icon-btn theme-btn" id="btn-theme" aria-label="تغییر حالت روشن و تاریک">
@@ -160,8 +169,8 @@
     <input type="file" id="gallery-input" accept="image/*" hidden>
 
     <div class="keys-scroll" id="keys-scroll">
-      <button class="key" id="key-focus" type="button" aria-label="حالت تمرکز" aria-pressed="false" title="حالت تمرکز اختیاری">◎</button>
-      <button class="key" id="key-explain" type="button" aria-label="توضیح قسمت انتخاب‌شده" title="توضیح یا بررسی خطوط انتخاب‌شده">✦</button>
+      <button class="key" id="key-focus" type="button" aria-label="حالت تمرکز" aria-pressed="false" title="کاهش حرکت پس‌زمینه و جمع‌وجور کردن ساعت">◎ <span>تمرکز</span></button>
+      <button class="key" id="key-explain" type="button" aria-label="توضیح قسمت انتخاب‌شده" title="توضیح یا بررسی بخش انتخاب‌شده؛ بدون انتخاب، خط فعلی">✦ <span>توضیح کد</span></button>
       <!-- ابزارهای کلیپ‌بورد و فایل -->
       <button class="key sq" id="key-paste" title="چسباندن متن از کلیپ‌بورد" aria-label="چسباندن">
         <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
@@ -255,9 +264,14 @@
   <!-- ═══ نوار پایین ═══ -->
   <footer class="bottom">
     <div class="playbar">
-      <button class="play" id="btn-play">
-        <svg class="play-ico" viewBox="0 0 24 24"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10.54-6.86a1.05 1.05 0 0 0 0-1.76L9.56 4.26A1.04 1.04 0 0 0 8 5.14z"/></svg>
-        <span class="play-label">تحلیل کد</span>
+      <button class="play analysis-button" id="btn-play" type="button">
+        <span class="analysis-outline" aria-hidden="true"></span>
+        <span class="analysis-state">
+          <span class="analysis-plane" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"><path d="M14.2199 21.63C13.0399 21.63 11.3699 20.8 10.0499 16.83L9.32988 14.67L7.16988 13.95C3.20988 12.63 2.37988 10.96 2.37988 9.78001C2.37988 8.61001 3.20988 6.93001 7.16988 5.60001L15.6599 2.77001C17.7799 2.06001 19.5499 2.27001 20.6399 3.35001C21.7299 4.43001 21.9399 6.21001 21.2299 8.33001L18.3999 16.82C17.0699 20.8 15.3999 21.63 14.2199 21.63ZM7.63988 7.03001C4.85988 7.96001 3.86988 9.06001 3.86988 9.78001C3.86988 10.5 4.85988 11.6 7.63988 12.52L10.1599 13.36C10.3799 13.43 10.5599 13.61 10.6299 13.83L11.4699 16.35C12.3899 19.13 13.4999 20.12 14.2199 20.12C14.9399 20.12 16.0399 19.13 16.9699 16.35L19.7999 7.86001C20.3099 6.32001 20.2199 5.06001 19.5699 4.41001C18.9199 3.76001 17.6599 3.68001 16.1299 4.19001L7.63988 7.03001Z" fill="currentColor"/><path d="M10.11 14.4C9.92005 14.4 9.73005 14.33 9.58005 14.18C9.29005 13.89 9.29005 13.41 9.58005 13.12L13.16 9.53C13.45 9.24 13.93 9.24 14.22 9.53C14.51 9.82 14.51 10.3 14.22 10.59L10.64 14.18C10.5 14.33 10.3 14.4 10.11 14.4Z" fill="currentColor"/></svg>
+          </span>
+          <span class="play-label">تحلیل کد</span>
+        </span>
       </button>
       <p class="micro-hint">کد اجرا نمی‌شود — فقط بررسی و توضیح داده می‌شود</p>
     </div>
@@ -301,10 +315,16 @@
   </header>
   <div class="sheet-body">
     <div class="loading" id="res-loading">
-      <div class="brain-loader" aria-hidden="true"><img src="icons/analysis-brain.svg" alt="" width="78" height="78"></div>
-      <p class="load-status" id="res-status">در حال خواندن کد…</p>
+      <!-- Terminal loader adapted from Uiverse.io by jeremyssocial. -->
+      <div class="terminal-loader" dir="ltr" aria-hidden="true">
+        <div class="terminal-header">
+          <div class="terminal-title">Status</div>
+          <div class="terminal-controls"><span class="control close"></span><span class="control minimize"></span><span class="control maximize"></span></div>
+        </div>
+        <div class="terminal-text">Loading...</div>
+      </div>
+      <p class="load-status" id="res-status" role="status" aria-live="polite">در حال خواندن کد…</p>
       <button type="button" class="patch-action" id="res-stop">توقف بررسی</button>
-      <div class="sk"><i></i><i></i><i></i><i></i></div>
     </div>
     <div class="review-summary glass-workspace" id="review-summary" hidden aria-live="polite"></div>
     <!-- دیاگرام تعاملی جریان ذهنی کد -->
@@ -436,7 +456,7 @@
       <p class="hint-line">پیش‌نویس جاری جدا از تاریخچه ذخیره می‌شود؛ پاک‌کردن ادیتور، پیش‌نویس خالی را جایگزین می‌کند. واگرد همچنان در جلسهٔ باز در دسترس است.</p>
       <div class="about">
         <b>کوگنی کد (CogniCode)</b>
-        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۷ · ۱۱ مهر ۱۴۰۵</p>
+        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۱۰ · ۱۱ مهر ۱۴۰۵</p>
         <p>تحلیل‌گر هوشمند کد، طراحی‌شده برای آیفون به سبک VS Code با پشتیبانی از ۳۴ زبان برنامه‌نویسی. این برنامه کد را اجرا نمی‌کند؛ فقط صحت آن را بررسی و رفتارش را توضیح می‌دهد.</p>
       </div>
     </div>
@@ -502,7 +522,7 @@
   <div class="sheet-body">
     <p id="selection-location"></p><pre class="selection-code glass-workspace" id="selection-code" dir="ltr"></pre>
     <div class="selection-actions"><button type="button" data-selection-action="explain">توضیح بده</button><button type="button" data-selection-action="improve">پیشنهاد بهبود</button><button type="button" data-selection-action="review">بررسی خطا</button><button type="button" id="selection-stop" hidden>توقف بررسی</button></div>
-    <p class="hint-line">توضیح بر اساس خطوط انتخاب‌شده است؛ وابستگی‌های بیرون این بخش ممکن است در دسترس نباشند.</p>
+    <p class="hint-line">برای بررسی چند خط، ابتدا آن‌ها را در ویرایشگر انتخاب کن؛ بدون انتخاب، خط فعلی نمایش داده می‌شود. توضیح هوش مصنوعی به API تنظیم‌شده نیاز دارد و فقط همین بخش را می‌بیند.</p>
     <div class="md" id="selection-result" aria-live="polite"></div>
   </div>
 </section>

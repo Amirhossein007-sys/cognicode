@@ -1,58 +1,48 @@
-/* OrbitalClock: framework-free adaptation for the PWA and native WKWebView. */
+/* Pipboy/CRT clock: retains this filename as the web/native resource entry point. */
 'use strict';
 (function () {
-  var clock = document.getElementById('orbital-clock');
+  var clock = document.getElementById('tehran-clock');
   if (!clock) return;
-  var svg = clock.querySelector('svg');
-  var dateLabel = clock.querySelector('time');
-  var hands = ['hour', 'minute', 'second'].map(function (name) {
-    return clock.querySelector('.orbital-' + name);
+  var timeLabel = clock.querySelector('.pip-time');
+  var dateLabel = clock.querySelector('.pip-date');
+  var hoursLabel = clock.querySelector('.pip-hours');
+  var minutesLabel = clock.querySelector('.pip-minutes');
+  // Shift the instant once, then format in UTC. Time and calendar share the fixed
+  // UTC+03:30 requested by the user, independently of device zone or DST rules.
+  var offset = 210 * 60000;
+  var timeFormat = new Intl.DateTimeFormat('fa-IR-u-nu-arabext', {
+    timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
-  var dateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-    timeZone: 'Asia/Tehran', month: 'long', day: 'numeric'
+  var dateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', {
+    timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'
   });
-  var fullDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-    timeZone: 'Asia/Tehran', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  var fullDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', {
+    timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
-  var weekdayFormat = new Intl.DateTimeFormat('fa-IR', { timeZone: 'Asia/Tehran', weekday: 'long' });
-  var yearFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric' });
-  var timeFormat = new Intl.DateTimeFormat('fa-IR', {
-    timeZone: 'Asia/Tehran', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-  });
-  var markers = [];
-  for (var i = 0; i < 12; i++) {
-    var marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    var angle = (i * 30 - 90) * Math.PI / 180;
-    marker.setAttribute('cx', String(50 + 38 * Math.cos(angle)));
-    marker.setAttribute('cy', String(50 + 38 * Math.sin(angle)));
-    marker.setAttribute('r', i % 3 === 0 ? '2' : '1.4');
-    marker.setAttribute('class', 'orbital-marker' + (i % 3 === 0 ? ' orbital-cardinal' : ''));
-    clock.querySelector('.orbital-markers').appendChild(marker);
-    markers.push(marker);
+  function parts(format, date) {
+    var value = {};
+    format.formatToParts(date).forEach(function (part) { value[part.type] = part.value; });
+    return value;
   }
   var timer;
   function update() {
-    var now = new Date();
-    // Fixed UTC+03:30 requested by the user; independent of the device timezone.
-    var tehran = new Date(now.getTime() + 210 * 60000);
-    var seconds = tehran.getUTCSeconds();
-    var minutes = tehran.getUTCMinutes() + seconds / 60;
-    var hours = tehran.getUTCHours() % 12 + minutes / 60;
-    [hours * 30, minutes * 6, seconds * 6].forEach(function (angle, index) {
-      hands[index].setAttribute('transform', 'rotate(' + angle + ' 50 50)');
-    });
-    markers.forEach(function (marker, index) {
-      marker.classList.toggle('orbital-active', Math.floor(hours) === index);
-    });
-    var weekday = weekdayFormat.format(now);
-    dateLabel.textContent = dateFormat.format(now);
-    clock.querySelector('.orbital-weekday').textContent = weekday + ' · ' + yearFormat.format(now);
-    dateLabel.dateTime = tehran.toISOString().slice(0, 10);
-    dateLabel.title = fullDateFormat.format(now);
-    dateLabel.setAttribute('aria-label', 'تاریخ شمسی تهران، ' + dateLabel.title);
-    svg.setAttribute('aria-label', 'ساعت تهران ' + timeFormat.format(now) + '، UTC+۳:۳۰');
     clearTimeout(timer);
-    if (!document.hidden) timer = setTimeout(update, 1000 - now.getMilliseconds());
+    var now = new Date();
+    var tehran = new Date(now.getTime() + offset);
+    var time = parts(timeFormat, tehran), date = parts(dateFormat, tehran);
+    hoursLabel.textContent = time.hour;
+    minutesLabel.textContent = time.minute;
+    dateLabel.textContent = date.year + '/' + date.month + '/' + date.day;
+    dateLabel.dateTime = tehran.toISOString().slice(0, 10);
+    timeLabel.dateTime = now.toISOString();
+    var timeText = time.hour + ':' + time.minute;
+    var fullDate = fullDateFormat.format(tehran);
+    timeLabel.setAttribute('aria-label', 'ساعت تهران ' + timeText + '، UTC+۳:۳۰');
+    dateLabel.setAttribute('aria-label', 'تاریخ شمسی تهران، ' + fullDate);
+    clock.setAttribute('aria-label', 'ساعت تهران ' + timeText + '، ' + fullDate + '، UTC+۳:۳۰');
+    clock.title = clock.getAttribute('aria-label');
+    // The display shows minutes; one update at each minute boundary is enough.
+    if (!document.hidden) timer = setTimeout(update, 60000 - (now.getTime() % 60000));
   }
   document.addEventListener('visibilitychange', update);
   window.addEventListener('pageshow', update);
