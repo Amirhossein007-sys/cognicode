@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+6">
+<meta name="cognicode-release" content="1.1.0+7">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -26,6 +26,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="workspace.css">
 </head>
 <body>
 <div id="launch-splash" class="launch-splash" role="status" aria-label="در حال باز شدن کوگنی کد">
@@ -85,6 +86,16 @@
   <section class="editor-shell">
     <div class="editor" id="editor">
       <div class="zoom-hud" id="zoom-hud" aria-hidden="true">۱۰۰٪</div>
+      <div class="quick-start glass-workspace" id="quick-start" dir="rtl" hidden>
+        <b>از کجا شروع کنیم؟</b><p>کدت را وارد کن؛ کوگنی کنارت بررسی می‌کند.</p>
+        <div class="quick-grid">
+          <button type="button" data-quick="key-paste">چسباندن کد</button>
+          <button type="button" data-quick="key-open">انتخاب فایل</button>
+          <button type="button" data-quick="key-camera">اسکن تصویر</button>
+          <button type="button" data-quick="key-sample">کد نمونه</button>
+        </div>
+        <small id="draft-status" role="status">پیش‌نویس به‌صورت خودکار ذخیره می‌شود</small>
+      </div>
       <div class="gutter-wrap">
         <div class="gutter" id="gutter" aria-hidden="true">1</div>
         <div class="gutter-errs" id="gutter-errs" aria-hidden="true"></div>
@@ -110,6 +121,7 @@
       </button>
     </header>
     <div class="problems-scroll" id="problems-scroll">
+      <div class="review-summary glass-workspace" id="problems-summary"></div>
       <div class="magic-fix-card" id="magic-fix-card" hidden>
         <div class="mf-head">
           <div class="mf-title">
@@ -125,7 +137,7 @@
         <div class="mf-diff-toggle-row">
           <button class="btn-diff-toggle" id="btn-diff-toggle" type="button">
             <svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M21 3l-7.5 7.5"/><path d="M3 21l7.5-7.5"/></svg>
-            <span id="diff-toggle-text">مشاهده مقایسه‌ای تغییرات (Split Diff)</span>
+            <span id="diff-toggle-text">مشاهدهٔ مقایسهٔ تغییرات</span>
           </button>
         </div>
         <div class="diff-viewer-wrap" id="diff-viewer-wrap" hidden>
@@ -148,6 +160,8 @@
     <input type="file" id="gallery-input" accept="image/*" hidden>
 
     <div class="keys-scroll" id="keys-scroll">
+      <button class="key" id="key-focus" type="button" aria-label="حالت تمرکز" aria-pressed="false" title="حالت تمرکز اختیاری">◎</button>
+      <button class="key" id="key-explain" type="button" aria-label="توضیح قسمت انتخاب‌شده" title="توضیح یا بررسی خطوط انتخاب‌شده">✦</button>
       <!-- ابزارهای کلیپ‌بورد و فایل -->
       <button class="key sq" id="key-paste" title="چسباندن متن از کلیپ‌بورد" aria-label="چسباندن">
         <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
@@ -289,8 +303,10 @@
     <div class="loading" id="res-loading">
       <div class="brain-loader" aria-hidden="true"><img src="icons/analysis-brain.svg" alt="" width="78" height="78"></div>
       <p class="load-status" id="res-status">در حال خواندن کد…</p>
+      <button type="button" class="patch-action" id="res-stop">توقف بررسی</button>
       <div class="sk"><i></i><i></i><i></i><i></i></div>
     </div>
+    <div class="review-summary glass-workspace" id="review-summary" hidden aria-live="polite"></div>
     <!-- دیاگرام تعاملی جریان ذهنی کد -->
     <div class="mental-logic-map" id="mental-logic-map" hidden>
       <div class="mlm-head">
@@ -350,6 +366,7 @@
     </div>
   </header>
   <div class="sheet-body">
+    <label class="fld"><span>جست‌وجوی نشست‌ها</span><input id="history-search" type="search" placeholder="نام فایل، زبان یا خلاصهٔ گزارش"></label>
     <div class="hist-list" id="hist-list"></div>
   </div>
 </section>
@@ -367,6 +384,10 @@
   </header>
   <div class="sheet-body">
     <div class="form">
+      <div class="form-card">
+        <label class="fld"><span>اندازهٔ متن گزارش و پنل‌ها</span><input id="cfg-text-scale" type="range" min="100" max="150" step="10" value="100"><output id="text-scale-value" for="cfg-text-scale">۱۰۰٪</output></label>
+        <small class="hint-line">بزرگ‌نمایی کد همچنان جداگانه در ادیتور در دسترس است.</small>
+      </div>
       <div class="form-card">
         <label class="fld">
           <span>آدرس سرویس هوش مصنوعی <small>(گپ جی پی تی / OpenAI API)</small></span>
@@ -387,7 +408,7 @@
               <svg class="eye-off" viewBox="0 0 24 24" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
-          <small class="hint-line">کلید فقط در حافظه همین دستگاه و همین مرورگر می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود. روی گوشی/سیستم اشتراکی ذخیره نکن.</small>
+          <small class="hint-line" id="credential-hint">کلید فقط در حافظه همین دستگاه و همین مرورگر می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود. روی گوشی/سیستم اشتراکی ذخیره نکن.</small>
         </label>
         <label class="fld">
           <span>نام مدل</span>
@@ -412,9 +433,10 @@
         <span class="row-txt">ذخیره تاریخچه روی گوشی<small>تحلیل‌های قبلی برای مرور بعدی</small></span>
         <span class="switch"><input type="checkbox" id="cfg-hist" checked><i></i></span>
       </label>
+      <p class="hint-line">پیش‌نویس جاری جدا از تاریخچه ذخیره می‌شود؛ پاک‌کردن ادیتور، پیش‌نویس خالی را جایگزین می‌کند. واگرد همچنان در جلسهٔ باز در دسترس است.</p>
       <div class="about">
         <b>کوگنی کد (CogniCode)</b>
-        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۶ · ۱۱ مهر ۱۴۰۵</p>
+        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۷ · ۱۱ مهر ۱۴۰۵</p>
         <p>تحلیل‌گر هوشمند کد، طراحی‌شده برای آیفون به سبک VS Code با پشتیبانی از ۳۴ زبان برنامه‌نویسی. این برنامه کد را اجرا نمی‌کند؛ فقط صحت آن را بررسی و رفتارش را توضیح می‌دهد.</p>
       </div>
     </div>
@@ -475,6 +497,16 @@
   </div>
 </section>
 
+<section class="sheet" id="sheet-selection" role="dialog" aria-modal="true" aria-label="بررسی قسمت انتخاب‌شده">
+  <div class="grabber"></div><header class="sheet-head"><h2>این قسمت را بررسی کن</h2><button class="icon-btn" data-close aria-label="بستن">×</button></header>
+  <div class="sheet-body">
+    <p id="selection-location"></p><pre class="selection-code glass-workspace" id="selection-code" dir="ltr"></pre>
+    <div class="selection-actions"><button type="button" data-selection-action="explain">توضیح بده</button><button type="button" data-selection-action="improve">پیشنهاد بهبود</button><button type="button" data-selection-action="review">بررسی خطا</button><button type="button" id="selection-stop" hidden>توقف بررسی</button></div>
+    <p class="hint-line">توضیح بر اساس خطوط انتخاب‌شده است؛ وابستگی‌های بیرون این بخش ممکن است در دسترس نباشند.</p>
+    <div class="md" id="selection-result" aria-live="polite"></div>
+  </div>
+</section>
+<div class="operation-bar glass-workspace" id="operation-bar" hidden role="status"><span id="operation-stage"></span><button id="operation-stop" type="button">توقف</button></div>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="launch.js"></script>
@@ -483,6 +515,9 @@
 <script src="malwatch.js"></script>
 <script src="sonar.js"></script>
 <script src="orbital-clock.js"></script>
+<script src="workspace-store.js"></script>
+<script src="change-set.js"></script>
+<script src="workspace-features.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

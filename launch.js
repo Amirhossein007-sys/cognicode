@@ -1,12 +1,15 @@
-/* Shared PWA / WKWebView launch screen: three seconds of visible presentation. */
+/* Preserve the branded first launch; subsequent launches finish when assets paint. */
 'use strict';
 (function () {
   var splash = document.getElementById('launch-splash');
   if (!splash) return;
-  var remaining = 3000, started = false, finished = false, since = 0, timer;
+  var seen = false;
+  try { seen = localStorage.getItem('cognicode.launch-seen.v1') === '1'; } catch (_) {}
+  var remaining = seen ? 350 : 3000, started = false, finished = false, since = 0, timer;
   function finish() {
     if (finished) return;
     finished = true;
+    try { localStorage.setItem('cognicode.launch-seen.v1', '1'); } catch (_) {}
     clearTimeout(timer);
     document.removeEventListener('visibilitychange', visibilityChanged);
     document.documentElement.classList.remove('launch-pending');

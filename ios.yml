@@ -1,0 +1,87 @@
+name: Build CogniCode IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Verify device JavaScript
+        run: |
+          node tools/check-device-script.cjs
+          node tools/check-change-set.cjs
+          node --check app.js
+          node --check workspace-store.js
+          node --check workspace-features.js
+          node --check change-set.js
+
+      - name: Sync Web files to native
+        run: pwsh -NoProfile -File tools/sync-native.ps1
+
+      - name: Verify release resources and version
+        run: node tools/verify-release.cjs --manifest
+
+      - name: Generate Xcode project
+        working-directory: native
+        run: |
+          cp CogniCode/Info.plist /tmp/cognicode-source-info.plist
+          xcodegen generate
+          cmp CogniCode/Info.plist /tmp/cognicode-source-info.plist
+          python3 ../tools/verify-ios-bundle.py
+
+      - name: Verify generated bundle identifiers
+        working-directory: native
+        run: |
+          xcodebuild -project CogniCode.xcodeproj \
+            -alltargets -configuration Release -sdk iphoneos \
+            -showBuildSettings -json > "$RUNNER_TEMP/cognicode-build-settings.json"
+          python3 ../tools/verify-ios-bundle.py --build-settings "$RUNNER_TEMP/cognicode-build-settings.json"
+
+      - name: Build App (unsigned)
+        working-directory: native
+        run: |
+          xcodebuild -project CogniCode.xcodeproj \
+            -scheme CogniCode \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            clean build \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Verify full-screen launch config
+        working-directory: native
+        run: |
+          python3 ../tools/verify-ios-bundle.py build/Build/Products/Release-iphoneos/CogniCode.app
+
+      - name: Package IPA
+        working-directory: native
+        run: |
+          rm -rf Payload CogniCode-unsigned.ipa
+          mkdir -p Payload
+          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -n 1)
+          echo "Found compiled app at: $APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          zip -qry CogniCode-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CogniCode-1.1.0-build-7-${{ github.run_number }}
+          path: |
+            native/CogniCode-unsigned.ipa
+            release.json
+            release-manifest.json
+          if-no-files-found: error

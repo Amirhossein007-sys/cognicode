@@ -1,0 +1,76 @@
+name: CogniCode
+options:
+  bundleIdPrefix: com.cognicode
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+schemes:
+  CogniCode:
+    build:
+      targets:
+        CogniCode: all
+    run:
+      config: Release
+    archive:
+      config: Release
+
+targets:
+  CogniCode:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    dependencies:
+      - target: CogniCodeWidgets
+        embed: true
+    sources:
+      - path: CogniCode
+        excludes:
+          - "Info.plist"
+      - path: Web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cognicode.CogniCode
+        # Use the checked-in plist. XcodeGen's `info` generates/overwrites it.
+        INFOPLIST_FILE: CogniCode/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.10"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Info.plist طھظ†ظ‡ط§ ظ…ظ†ط¨ط¹ ط­ظ‚غŒظ‚طھ ط§ط³طھط› طھظˆظ„غŒط¯ ط®ظˆط¯ع©ط§ط± ط±ط§ ظ‚ط·ط¹ ظ…غŒâ€Œع©ظ†غŒظ… طھط§ ع©ظ„غŒط¯ظ‡ط§غŒ
+        # UILaunchScreen / UILaunchStoryboardName ظ‡ظ…غŒط´ظ‡ ط¯ط³طھâ€Œظ†ط®ظˆط±ط¯ظ‡ ط¨ظ…ط§ظ†ظ†ط¯
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "7"
+        CADisableMinimumFrameDurationOnPhone: true
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+
+  CogniCodeWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: CogniCodeWidgets
+        excludes:
+          - "Info.plist"
+      - path: CogniCode/Shared/ActivityAttributes.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cognicode.CogniCode.widgets
+        INFOPLIST_FILE: CogniCodeWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.10"
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "7"
