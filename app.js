@@ -904,18 +904,8 @@ try {
     });
   }
 
-  /* روی iOS، WKWebView نوع ورودی (تصویر یا فایل) را به delegate نمی‌گوید؛
-     قبل از بازشدن پنل بومی، رشتهٔ accept را از پل اعلام می‌کنیم تا پیکر
-     درست (گالری تصویر یا انتخاب فایل متنی) باز شود. در مرورگر بی‌اثر است. */
-  function armNativeFilePicker(input) {
-    var bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.fileBridge;
-    if (!bridge || !input) return;
-    try {
-      bridge.postMessage({ accept: input.accept || '', capture: input.getAttribute('capture') || '' });
-    } catch (_) {}
-  }
-
-  /* دکمه باز کردن فایل کد از دستگاه */
+  /* دکمه باز کردن فایل کد از دستگاه — iOS خودش پیکر فایل/گالری را برای
+     <input type=file> باز می‌کند؛ نیازی به پل بومی نیست */
   if (keyOpen && fileInput) {
     keyOpen.addEventListener('click', function () {
       haptic('light');
@@ -924,7 +914,6 @@ try {
     });
     $('import-file').addEventListener('click', function () {
       closeSheets();
-      armNativeFilePicker(fileInput);
       fileInput.click();
     });
 
@@ -1078,7 +1067,6 @@ try {
       openSheet('sheet-settings');
       return;
     }
-    armNativeFilePicker(input);
     input.click();
   }
   keyCamera.addEventListener('click', function () { chooseCodeImage(cameraInput); });

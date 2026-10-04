@@ -1,7 +1,5 @@
 import SwiftUI
 import WebKit
-import PhotosUI
-import UniformTypeIdentifiers
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -155,16 +153,11 @@ struct WebViewContainer: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let webView: WKWebView
         let keyboardManager = NativeKeyboardManager()
         private var requests: [String: URLSessionDataTask] = [:]
         private var recoveryAttempts = 0
-        /// نوع ورودی فایل (`accept`) که جاوااسکریپت قبل از کلیک اعلام می‌کند؛
-        /// چون WKOpenPanelParameters خودش این اطلاعات را به delegate نمی‌دهد.
-        private var pendingFileAccept = ""
-        /// تکمیل‌کنندهٔ runOpenPanelWith؛ هر لحظه حداکثر یک پیکر باز است، پس یک خانه کافی است.
-        private var pendingOpenPanelCompletion: (([URL]?) -> Void)?
         func cancelRequests() {
             for task in requests.values { task.cancel() }
             requests.removeAll()
@@ -175,7 +168,7 @@ struct WebViewContainer: UIViewRepresentable {
             webView.evaluateJavaScript("window.\(name) && window.\(name).apply(null, \(literal));", completionHandler: nil)
         }
         static let messageHandlerNames = [
-            "aiBridge", "themeBridge", "hapticBridge", "dynamicIslandBridge", "keyboardBridge", "saveImage", "aiCancelBridge", "credentialBridge", "draftBridge", "clipboardBridge", "fileBridge"
+            "aiBridge", "themeBridge", "hapticBridge", "dynamicIslandBridge", "keyboardBridge", "saveImage", "aiCancelBridge", "credentialBridge", "draftBridge", "clipboardBridge"
         ]
 
         override init() {
@@ -219,7 +212,6 @@ struct WebViewContainer: UIViewRepresentable {
             DispatchQueue.main.async { _ = DynamicIslandManager.shared }
 
             wv.navigationDelegate = self
-            wv.uiDelegate = self
             for name in Self.messageHandlerNames {
                 wv.configuration.userContentController.add(self, name: name)
             }
@@ -305,11 +297,6 @@ struct WebViewContainer: UIViewRepresentable {
                     let text = UIPasteboard.general.string ?? ""
                     self.notify("__onNativeClipboardText", arguments: [text])
                 }
-                return
-            }
-
-            if message.name == "fileBridge", let object = message.body as? [String: Any] {
-                pendingFileAccept = (object["accept"] as? String) ?? ""
                 return
             }
 
@@ -435,128 +422,9 @@ struct WebViewContainer: UIViewRepresentable {
             recoveryAttempts = 0
         }
 
-        // MARK: - پنل انتخاب فایل/تصویر (بدون این، <input type=file> روی دستگاه
-        // هیچ پاسخی نمی‌دهد و دکمه‌های «انتخاب فایل» و «اسکن تصویر» مرده‌اند)
-        func webView(_ webView: WKWebView,
-                     runOpenPanelWith parameters: WKOpenPanelParameters,
-                     initiatedByFrame frameInfo: WKFrameInfo,
-                     completionHandler: @escaping ([URL]?) -> Void) {
-            // pendingFileAccept عمداً ریست نمی‌شود: پیام fileBridge و درخواست پنل
-            // هر دو از همان صف IPC می‌آیند و آخرین accept اعلام‌شده همیشه معتبر است.
-            let wantsImage = pendingFileAccept.lowercased().contains("image")
-            DispatchQueue.main.async {
-                if wantsImage {
-                    self.presentImagePicker(allowsMultiple: parameters.allowsMultipleSelection, completionHandler: completionHandler)
-                } else {
-                    self.presentDocumentPicker(allowsMultiple: parameters.allowsMultipleSelection, completionHandler: completionHandler)
-                }
-            }
-        }
-
-        private func presentImagePicker(allowsMultiple: Bool, completionHandler: @escaping ([URL]?) -> Void) {
-            var configuration = PHPickerConfiguration()
-            configuration.filter = .images
-            configuration.selectionLimit = allowsMultiple ? 0 : 1
-            let picker = PHPickerViewController(configuration: configuration)
-            picker.delegate = self
-            picker.modalPresentationStyle = .formSheet
-            guard let root = webView.window?.rootViewController else { completionHandler([]); return }
-            var top = root
-            while let presented = top.presentedViewController { top = presented }
-            self.pendingOpenPanelCompletion = completionHandler
-            top.present(picker, animated: true)
-        }
-
-        private func presentDocumentPicker(allowsMultiple: Bool, completionHandler: @escaping ([URL]?) -> Void) {
-            // asCopy کپی موقت می‌دهد؛ نه جنگ با Security-Scoped Bookmarks، نه نشت دسترسی
-            var types = Self.documentTypes(for: pendingFileAccept)
-            if types.isEmpty { types = [.data, .text, .json] }
-            let picker: UIDocumentPickerViewController
-            if #available(iOS 14.0, *) {
-                picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
-            } else {
-                picker = UIDocumentPickerViewController(documentTypes: types.compactMap(\.identifier), in: .import)
-            }
-            picker.allowsMultipleSelection = allowsMultiple
-            picker.delegate = self
-            picker.modalPresentationStyle = .formSheet
-            guard let root = webView.window?.rootViewController else { completionHandler([]); return }
-            var top = root
-            while let presented = top.presentedViewController { top = presented }
-            self.pendingOpenPanelCompletion = completionHandler
-            top.present(picker, animated: true)
-        }
-
-        /// نگاشت رشتهٔ `accept` جاوااسکریپت (`.js,text/*,…`) به UTTypeهای قابل‌ارائه.
-        private static func documentTypes(for accept: String) -> [UTType] {
-            var seen = Set<String>()
-            var types: [UTType] = []
-            for rawToken in accept.split(whereSeparator: { $0 == "," || $0 == " " }) {
-                let token = rawToken.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                let mapped: UTType?
-                if token.hasPrefix(".") {
-                    mapped = UTType(filenameExtension: String(token.dropFirst()))
-                } else if token == "text/*" || token.hasPrefix("text/") {
-                    mapped = .text
-                } else if token.contains("json") {
-                    mapped = .json
-                } else if token.contains("javascript") {
-                    mapped = UTType(filenameExtension: "js")
-                } else {
-                    mapped = UTType(mimeType: token)
-                }
-                guard let mapped, !seen.contains(mapped.identifier) else { continue }
-                seen.insert(mapped.identifier)
-                types.append(mapped)
-            }
-            return types
-        }
-
-        // MARK: - PHPickerViewControllerDelegate (تصویر از گالری، بدون نیاز به مجوز عکس‌ها)
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
-            guard let completion = pendingOpenPanelCompletion else { return }
-            pendingOpenPanelCompletion = nil
-            pickedImageURLs(from: results.map(\.itemProvider)) { urls in
-                completion(urls?.isEmpty == false ? urls : [])
-            }
-        }
-
-        // MARK: - UIDocumentPickerDelegate (فایل کد متنی از دستگاه)
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let completion = pendingOpenPanelCompletion else { return }
-            pendingOpenPanelCompletion = nil
-            completion(urls)
-        }
-
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            guard let completion = pendingOpenPanelCompletion else { return }
-            pendingOpenPanelCompletion = nil
-            completion([])
-        }
-
-        private func pickedImageURLs(from providers: [NSItemProvider], completion: @escaping ([URL]?) -> Void) {
-            guard !providers.isEmpty else { completion([]); return }
-            let group = DispatchGroup()
-            let lock = NSLock()
-            var urls: [URL] = []
-            for provider in providers {
-                group.enter()
-                // پسوند واقعی از نوع محتوای ارائه‌شده؛ در نبودش تصویر را jpg فرض می‌کنیم
-                let identifiers = provider.registeredTypeIdentifiers
-                let preferred = identifiers.first { UTType($0)?.conforms(to: .image) == true } ?? identifiers.first ?? UTType.image.identifier
-                let fallbackExtension = UTType(preferred)?.preferredFilenameExtension ?? "jpg"
-                provider.loadDataRepresentation(forTypeIdentifier: preferred) { data, _ in
-                    defer { group.leave() }
-                    guard let data, !data.isEmpty else { return }
-                    let url = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("cognicode-pick-\(UUID().uuidString).\(fallbackExtension)")
-                    do { try data.write(to: url, options: .atomic) } catch { return }
-                    lock.lock(); urls.append(url); lock.unlock()
-                }
-            }
-            group.notify(queue: .main) { completion(urls) }
-        }
+        // ورودی‌های <input type=file> در iOS به‌صورت بومی توسط WebKit مدیریت می‌شوند
+        // (پنل گالری/فایل‌ها خودکار باز می‌شود)؛ برخلاف macOS هیچ runOpenPanelWith
+        // در WKUIDelegateِ iOS وجود ندارد و افزودنش باعث خطای کامپایل می‌شود.
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             DynamicIslandManager.shared.endAnalysis(success: false)
