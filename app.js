@@ -162,6 +162,8 @@ try {
   var backdrop = $('backdrop'), toastEl = $('toast');
   var resVerdict = $('res-verdict'), resFile = $('res-file'), resMode = $('res-mode'), resShare = $('res-share');
   var resLoading = $('res-loading'), resStatus = $('res-status'), resBody = $('res-body');
+  /* پوشش لودینگ تحلیل: تمام‌صفحه با بلور؛ فقط ترمینال وضعیت، بدون هیچ دکمه‌ای */
+  var analysisOverlay = $('analysis-overlay'), analysisStatus = $('analysis-status');
   var histList = $('hist-list'), langListEl = $('lang-list');
   var cfgBase = $('cfg-base'), cfgProxy = $('cfg-proxy'), cfgKey = $('cfg-key'), cfgModel = $('cfg-model'), cfgHist = $('cfg-hist');
   var cfgTest = $('cfg-test'), cfgTestLine = $('cfg-test-line');
@@ -205,8 +207,11 @@ try {
     if (!activeOperation) return;
     $('operation-stage').textContent = stage;
     if (resStatus) resStatus.textContent = stage;
-    $('operation-bar').hidden = false;
+    setAnalysisStatus(stage);
     $('operation-stop').disabled = false;
+    /* در حین تحلیل، پوشش بلور جای نوار عملیات را می‌گیرد: هیچ دکمه‌ای بالای
+       لودینگ دیده نمی‌شود تا تحلیل تا پایان بدون وقفه نمایش داده شود */
+    $('operation-bar').hidden = isAnalysisOverlayVisible();
   }
   function finishOperation(op) {
     if (activeOperation === op) { activeOperation = null; $('operation-bar').hidden = true; }
@@ -853,29 +858,61 @@ try {
     });
   }
 
+  /* خواندن قطعی کلیپ‌بورد روی iOS: navigator.clipboard.readText در WKWebView
+     معمولاً reject می‌شود؛ پل بومی UIPasteboard را می‌خواند و هر دو مکمل هم دارند */
+  function readClipboardNative() {
+    return new Promise(function (resolve, reject) {
+      var bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.clipboardBridge;
+      if (!bridge) { reject(new Error('no-native-clipboard')); return; }
+      var timer = setTimeout(function () { delete window.__onNativeClipboardText; reject(new Error('clipboard-timeout')); }, 1500);
+      window.__onNativeClipboardText = function (text) {
+        clearTimeout(timer);
+        delete window.__onNativeClipboardText;
+        if (typeof text === 'string') resolve(text);
+        else reject(new Error('clipboard-unavailable'));
+      };
+      bridge.postMessage({ action: 'read' });
+    });
+  }
+  function pasteIntoEditor(text) {
+    if (!text) { toast('کلیپ‌بورد خالی است'); return; }
+    insertText(text);
+    ensureCaretVisible();
+    toast('متن چسبانده شد ✓');
+    haptic('success');
+  }
+  function pasteViaExecCommand() {
+    ta.focus();
+    var ok = false;
+    try { ok = document.execCommand('paste'); } catch (_) {}
+    if (!ok) toast('از میانبر Paste کیبورد دستگاه استفاده کنید');
+  }
+
   /* دکمه چسباندن (Paste) */
   if (keyPaste) {
     keyPaste.addEventListener('click', function () {
       haptic('light');
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then(function (t) {
-          if (t) {
-            insertText(t);
-            ensureCaretVisible();
-            toast('متن چسبانده شد ✓');
-            haptic('success');
+      readClipboardNative()
+        .then(function (t) { pasteIntoEditor(t); })
+        .catch(function () {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then(function (t) { pasteIntoEditor(t); }).catch(pasteViaExecCommand);
           } else {
-            toast('کلیپ‌بورد خالی است');
+            pasteViaExecCommand();
           }
-        }).catch(function () {
-          ta.focus();
-          toast('از میانبر Paste کیبورد دستگاه استفاده کنید');
         });
-      } else {
-        ta.focus();
-        toast('از میانبر Paste کیبورد دستگاه استفاده کنید');
-      }
     });
+  }
+
+  /* روی iOS، WKWebView نوع ورودی (تصویر یا فایل) را به delegate نمی‌گوید؛
+     قبل از بازشدن پنل بومی، رشتهٔ accept را از پل اعلام می‌کنیم تا پیکر
+     درست (گالری تصویر یا انتخاب فایل متنی) باز شود. در مرورگر بی‌اثر است. */
+  function armNativeFilePicker(input) {
+    var bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.fileBridge;
+    if (!bridge || !input) return;
+    try {
+      bridge.postMessage({ accept: input.accept || '', capture: input.getAttribute('capture') || '' });
+    } catch (_) {}
   }
 
   /* دکمه باز کردن فایل کد از دستگاه */
@@ -887,6 +924,7 @@ try {
     });
     $('import-file').addEventListener('click', function () {
       closeSheets();
+      armNativeFilePicker(fileInput);
       fileInput.click();
     });
 
@@ -1040,6 +1078,7 @@ try {
       openSheet('sheet-settings');
       return;
     }
+    armNativeFilePicker(input);
     input.click();
   }
   keyCamera.addEventListener('click', function () { chooseCodeImage(cameraInput); });
@@ -2054,6 +2093,26 @@ try {
     return md;
   }
 
+  /* ── پوشش لودینگ تحلیل ──
+     خواستهٔ کاربر: با زدن «تحلیل کد» کل صفحهٔ برنامه بلور شود و فقط مدل لودینگ
+     (ترمینال Status) تا پایان تحلیل دیده شود — بدون کارت، بدون نوار بالا و
+     بدون هیچ دکمهٔ اضافی؛ در هر دو تم، کنتراست متن حفظ می‌شود. */
+  function isAnalysisOverlayVisible() {
+    return !!analysisOverlay && !analysisOverlay.hidden;
+  }
+  function setAnalysisStatus(text) {
+    if (analysisStatus && typeof text === 'string' && text) analysisStatus.textContent = text;
+  }
+  function showAnalysisOverlay() {
+    if (!analysisOverlay) return;
+    analysisOverlay.hidden = false;
+    $('operation-bar').hidden = true;
+  }
+  function hideAnalysisOverlay() {
+    if (!analysisOverlay) return;
+    analysisOverlay.hidden = true;
+  }
+
   /* ── حالت بارگذاری ── */
   var loadTimer = null;
   function startLoading() {
@@ -2061,7 +2120,9 @@ try {
     resBody.hidden = true;
     if (mentalLogicMap) mentalLogicMap.hidden = true;
     resVerdict.style.visibility = 'hidden';
-    resStatus.textContent = activeOperation ? $('operation-stage').textContent : 'در حال بررسی کد…';
+    var stage = activeOperation ? $('operation-stage').textContent : 'در حال بررسی کد…';
+    resStatus.textContent = stage;
+    setAnalysisStatus(stage);
     clearInterval(loadTimer);
     loadTimer = null;
   }
@@ -2077,6 +2138,7 @@ try {
     clearInterval(loadTimer);
     loadTimer = null;
     if (resStatus) resStatus.textContent = msg;
+    setAnalysisStatus(msg);
   }
 
   /* ── جریان تحلیل ── */
@@ -2125,7 +2187,9 @@ try {
     playBtn.classList.add('loading');
     playLabel.textContent = 'در حال تحلیل…';
     scanline.hidden = false;
-    openSheet('sheet-result');
+    /* لودینگ تمام‌صفحه: صفحه بلور می‌شود و تا پایان تحلیل فقط ترمینال وضعیت
+       دیده می‌شود؛ شیت نتیجه فقط بعد از آماده‌شدن گزارش باز می‌شود */
+    showAnalysisOverlay();
     startLoading();
     var t0 = Date.now();
 
@@ -2230,6 +2294,7 @@ try {
       setBrainState('error');
       stopOnce('error');
       stopLoading();
+      hideAnalysisOverlay();
       closeSheets();
       showProblems(all, adv, fixCode, fixExp);
       haptic('error');
@@ -2280,6 +2345,9 @@ try {
       resVerdict.textContent = '⚠️ بررسی کامل تأیید نشد';
       resVerdict.className = 'verdict warn';
     }
+    /* گزارش آماده شد؛ اکنون شیت نتیجه با محتوای کامل باز می‌شود */
+    hideAnalysisOverlay();
+    openSheet('sheet-result');
     if (fixCode) toast('✨ نسخهٔ بهبودیافتهٔ کد آماده است — پنل «مشکلات» را ببین', 4800);
     addHistory(lastSummary(md, ai), incomplete || needsCorrection ? 'err' : 'ok');
     // اعلام وضعیت Live Activity فقط بعد از رندر کامل نتیجه انجام می‌شود؛ اگر رندر
@@ -2302,12 +2370,15 @@ try {
         resBody.hidden = false;
         resVerdict.textContent = '⚠️ بررسی کامل نشد';
         resVerdict.className = 'verdict warn';
+        hideAnalysisOverlay();
+        openSheet('sheet-result');
         toast('بررسی کامل نشد؛ دوباره تلاش کنید');
       }
     } finally {
       finishOperation(op);
       analyzing = false;
       scanline.hidden = true;
+      hideAnalysisOverlay();
       // End this visual on every exit, including a discarded stale result.
       resLoading.hidden = true;
       playBtn.disabled = false;

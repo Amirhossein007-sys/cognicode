@@ -5,10 +5,10 @@ window.Sonar = (() => {
   const host = document.getElementById('particles-js');
   const canvas = host?.querySelector('canvas');
   const ctx = canvas?.getContext('2d');
-  if (!ctx) return { refresh() {}, ripple() {}, setPulse() {} };
+  if (!ctx) return { refresh() {}, setFocus() {} };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let width = 0, height = 0, particles = [], frame = 0, last = 0, time = 0;
-  let suspended = false, light = false, pointer = null;
+  let suspended = false, light = false, pointer = null, focused = false;
   const randomParticle = (x = Math.random() * width, y = Math.random() * height) => ({
     x, y, vx: (Math.random() - .5) * 40, vy: (Math.random() - .5) * 40,
     radius: 1 + Math.random() * 2, phase: Math.random() * Math.PI * 2
@@ -46,7 +46,7 @@ window.Sonar = (() => {
   function tick(now) {
     frame = 0;
     if (suspended || document.hidden || reduced.matches) return;
-    draw(last ? Math.min((now - last) / 1000, .05) : 0);
+    draw(last ? Math.min((now - last) / 1000, .05) * (focused ? .25 : 1) : 0);
     last = now;
     frame = requestAnimationFrame(tick);
   }
@@ -87,5 +87,5 @@ window.Sonar = (() => {
     if (particles.length > 140) particles.splice(0, particles.length - 140);
   }, { passive: true });
   resize(); playback();
-  return { refresh, ripple() {}, setPulse() {} };
+  return { refresh, setFocus(value) { focused = !!value; pointer = null; } };
 })();

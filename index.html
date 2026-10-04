@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+13">
+<meta name="cognicode-release" content="1.1.0+14">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -296,6 +296,19 @@
 
 <!-- ═══ بک‌دراپ ═══ -->
 <div class="backdrop" id="backdrop"></div>
+
+<!-- ═══ پوشش لودینگ تحلیل: صفحهٔ برنامه بلور می‌شود و فقط ترمینال وضعیت
+     (بدون کارت، بدون نوار بالا، بدون هیچ دکمه‌ای) تا پایان تحلیل دیده می‌شود ═══ -->
+<div class="analysis-overlay" id="analysis-overlay" hidden role="status" aria-live="polite" aria-label="در حال تحلیل کد">
+  <div class="terminal-loader" dir="ltr" aria-hidden="true">
+    <div class="terminal-header">
+      <div class="terminal-title">Status</div>
+      <div class="terminal-controls"><span class="control close"></span><span class="control minimize"></span><span class="control maximize"></span></div>
+    </div>
+    <div class="terminal-text">Loading...</div>
+  </div>
+  <p class="load-status" id="analysis-status">در حال تحلیل کد…</p>
+</div>
 
 <!-- ═══ شیت نتیجه ═══ -->
 <section class="sheet" id="sheet-result" role="dialog" aria-modal="true" aria-label="نتیجه تحلیل">

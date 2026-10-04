@@ -1,7 +1,10 @@
 /* Additive workspace surfaces preserve the existing background and glass. */
 .glass-workspace { background: rgba(15,23,42,.46); border: 1px solid var(--line); border-radius: 16px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); color: var(--txt1); }
 html[data-theme="light"] .glass-workspace { background: rgba(255,255,255,.24); }
-.quick-start { position: absolute; z-index: 3; inset: 52px 22px auto 50px; padding: 18px; text-align: start; max-height: calc(100% - 68px); overflow: auto; }
+/* پنل شروع باید بالاتر از هر دو لایهٔ کد (pre z=1 و textarea z=2) بنشیند تا
+   هم متنِ کد هرگز روی آن نیفتد و هم لمس‌ها همیشه به خودش برسد */
+.quick-start { position: absolute; z-index: 6; pointer-events: auto; inset: 52px 22px auto 50px; padding: 18px; text-align: start; max-height: calc(100% - 68px); overflow: auto; }
+.quick-start[hidden] { display: none !important; }
 .quick-start b { font-size: 18px; }.quick-start p { font-size: 13px; color: var(--txt2); margin: 8px 0 16px; }
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .quick-start small { display: block; margin-top: 14px; font-size: 11px; color: var(--txt2); }
@@ -144,33 +147,73 @@ html[data-theme="light"] #btn-play {
 @keyframes analysis-takeoff { 0% { opacity: 1; } 60% { opacity: 1; transform: translateX(70px) rotate(45deg) scale(2); } 100% { opacity: 0; transform: translateX(160px) rotate(45deg) scale(0); } }
 @keyframes analysis-contrail { 0% { width: 0; opacity: 1; } 8% { width: 15px; } 60% { width: 80px; opacity: .7; } 100% { width: 160px; opacity: 0; } }
 
-/* Uiverse.io terminal by jeremyssocial: animation lasts for the whole analysis. */
-#res-loading .terminal-loader {
+/* Uiverse.io terminal by jeremyssocial: animation lasts for the whole analysis.
+   هم در شیت نتیجه (#res-loading) و هم در پوشش تمام‌صفحهٔ لودینگ تحلیل. */
+#res-loading .terminal-loader,
+.analysis-overlay .terminal-loader {
   --terminal-ink: #4ade80; --terminal-body: rgba(26,26,26,.92); --terminal-head: #333; --terminal-title: #eee; --terminal-border: #525252;
   width: 15em; max-width: 100%; position: relative; overflow: hidden; box-sizing: border-box;
   padding: 1.5em 1em; border: .1em solid var(--terminal-border); border-radius: 4px;
   color: var(--terminal-ink); background: var(--terminal-body); text-align: left;
   font: 16px/1.5 "Courier New",Courier,monospace; box-shadow: 0 4px 8px rgba(0,0,0,.2);
 }
-html[data-theme="light"] #res-loading .terminal-loader {
+html[data-theme="light"] #res-loading .terminal-loader,
+html[data-theme="light"] .analysis-overlay .terminal-loader {
   --terminal-ink: #166534; --terminal-body: rgba(255,255,255,.92); --terminal-head: #e2e8f0; --terminal-title: #172033; --terminal-border: #64748b;
 }
-#res-loading .terminal-header { position: absolute; inset: 0 0 auto; height: 1.5em; padding: 0 .4em; display: flex; align-items: center; justify-content: space-between; background: var(--terminal-head); }
-#res-loading .terminal-title { line-height: 1.5em; color: var(--terminal-title); }
-#res-loading .terminal-controls { display: flex; gap: .4em; }
-#res-loading .control { display: block; width: .6em; height: .6em; border-radius: 50%; }
-#res-loading .control.close { background: #e33; }
-#res-loading .control.minimize { background: #ee0; }
-#res-loading .control.maximize { background: #0b0; }
-#res-loading .terminal-text { display: inline-block; box-sizing: content-box; width: 10ch; white-space: nowrap; overflow: hidden; letter-spacing: 0; border-right: .2em solid var(--terminal-ink); margin-top: 1.5em; vertical-align: bottom; animation: analysis-type-delete 4s steps(10) infinite,analysis-cursor .5s step-end infinite alternate; }
-#res-loading .load-status { text-align: center; line-height: 1.9; }
+#res-loading .terminal-header,
+.analysis-overlay .terminal-header { position: absolute; inset: 0 0 auto; height: 1.5em; padding: 0 .4em; display: flex; align-items: center; justify-content: space-between; background: var(--terminal-head); }
+#res-loading .terminal-title,
+.analysis-overlay .terminal-title { line-height: 1.5em; color: var(--terminal-title); }
+#res-loading .terminal-controls,
+.analysis-overlay .terminal-controls { display: flex; gap: .4em; }
+#res-loading .control,
+.analysis-overlay .control { display: block; width: .6em; height: .6em; border-radius: 50%; }
+#res-loading .control.close,
+.analysis-overlay .control.close { background: #e33; }
+#res-loading .control.minimize,
+.analysis-overlay .control.minimize { background: #ee0; }
+#res-loading .control.maximize,
+.analysis-overlay .control.maximize { background: #0b0; }
+#res-loading .terminal-text,
+.analysis-overlay .terminal-text { display: inline-block; box-sizing: content-box; width: 10ch; white-space: nowrap; overflow: hidden; letter-spacing: 0; border-right: .2em solid var(--terminal-ink); margin-top: 1.5em; vertical-align: bottom; animation: analysis-type-delete 4s steps(10) infinite,analysis-cursor .5s step-end infinite alternate; }
+#res-loading .load-status,
+.analysis-overlay .load-status { text-align: center; line-height: 1.9; }
 @keyframes analysis-cursor { 50% { border-right-color: transparent; } }
 @keyframes analysis-type-delete { 0%,10% { width: 0; } 45%,55% { width: 10ch; } 90%,100% { width: 0; } }
 @media(prefers-reduced-motion:reduce) {
   #btn-play, #btn-play *, #btn-play *::before { animation: none !important; transition: none; }
   #btn-play .burst { display: none; }
   #btn-play .analysis-plane svg { opacity: 1; transform: none; }
-  #res-loading .terminal-text { animation: none; width: 10ch; border-right-color: var(--terminal-ink); }
+  #res-loading .terminal-text, .analysis-overlay .terminal-text { animation: none; width: 10ch; border-right-color: var(--terminal-ink); }
+}
+
+/* ═══ پوشش تمام‌صفحهٔ لودینگ تحلیل ═══
+   خواستهٔ کاربر: با زدن «تحلیل کد» کل صفحهٔ برنامه بلور شود و فقط ترمینال
+   وضعیت + متن مرحله دیده شود — بدون کارت پس‌زمینه، بدون نوار بالا، بدون هیچ
+   دکمه‌ای؛ از شروع تا پایان تحلیل می‌ماند و جزیره/توست‌ها بالای آن کار می‌کنند. */
+.analysis-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; padding: 24px;
+  /* آلفای ۰.۶۰/۰.۶۲ طوری انتخاب شده که متن وضعیت حتی روی بدترین ترکیب
+     پشت‌زمینه (سفید مطلق در تیره / سیاه مطلق در روشن) هم ≥ ۴.۵:۱ بماند */
+  background: rgba(8, 12, 24, .60);
+  backdrop-filter: blur(16px) saturate(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
+}
+html[data-theme="light"] .analysis-overlay { background: rgba(226, 232, 240, .62); }
+.analysis-overlay[hidden] { display: none; }
+.analysis-overlay .load-status {
+  margin: 0; font: 600 14px/2 var(--fa); text-align: center;
+  max-width: 36ch; color: var(--txt1);
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+}
+html[data-theme="light"] .analysis-overlay .load-status { color: #0f172a; text-shadow: 0 1px 2px rgba(255,255,255,.55); }
+/* شفافیت کمتر یا حرکت کمتر → بلور جای خود را به سطح خوانا می‌دهد؛ کنتراست حفظ می‌شود */
+@media(prefers-contrast:more), (prefers-reduced-transparency:reduce) {
+  .analysis-overlay { background: rgba(8,12,24,.88); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  html[data-theme="light"] .analysis-overlay { background: rgba(241,245,249,.94); }
 }
 
 /* Compact adaptation of the supplied Pipboy clock, with its date inside the CRT. */

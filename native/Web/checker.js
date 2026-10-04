@@ -438,6 +438,9 @@ window.Checker = (function () {
     lintWarnings: lintWarnings,
     localExplain: localExplain,
     /* CONF برای موتور Malwatch: تشخیص کامنت/رشتهٔ هر زبان (رشته‌ها حفظ می‌شوند) */
-    CONF: CONF
+    CONF: CONF,
+    /* codeOnlyLines برای Malwatch: کامنت و رشته هر دو حذف می‌شوند تا قواعدی مثل
+       «کاراکتر نامرئی» فقط داخل کد واقعی عمل کنند، نه داخل متن فارسی رشته‌ها */
+    codeOnlyLines: codeOnlyLines
   };
 })();

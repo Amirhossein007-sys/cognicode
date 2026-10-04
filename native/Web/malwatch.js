@@ -104,8 +104,11 @@ window.Malwatch = (function () {
       msg: 'دستکاری مکانیزم بارگذاری ماژول در جاوااسکریپت', hint: 'پنهان‌کردن require واقعی، ترفند رایج استیلرهای npm است' },
     { id: 'obf-trojan-source', sev: 'high', attack: 'T1027', rx: /[\u202A-\u202E\u2066-\u2069]/,
       msg: 'کاراکترهای دوسوگرا (bidi) در کد — الگوی «Trojan Source»', hint: 'این کاراکترها ترتیب نمایش کد را جعل می‌کنند و چشم بازبین را گول می‌زنند' },
-    { id: 'obf-invisible', sev: 'high', attack: 'T1027', rx: /[\u200B\u200D\u2060\uFEFF]/,
-      msg: 'کاراکتر پنهان (zero-width) داخل کد شناسایی شد', hint: 'کاراکترهای نامرئی در شناسه‌ها می‌توانند بک‌دور نامرئی بسازند' },
+    /* codeOnly: کاراکتر نامرئی داخل رشته/کامنت متن عادی است (متن فارسی، ایموجی)؛
+       فقط وقتی داخل خودِ کد باشد بک‌دور نامرئی محسوب می‌شود. BOM هم عمداً حذف شد
+       چون در import پاک می‌شود و به‌تنهایی نشانهٔ حمله نیست. */
+    { id: 'obf-invisible', sev: 'high', attack: 'T1027', codeOnly: true, rx: /[\u200B\u200D\u2060]/,
+      msg: 'کاراکتر پنهان (zero-width) داخل خود کد شناسایی شد', hint: 'کاراکترهای نامرئی در شناسه‌ها می‌توانند بک‌دور نامرئی بسازند' },
     { id: 'obf-log-suppress', sev: 'medium', attack: 'T1564', rx: /console\.(?:log|warn|error|info)\s*=\s*(?:function\s*\(\s*\)\s*\{\s*\}|noop|noOp)/,
       msg: 'خاموش‌کردن کنسول همراه با بقیهٔ کد', hint: 'بدافزارها لاگ را کور می‌کنند تا تحلیل دشوار شود' },
 
@@ -187,7 +190,10 @@ window.Malwatch = (function () {
         return /\bIEX\b|Invoke-Expression/i.test(body) && /DownloadString|DownloadFile|Invoke-WebRequest/i.test(body);
       },
       msg: 'ترکیب Invoke-Expression + دانلود وب', hint: 'کلاسیک‌ترین ریسک اجرای بدون-فایل ویندوز' },
-    { id: 'combo-exfil-sysinfo', sev: 'high', attack: 'T1082/T1041',
+    /* severity عمداً medium است: «مشخصات سیستم + ارسال شبکه» به‌تنهایی الگوی روزمرهٔ
+       سرویس‌های مانیتورینگ/هلث‌چک است و با وزن ۲۲ (high) حکم را یک‌تنه به «مشکوک» می‌برد.
+       با ۱۰ امتیاز، این الگو فقط در کنار نشانه‌های دیگر به آستانه می‌رسد. */
+    { id: 'combo-exfil-sysinfo', sev: 'medium', attack: 'T1082/T1041',
       test: function (body) {
         var info = /platform\.|uname\s*\(|systeminfo|os\.name|os\.hostname|GetComputerName/i.test(body);
         var send = /requests\.post|fetch\s*\(|XMLHttpRequest|urlopen\s*\(|\bcurl\s|\bwget\s/i.test(body);
@@ -209,6 +215,17 @@ window.Malwatch = (function () {
     var conf = (window.Checker && Checker.CONF) ? Checker.CONF[langKey] : null;
     var lines = commentFreeLines(code, conf);
     var body = lines.join('\n');
+    /* برخی قواعد باید فقط «کد واقعی» را ببینند (بدون رشته و کامنت) تا متن عادیِ
+       داخل رشته — مثل متن فارسی یا ایموجی — هشدار کاذب نسازد. این خطوط تنبل و
+       فقط یک‌بار ساخته می‌شوند تا به مسیر معمول هزینه‌ای تحمیل نشود. */
+    var codeLines = null;
+    function codeLinesFor() {
+      if (codeLines === null) {
+        try { codeLines = (window.Checker && Checker.codeOnlyLines) ? Checker.codeOnlyLines(code, langKey) : lines; }
+        catch (_) { codeLines = lines; }
+      }
+      return codeLines;
+    }
 
     var findings = [], evidence = [], categories = [], seen = {};
     var i, j, r;
@@ -241,7 +258,9 @@ window.Malwatch = (function () {
       for (j = 0; j < LINE_RULES.length && findings.length < 15; j++) {
         r = LINE_RULES[j];
         if (seen[r.id]) continue;
-        if (r.rx.test(ln)) push(r, i + 1);
+        var target = r.codeOnly ? codeLinesFor()[i] : ln;
+        if (!target || !r.rx.test(target)) continue;
+        push(r, i + 1);
       }
     }
 
