@@ -218,6 +218,75 @@ window.Checker = (function () {
     return errors;
   }
 
+  /* ── حذف فقط کامنت‌ها (رشته‌ها با محتوا حفظ می‌شوند) ──
+     هشدارهای سبک باید بر «کد» سنجیده شوند نه کامنت‌ها؛ مثلاً http:// داخل
+     کامنتِ آموزشی نباید هشدار «اتصال ناامن» بسازد. رشته‌ها حفظ می‌شوند چون
+     هشدارهایی مثل «کلید هاردکد» روی مقدارِ رشته سنجیده می‌شوند.
+     شمارهٔ خطوط حفظ می‌شود (خروجی خط‌به‌خط است). */
+  function commentFreeLines(code, conf) {
+    if (!code) return [];
+    if (!conf) return code.split('\n');
+    var out = [], buf = '';
+    var state = 'code', quote = '', blockEnd = '', tripleMark = '';
+    var i = 0, n = code.length;
+    while (i < n) {
+      var ch = code[i];
+      if (ch === '\n') {
+        if (state === 'lcom') state = 'code';
+        /* رشتهٔ تک‌خطی بسته‌نشده: از خط بعد دوباره کد است (ساده‌سازی عمدی) */
+        if (state === 'str' && !(conf.multiline && conf.multiline.indexOf(quote) >= 0)) state = 'code';
+        out.push(buf); buf = ''; i++; continue;
+      }
+      if (state === 'code') {
+        if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
+        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
+        if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
+          var reEnd = regexLiteralEnd(code, i);
+          if (reEnd > 0) { buf += code.slice(i, reEnd); i = reEnd; continue; }
+        }
+        if (conf.quotes.indexOf(ch) >= 0) {
+          if (conf.aposAfterAtom && prevAtomEnd(code, i)) { buf += ch; i++; continue; }
+          /* آپاستروفِ متنی (don't) یا جداکنندهٔ رقم C++ (1'000) بعد از حرف/عدد
+             رشتهٔ جعلی نمی‌سازد که نیمهٔ بقیهٔ خط بلعیده شود */
+          if (ch === "'" && conf.escape && i > 0 && /[A-Za-z0-9_$]/.test(code[i - 1])) { buf += ch; i++; continue; }
+          var isTriple = false;
+          if (conf.triple) {
+            var marks = Array.isArray(conf.triple) ? conf.triple : [conf.triple];
+            for (var t = 0; t < marks.length; t++) {
+              if (marks[t][0] === ch && code.startsWith(marks[t], i)) { isTriple = true; tripleMark = marks[t]; break; }
+            }
+          }
+          if (isTriple) { state = 'tstr'; buf += tripleMark; i += tripleMark.length; }
+          else { state = 'str'; quote = ch; buf += ch; i++; }
+          continue;
+        }
+        buf += ch; i++; continue;
+      }
+      if (state === 'lcom') { i++; continue; }
+      if (state === 'bcom') {
+        if (code.startsWith(blockEnd, i)) { state = 'code'; i += blockEnd.length; } else i++;
+        continue;
+      }
+      if (state === 'str') {
+        if (conf.escape && ch === '\\') {
+          if (code[i + 1] === '\n') { out.push(buf + ch); buf = ''; i += 2; continue; }
+          buf += ch;
+          if (i + 1 < n) { buf += code[i + 1]; i += 2; continue; }
+          i++; continue;
+        }
+        if (ch === quote) state = 'code';
+        buf += ch; i++; continue;
+      }
+      if (state === 'tstr') {
+        if (code.startsWith(tripleMark, i)) { state = 'code'; buf += tripleMark; i += tripleMark.length; }
+        else { buf += ch; i++; }
+        continue;
+      }
+    }
+    out.push(buf);
+    return out;
+  }
+
   /* ── هشدارهای سبک ── */
   var LINT = [
     { rx: /while\s*\(\s*(?:true|1)\s*\)|while\s+True\b/, msg: 'حلقهٔ بی‌نهایت بالقوه', hint: 'شرط خروج باید داخل بدنهٔ حلقه برقرار شود' },
@@ -225,16 +294,22 @@ window.Checker = (function () {
     { rx: /http:\/\/(?!localhost|127\.0\.0\.1)/, msg: 'اتصال ناامن HTTP به‌جای HTTPS', hint: '' },
     { rx: /(?:password|passwd|secret|api[_-]?key|apikey|token)\s*[:=]\s*["'][^"']{4,}["']/i, msg: 'احتمال قرارگرفتن کلید یا رمز به‌صورت مستقیم در کد', hint: 'مقادیر حساس را از متغیر محیطی یا فایل تنظیمات بخوان' },
     { rx: /catch\s*\([^)]*\)\s*\{\s*\}|except\s*:\s*(?:pass\s*)?(?:#.*)?$/, msg: 'خطاها بی‌صدا نادیده گرفته می‌شوند (catch/except خالی)', hint: 'لااقل خطا را ثبت (log) کن' },
-    { rx: /\bTODO\b|\bFIXME\b/, msg: 'یادداشت کار ناتمام (TODO/FIXME) در کد هست', hint: '' }
+    /* todo:true → فقط این قاعده روی خطوط خام اجرا می‌شود چون TODO ذاتاً داخل کامنت زندگی می‌کند */
+    { rx: /\bTODO\b|\bFIXME\b/, msg: 'یادداشت کار ناتمام (TODO/FIXME) در کد هست', hint: '', todo: true }
   ];
 
   function lintWarnings(code, langKey) {
     var out = [], seen = {};
     if (!code) return out;
-    var lines = code.split('\n');
-    for (var i = 0; i < lines.length && out.length < 10; i++) {
+    var rawLines = code.split('\n');
+    /* قواعد روی «کد بدون کامنت» اجرا می‌شوند تا مثال‌های داخل کامنتِ آموزشی
+       هشدار کاذب نسازند؛ فقط قاعدهٔ TODO روی خطوط خام می‌ماند. */
+    var lines = rawLines;
+    try { lines = commentFreeLines(code, CONF[langKey]); } catch (e) { lines = rawLines; }
+    for (var i = 0; i < rawLines.length && out.length < 10; i++) {
       for (var j = 0; j < LINT.length; j++) {
-        if (LINT[j].rx.test(lines[i])) {
+        var target = LINT[j].todo ? rawLines[i] : lines[i];
+        if (target && LINT[j].rx.test(target)) {
           var key = (i + 1) + LINT[j].msg;
           if (seen[key]) continue;
           seen[key] = true;
@@ -371,6 +446,194 @@ window.Checker = (function () {
   }
 
 
+  /* ═══════════ استخراج «فقط کد» از متن خام چسبانده‌شده ═══════════
+     متن کپی‌شده از شبکه‌های اجتماعی/وبلاگ/پیام‌رسان معمولاً با متن عادی قاطی
+     است (کپشن، هشتگ، جملهٔ فارسی، «مشاهده بیشتر»، شمارهٔ خط ادیتور). این بخش
+     هرچه کد نیست را تشخیص می‌دهد و کنار می‌گذارد تا موتور تحلیل گول متن نخورد:
+       ۱) اگر بلاک مارک‌داون ``` وجود دارد، فقط محتوای فنس‌ها کد است.
+       ۲) شماره‌گذاری خط ادیتور (۱۲: / ۱۲) / ۱۲|) اگر همه‌گیر باشد برمی‌دارد.
+       ۳) خط‌به‌خط: جمله‌های غیرکد حذف می‌شوند؛ ولی خطی که ادامهٔ رشته یا
+          کامنت چندخطی است (متن فارسی داخل """ پایتون یا ` جاوااسکریپت)
+          هرگز حذف نمی‌شود. */
+  var FENCE_RX = /^[ \t]*(?:```|~~~)[ \t]*([A-Za-z0-9+#._-]*)[ \t]*$/;
+  var GUTTER_RX = /^[ \t]*\d{1,4}[.)|\]:](?![ \t]*\d)[ \t]?/;
+  /* نشانه‌های ساختار کد؛ نقطه/کاما عمداً نیستند چون در جملهٔ عادی هم می‌آیند */
+  var CODEISH_RX = /[=+\-*/%<>!&|^~()[\]{}\\@$"'`;]/;
+
+  function keepAsComment(line, conf) {
+    var t = String(line).replace(/^\s+/, '');
+    if (!t) return false;
+    if (conf) {
+      if (conf.line && t.indexOf(conf.line) === 0) return true;
+      if (conf.block && t.indexOf(conf.block[0]) === 0) return true;
+      return false;
+    }
+    /* زبان نامشخص: فقط نشانگرهای قطعی؛ «#» نمی‌آید چون هشتگ هم هست */
+    return /^(?:\/\/|--|\/\*|<!--|\(\*|\{-|%)/.test(t);
+  }
+
+  function isProseLine(line, conf) {
+    var t = String(line).replace(/\s+$/, '');
+    if (!t.trim()) return false;
+    if (keepAsComment(line, conf)) return false; // کامنت بخش مشروع کد است
+    /* خط حاوی URL — قبل از آزمون ساختار، چون خودِ «https://» اسلش دارد و کد
+       جلوه می‌کند. فقط وقتی کد است که کنارش ساختار واقعی هم باشد (فراخوانی،
+       انتساب، براکت). «منبع: https://…» کپشن است، ولی fetch('https://…') کد است. */
+    if (/https?:\/\//i.test(t)) {
+      var rest = t.replace(/https?:\/\/\S+/gi, '');
+      if (!/[=+*<>!&|^~()[\]{}@$"'`]/.test(rest) && !/\w\s*\(/.test(rest)) return true;
+      return false;
+    }
+    /* @ و # قبل از آزمون ساختار برمی‌دارند: منشن/هشتگِ شبکهٔ اجتماعی «کد» نیست
+       ولی دکوریتور @State و فراخوانی @app.route خودشان بقیهٔ ساختار را دارند */
+    var bare = t.replace(/[@#]/g, '');
+    if (CODEISH_RX.test(bare)) return false;     // نشانهٔ ساختار کد دارد → کد است
+    /* شمارندهٔ غیر-ASCII عام است تا ایموجی و نماد (👇🔥…) هم شمرده شوند، نه فقط
+       حروف زبان‌های دیگر؛ خط کد واقعی تقریباً هرگز ۲+ نویسهٔ غیر-ASCII بیرون
+       رشته/کامنت ندارد و رشته هم معمولاً کوتیشن/ساختار دارد */
+    var nonAscii = 0, m;
+    var g = new RegExp('[^\\x00-\\x7F]', 'g');
+    while ((m = g.exec(t)) !== null) { nonAscii++; if (nonAscii >= 2) break; }
+    if (nonAscii >= 2) return true;              // جملهٔ فارسی/عربی/سیریلیک/CJK/ایموجی
+    if (nonAscii >= 1) {
+      /* یک‌دو نویسهٔ غیرانگلیسی + نماد و بدون هیچ ساختار: تیتر و شکلک */
+      return t.replace(/[A-Za-z0-9\s]/g, '').length >= 2;
+    }
+    /* انگلیسی: جملهٔ بلند چندکلمه‌ایِ بدون ساختار که با نشانهٔ جمله تمام می‌شود */
+    var words = t.split(/\s+/).filter(function (w) { return /[A-Za-z]{2,}/.test(w); });
+    return words.length >= 5 && /[.!?,]$/.test(t);
+  }
+
+  function extractFenced(text) {
+    var lines = text.split('\n'), blocks = [], buf = null, fenceLang = null, dropped = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(FENCE_RX);
+      if (m) {
+        if (buf === null) { buf = []; fenceLang = m[1] || null; }
+        else { blocks.push({ lang: fenceLang, code: buf.join('\n') }); buf = null; }
+        dropped++; // خود خط فنس متن نیست
+        continue;
+      }
+      if (buf !== null) buf.push(lines[i]);
+      else if (lines[i].trim()) dropped++; // متن بیرونِ فنس
+    }
+    if (buf !== null) blocks.push({ lang: fenceLang, code: buf.join('\n') }); // فنس بسته‌نشده
+    if (!blocks.length) return null;
+    return {
+      code: blocks.map(function (b) { return b.code; }).join('\n\n'),
+      dropped: dropped,
+      lang: blocks[0].lang || null
+    };
+  }
+
+  function stripGutters(text) {
+    var lines = text.split('\n'), numbered = 0, nonBlank = 0, i;
+    for (i = 0; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      nonBlank++;
+      if (GUTTER_RX.test(lines[i])) numbered++;
+    }
+    /* فقط وقتی الگو همه‌گیر است که شمارهٔ خط ادیتور است؛ وگرنه کدهایی که خودشان
+       با عدد شروع می‌شوند دست‌نخورده می‌مانند */
+    if (numbered < 3 || nonBlank === 0 || numbered / nonBlank < 0.6) return text;
+    for (i = 0; i < lines.length; i++) lines[i] = lines[i].replace(GUTTER_RX, '');
+    return lines.join('\n');
+  }
+
+  /* وضعیت ابتدای هر خط: خطی که ادامهٔ رشته/کامنت چندخطی است حذف نمی‌شود */
+  function lineStartStates(code, langKey) {
+    var conf = CONF[langKey];
+    if (!conf || !code) return null;
+    var out = ['code'];
+    var state = 'code', quote = '', blockEnd = '', tripleMark = '';
+    var i = 0, n = code.length;
+    while (i < n) {
+      var ch = code[i];
+      if (ch === '\n') {
+        if (state === 'lcom') state = 'code';
+        if (state === 'str' && !(conf.multiline && conf.multiline.indexOf(quote) >= 0)) state = 'code';
+        out.push(state); i++; continue;
+      }
+      if (state === 'code') {
+        if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
+        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
+        if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
+          var reEnd = regexLiteralEnd(code, i);
+          if (reEnd > 0) { i = reEnd; continue; }
+        }
+        if (conf.quotes.indexOf(ch) >= 0) {
+          if (conf.aposAfterAtom && prevAtomEnd(code, i)) { i++; continue; }
+          if (ch === "'" && conf.escape && i > 0 && /[A-Za-z0-9_$]/.test(code[i - 1])) { i++; continue; }
+          var isTriple = false;
+          if (conf.triple) {
+            var marks = Array.isArray(conf.triple) ? conf.triple : [conf.triple];
+            for (var t = 0; t < marks.length; t++) {
+              if (marks[t][0] === ch && code.startsWith(marks[t], i)) { isTriple = true; tripleMark = marks[t]; break; }
+            }
+          }
+          if (isTriple) { state = 'tstr'; i += tripleMark.length; }
+          else { state = 'str'; quote = ch; i++; }
+          continue;
+        }
+        i++; continue;
+      }
+      if (state === 'lcom') { i++; continue; }
+      if (state === 'bcom') { if (code.startsWith(blockEnd, i)) { state = 'code'; i += blockEnd.length; } else i++; continue; }
+      if (state === 'str') {
+        if (conf.escape && ch === '\\') { i += 2; continue; }
+        if (ch === quote) state = 'code';
+        i++; continue;
+      }
+      if (state === 'tstr') { if (code.startsWith(tripleMark, i)) { state = 'code'; i += tripleMark.length; } else i++; continue; }
+    }
+    return out;
+  }
+
+  function extractCode(text, langHint) {
+    text = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    if (!text.trim()) return { code: '', dropped: 0, langHint: 'text' };
+
+    /* ۱) بلاک مارک‌داون: هرچه داخل فنس است کد است و بقیه متن */
+    var fence = extractFenced(text);
+    if (fence) {
+      var fenceCode = fence.code.replace(/^\n+/, '').replace(/\s+$/, '');
+      var fenceLang = fence.lang && CONF[fence.lang] ? fence.lang : (Syntax.detect(fenceCode) !== 'text' ? Syntax.detect(fenceCode) : null);
+      return { code: fenceCode, dropped: fence.dropped, langHint: fenceLang || 'text' };
+    }
+
+    /* ۲) شمارهٔ خط ادیتور */
+    text = stripGutters(text);
+
+    /* ۳) فیلتر خط‌به‌خط متن عادی. برای HTML متنِ آزاد داخل فایل مجاز است،
+       پس فیلتر نمی‌شود؛ برای بقیه زبان detect داخلی هم کمک می‌کند. */
+    var conf = (langHint && CONF[langHint] !== undefined) ? langHint : null;
+    if (!conf) {
+      var det = Syntax.detect(text);
+      if (det !== 'text') conf = det;
+    }
+    var skipProseFilter = conf === 'html'; // html و text: متنِ داخل فایل جزء ساختار است
+    var lines = text.split('\n');
+    var states = null;
+    if (!skipProseFilter && conf) {
+      try { states = lineStartStates(text, conf); } catch (e) { states = null; }
+    }
+
+    var kept = [], dropped = 0, i;
+    for (i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (!ln.trim()) { kept.push(''); continue; }
+      var insideLiteral = !!(states && states[i] && states[i] !== 'code' && states[i] !== 'lcom');
+      if (!insideLiteral && !skipProseFilter && isProseLine(ln, conf)) { dropped++; continue; }
+      kept.push(ln);
+    }
+    var code = kept.join('\n')
+      .replace(/\n{4,}/g, '\n\n\n') /* فاصله‌های خیلی باز از متن پیست مانده‌اند */
+      .replace(/^\n+/, '')
+      .replace(/\s+$/, '');
+    if (!code) return { code: '', dropped: dropped, langHint: conf || 'text' };
+    return { code: code, dropped: dropped, langHint: conf || 'text' };
+  }
+
   function uniq(arr) {
     var seen = {}, out = [];
     for (var i = 0; i < arr.length; i++) if (!seen[arr[i]]) { seen[arr[i]] = true; out.push(arr[i]); }
@@ -438,6 +701,13 @@ window.Checker = (function () {
     lintWarnings: lintWarnings,
     localExplain: localExplain,
     /* CONF برای موتور Malwatch: تشخیص کامنت/رشتهٔ هر زبان (رشته‌ها حفظ می‌شوند) */
-    CONF: CONF
+    CONF: CONF,
+    /* codeOnlyLines برای Malwatch: کامنت و رشته هر دو حذف می‌شوند تا قواعدی مثل
+       «کاراکتر نامرئی» فقط داخل کد واقعی عمل کنند، نه داخل متن فارسی رشته‌ها */
+    codeOnlyLines: codeOnlyLines,
+    /* commentFreeLines: فقط کامنت‌ها حذف می‌شوند؛ برای lint و گزارش‌گیری روی کد */
+    commentFreeLines: commentFreeLines,
+    /* extractCode: پالایش متن چسبانده‌شده/استخراج‌شده از تصویر به «فقط کد» */
+    extractCode: extractCode
   };
 })();

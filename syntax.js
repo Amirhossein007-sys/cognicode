@@ -354,8 +354,10 @@ window.Syntax = (function () {
     ['ruby', /\bdef\s+\w+|\bputs\b|\bend\b\s*(?:#.*)?(?:\n|$)|:\w+\s*=>|\bdo\s*\|[\w, ]*\|/g],
     ['sql', /\bSELECT\b[^;]{0,200}\bFROM\b|\bINSERT\s+INTO\b|\bCREATE\s+TABLE\b|\bUPDATE\b[^;]{0,100}\bSET\b/gi],
     /* سقف ۲۰۰ نویسه روی وسط الگو: سلکتور واقعی CSS هرگز تا این حد طولانی نیست
-       و بدون سقف، روی ورودی‌های پر از «.» بدون آکولاد، جست‌وجو چندجمله‌ای می‌شود */
-    ['css', /[.#@][\w-]+[^{}]{0,200}\{|@media|@import|@keyframes|\b(?:display|color|margin|padding|font-size)\s*:/g],
+       و بدون سقف، روی ورودی‌های پر از «.» بدون آکولاد، جست‌وجو چندجمله‌ای می‌شود.
+       سلکتور با حرف ASCII شروع می‌شود؛ «#هشتگ فارسی … {» در متن شبکهٔ اجتماعی
+       نباید CSS شمرده شود (هشتگ بعدش \w نیست). */
+    ['css', /[.#@][A-Za-z][\w-]*[^{}()\n]{0,200}\{|@media|@import|@keyframes|\b(?:display|color|margin|padding|font-size)\s*:/g],
     ['html', /<\/(?:html|body|div|p|span|head|section)\s*>|<html[\s>]|<!DOCTYPE\s+html/gi],
     ['bash', /^#!.*\b(?:bash|sh|zsh)\b|\becho\s+["']?[ $\w]|\$\([^)]+\)|\bfi\b\s*$|\bdone\b\s*$|\bexport\s+\w+=|\bsudo\s+\w+/gm],
     ['json', /^\s*[{\[][\s\S]*[}\]]\s*$/g],
@@ -372,7 +374,8 @@ window.Syntax = (function () {
     ['scala', /\bobject\s+\w+|case class|\bval\s+\w+\s*[:=]|<-\s|\bdef\s+\w+\s*\(|extends\s+App\b|\bimport scala\./g],
     ['perl', /use strict|use warnings|\bsub\s+\w+\s*\{|my\s+[\$\(@]|\bmy\s*\(|#!.*perl|foreach\s+my\b|=>\s*[\w'"]/g],
     ['r', /<-\s|<<-\s|\blibrary\(|\bc\(\s*\)|\bTRUE\b|\bFALSE\b|ggplot|\bdata\.frame\b|\bNA\b/g],
-    ['julia', /::\s*[A-Z]|println\(|\bfunction\s+\w+|using\s+\w+|\bstruct\s+\w+|\w+!\s*\(/g],
+    /* «function foo» ژنریک است (js هم دارد)؛ فقط با نشانه‌های مختص julia دیده می‌شود */
+    ['julia', /::\s*[A-Z]|println\(|using\s+\w+|\bstruct\s+\w+|\w+!\s*\(/g],
     ['haskell', /\bmodule\s+\w+\s+where|::\s*[A-Z]|->\s*\[|main\s*=\s*do\b|\bwhere\b|\bderiving\b|\bimport\s+Data\./g],
     ['matlab', /%[^\n]*|\bdisp\(|\bclc\b|\.\*\b|\bzeros?\s*\(|\bend\b\s*\n\s*\bend\b/gm],
     ['groovy', /\bdef\s+\w+\s*=|println\s+|\w+\.each\s*\{|\bClosure\b|:\s*String\b/g],
