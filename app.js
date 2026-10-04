@@ -150,6 +150,7 @@ try {
   var problems = $('problems'), problemsList = $('problems-list'), problemsCount = $('problems-count');
   var magicFixCard = $('magic-fix-card'), btnMagicFix = $('btn-magic-fix'), mfDesc = $('mf-desc');
   var btnDiffToggle = $('btn-diff-toggle'), diffViewerWrap = $('diff-viewer-wrap'), diffViewerBody = $('diff-viewer-body'), diffToggleText = $('diff-toggle-text');
+  var btnSmartFix = $('btn-smart-fix'), smartFixLabel = $('smart-fix-label');
   var mentalLogicMap = $('mental-logic-map'), mlmFlow = $('mlm-flow');
   var socialCanvas = $('social-canvas'), btnSocialDownload = $('btn-social-download'), btnSocialShareNative = $('btn-social-share-native');
   var keyPaste = $('key-paste');
@@ -1435,6 +1436,7 @@ try {
   function showProblems(list, advice, fixedCode, fixExplanation) {
     problemsCount.textContent = fa(list.length);
     problemsList.innerHTML = '';
+    problems.classList.remove('peek');
     if (problemsScroll) problemsScroll.scrollTop = 0;
     if (fixedCode && fixedCode.trim() && fixedCode.trim() !== ta.value.trim()) {
       lastFixedCode = fixedCode;
@@ -1463,18 +1465,47 @@ try {
         (er.hint ? '<span class="p-hint">💡 ' + esc(er.hint) + '</span>' : '') +
         '<span class="p-loc">خط ' + fa(er.line) + ' · ستون ' + fa(er.column) + '</span>' +
         '</span>';
-      b.addEventListener('click', function () { haptic('light'); jumpToLine(er.line); });
+      b.addEventListener('click', function () { haptic('light'); jumpToProblem(er); });
       problemsList.appendChild(b);
     });
     problems.hidden = false;
   }
 
+  /* ── حالت «نگاه سریع» پنل مشکلات ──
+     پنل ۴۸vh از ارتفاع را می‌گیرد و در صفحه‌های کوچک ادیتور را تا صفر فشرده
+     می‌کند؛ با لمس هر مشکل، پنل موقتاً جمع می‌شود (فقط نوار عنوان می‌ماند) تا
+     ادیتور جا باز کند و خطِ ایراد با فلش دیده شود. لمس دوبارهٔ نوار عنوان، فهرست
+     را برمی‌گرداند و بستن با شِورون مثل قبل کامل می‌بندد. */
+  var peekHintShown = false;
+  function jumpToProblem(er) {
+    if (problems && !problems.hidden) problems.classList.add('peek');
+    var lines = ta.value.split('\n');
+    var li = Math.min(Math.max(er.line || 1, 1), lines.length) - 1;
+    var idx = 0;
+    for (var i = 0; i < li; i++) idx += lines[i].length + 1;
+    idx += Math.min(Math.max((er.column || 1), 1) - 1, (lines[li] || '').length);
+    try { ta.setSelectionRange(idx, idx); } catch (eC) {}
+    requestAnimationFrame(function () { jumpToLine(er.line); });
+    if (!peekHintShown) {
+      peekHintShown = true;
+      toast('برای دیدن فهرست مشکلات، نوار «مشکلات» پایین ادیتور را لمس کن', 4600);
+    }
+  }
+
   function hideProblems() {
     problems.hidden = true;
+    problems.classList.remove('peek');
     if (magicFixCard) magicFixCard.hidden = true;
     if (diffViewerWrap) diffViewerWrap.hidden = true;
   }
-  $('problems-close').addEventListener('click', function () { haptic('light'); hideProblems(); });
+  $('problems-close').addEventListener('click', function (e) { e.stopPropagation(); haptic('light'); hideProblems(); });
+  /* لمس نوار عنوان در حالت جمع‌شده = بازگشت فهرست مشکلات */
+  var problemsHead = problems.querySelector('header');
+  if (problemsHead) problemsHead.addEventListener('click', function (e) {
+    if (e.target.closest('.p-close') || !problems.classList.contains('peek')) return;
+    haptic('light');
+    problems.classList.remove('peek');
+  });
 
   if (btnDiffToggle && diffViewerWrap) {
     btnDiffToggle.addEventListener('click', function () {
@@ -1520,6 +1551,75 @@ try {
          گرفته می‌شود تا setBrainState خودش healthy/error واقعی را از روی کدِ
          اصلاح‌شده اعلام کند — سبز یعنی تأییدشده، قرمز یعنی هنوز ایراد دارد */
       setTimeout(function () { runAnalysis(true); }, 900);
+    });
+  }
+
+  /* ── اصلاح هوشمند مستقل ──
+     کارت «اصلاح جادویی» فقط وقتی ظاهر می‌شد که تحلیلِ کاملِ AI سر بسته باشد؛
+     با شکست درخواست (مثلاً کوتا) هیچ راهی برای درخواستِ اصلاح نبود. این دکمه
+     مستقل از تحلیل، همان خط‌لولهٔ اصلاح (askAIFix + گیت صحت + کارت دیف) را
+     روی ایرادهای فعلی پنل اجرا می‌کند. */
+  var smartFixRunning = false;
+  if (btnSmartFix) {
+    btnSmartFix.addEventListener('click', async function () {
+      if (smartFixRunning) return;
+      if (analyzing || scanningImage || activeOperation) { toast('ابتدا بررسی جاری را متوقف کن', 3200); return; }
+      if (!ta.value.trim()) { toast('اول کدی وارد کن', 3200); return; }
+      if (!settings.key) { toast('برای اصلاح هوشمند، اول کلید API را تنظیم کن', 4200); openSheet('sheet-settings'); return; }
+      var code = ta.value;
+      var clip = clipForAI(code);
+      if (clip.truncated) { toast('فایل برای اصلاح کامل بزرگ است؛ بخش کمتر از ۴۸۰۰۰ نویسه را جداگانه اصلاح کن', 5200); return; }
+      var fixable = currentErrors.filter(function (x) { return x.severity !== 'warning' && x.source !== 'malwatch'; });
+      smartFixRunning = true;
+      btnSmartFix.disabled = true;
+      if (smartFixLabel) smartFixLabel.textContent = 'در حال اصلاح…';
+      haptic('light');
+      var op = null;
+      var islandStopped = false;
+      function stopIsland(state) { if (!islandStopped) { islandStopped = true; DynamicIsland.stop(state); } }
+      try {
+        DynamicIsland.start('اصلاح هوشمند کد', 'در حال ارتباط با هوش مصنوعی…');
+        op = beginOperation('در حال اصلاح هوشمند کد…');
+        var candidate = await askAIFix(code, fixable, clip, true);
+        checkOperation(op);
+        stopIsland('done');
+        if (ta.value !== code) { toast('کد حین اصلاح تغییر کرد؛ نتیجه اعمال نشد — دوباره تلاش کن', 4600); return; }
+        if (!candidate || !candidate.trim() || candidate.trim() === code.trim()) {
+          toast('هوش مصنوعی تغییری پیشنهاد نکرد؛ کد از قبل سالم و بهینه است', 4600);
+          return;
+        }
+        /* همان گیت صحت تحلیل: نسخهٔ پیشنهادی نباید خطای ساختاری تازه داشته باشد */
+        var beforeErrs = 0, afterErrs = 0;
+        try { beforeErrs = Checker.staticCheck(code, langKey).length; } catch (eB) { beforeErrs = 0; }
+        try { afterErrs = Checker.staticCheck(candidate, langKey).length; } catch (eA) { afterErrs = 99; }
+        if (afterErrs > beforeErrs) { toast('اصلاح پیشنهادی خودش خطای ساختاری داشت؛ کد تغییر نکرد', 4800); return; }
+        lastFixedCode = candidate;
+        var desc = fixable.length
+          ? 'اصلاح هوشمند برای ' + fa(fixable.length) + ' ایراد آماده شد؛ مقایسهٔ تغییرات را ببین و «اعمال اصلاحات» را بزن.'
+          : 'نسخهٔ بهینه‌شدهٔ کد آماده شد؛ رفتار کد حفظ شده است. مقایسهٔ تغییرات را ببین و «اعمال اصلاحات» را بزن.';
+        mfDesc.textContent = desc;
+        if (diffViewerWrap) diffViewerWrap.hidden = true;
+        if (diffToggleText) diffToggleText.textContent = 'مشاهدهٔ مقایسهٔ تغییرات';
+        renderDiffViewer(code, candidate);
+        magicFixCard.hidden = false;
+        // proposal ورک‌اسپیس باید با همین نسخه همگام شود وگرنه گارد دکمهٔ اعمال،
+        // کلیک را می‌بلعد و «اعمال اصلاحات» بی‌اثر می‌ماند
+        if (workspace) workspace.setReview({ code: code, errors: currentErrors, mode: 'ai', model: settings.model, incomplete: false, proposed: candidate, explanation: desc, security: lastMal });
+        setTimeout(function () { if (magicFixCard.scrollIntoView) magicFixCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 80);
+        haptic('success');
+        toast('✨ نسخهٔ اصلاح‌شده آماده است — «اعمال اصلاحات» را بزن', 4800);
+      } catch (eFix) {
+        stopIsland('error');
+        if (eFix && eFix.name === 'AbortError') toast('اصلاح هوشمند متوقف شد');
+        else if (eFix && eFix.fixTruncated) toast('پاسخ مدل برای اصلاح کامل کافی نبود؛ کد تغییر نکرد', 4600);
+        else if (eFix && eFix.fixEmpty) toast('مدل کدی برنگرداند؛ یک‌بار دیگر تلاش کن', 4200);
+        else toast('اصلاح هوشمند انجام نشد — ' + aiErrorText(eFix), 5600);
+      } finally {
+        if (op) finishOperation(op);
+        smartFixRunning = false;
+        btnSmartFix.disabled = false;
+        if (smartFixLabel) smartFixLabel.textContent = 'اصلاح هوشمند';
+      }
     });
   }
 
@@ -1751,14 +1851,36 @@ try {
 
   function netErr() { var e = new Error('network'); e.network = true; return e; }
 
+  /* خطای HTTP بدنهٔ JSON دارد؛ message و code زبانی (مثل insufficient_user_quota)
+     استخراج می‌شود تا aiErrorText بتواند پیام فارسی دقیق بسازد */
+  function apiErrorFrom(status, text) {
+    var msg = '', apiCode = '';
+    try {
+      var j = JSON.parse(text);
+      msg = (j && j.error && j.error.message) || (j && j.message) || '';
+      apiCode = (j && j.error && j.error.code) || '';
+    } catch (e3) {}
+    var err = new Error(msg || text || ('HTTP ' + status));
+    err.code = status;
+    err.apiCode = apiCode || '';
+    return err;
+  }
+
   function aiErrorText(e) {
+    var m = String((e && e.message) || '');
+    /* کوتا همیشه قبل از نگاشت کدهای HTTP بررسی می‌شود: سرویس‌های واسط کوتای
+       تمام‌شده را با ۴۲۹ هم می‌فرستند و «تعداد درخواست زیاد» گمراه‌کننده است */
+    if ((e && e.apiCode === 'insufficient_user_quota') || /insufficient[_ ]user[_ ]quota|pre-consume quota/i.test(m)) {
+      var rem = m.match(/remaining user quota:\s*\$?\s*([\d.]+)/i);
+      return 'اعتبار حساب API تو تمام شده است' + (rem ? ' (موجودی حدود ' + rem[1] + ' دلار)' : '') + '؛ حساب API را شارژ کن یا در تنظیمات مدلی ارزان‌تر انتخاب کن.';
+    }
     if (e && e.code === 401) return 'کلید API درست نیست (خطای ۴۰۱). آن را در تنظیمات بررسی کن.';
     if (e && e.code === 403) return 'این کلید به این مدل دسترسی ندارد (خطای ۴۰۳).';
     if (e && e.code === 404) return 'آدرس سرویس یا نام مدل اشتباه است (خطای ۴۰۴).';
     if (e && e.code === 429) return 'تعداد درخواست‌ها زیاد است؛ کمی صبر کن (خطای ۴۲۹).';
     if (e && e.code >= 500) return 'سرور سرویس هوش مصنوعی موقتاً در دسترس نیست.';
     if (e && e.network) return 'اتصال برقرار نشد. اینترنت و آدرس API را بررسی کنید. پیشنهاد: از گپ جی پی تی (https://api.gapgpt.app/v1) استفاده کنید که در ایران بدون تحریم و بدون پروکسی کار می‌کند.';
-    return (e && e.message) || 'خطای ناشناخته';
+    return m || 'خطای ناشناخته';
   }
 
   /* ── حالت روشن/تاریک ── */
@@ -1854,9 +1976,8 @@ try {
     clearTimeout(p.timer);
     if (ok) { p.resolve({ status: status, text: text }); }
     else {
-      var e = new Error(text || ('HTTP ' + status));
-      e.code = status;
-      p.reject(e);
+      // بدنهٔ خام JSON به کاربر نشان داده نمی‌شود؛ پیام و کد خطا استخراج می‌شود
+      p.reject(apiErrorFrom(status, text));
     }
   };
 
@@ -1924,18 +2045,12 @@ try {
     }
     checkOperation(op);
 
-    if (status < 200 || status >= 300) {
-      var msg = '';
-      try {
-        var j = JSON.parse(text);
-        msg = (j && j.error && j.error.message) || (j && j.message) || '';
-      } catch (e3) {}
-      var err = new Error(msg || ('HTTP ' + status));
-      err.code = status;
-      throw err;
-    }
+    if (status < 200 || status >= 300) throw apiErrorFrom(status, text);
     var data;
     try { data = JSON.parse(text); } catch (e4) { throw netErr(); }
+    /* برخی سرویس‌های واسط خطای کوتا/کلید را با HTTP 200 برمی‌گردانند؛ بدون این
+       گارد، بدنهٔ خطا بی‌صدا «بدون پاسخ» تفسیر می‌شد */
+    if (data && data.error) throw apiErrorFrom(status, text);
     var c = ((data || {}).choices || [])[0] || {};
     // finish_reason هم برگردانده می‌شود: 'length' یعنی پاسخ به سقف توکن خورده و
     // بریده است — باید به کاربر گفته شود، نه اینکه متن نیمه‌کاره به‌عنوان نتیجه
@@ -2003,12 +2118,13 @@ try {
     return t.replace(/^```[a-zA-Z0-9+#._-]*[ \t]*\n?/, '').replace(/\n?```[ \t]*$/, '').trim();
   }
 
-  async function askAIFix(code, issues, clip) {
+  async function askAIFix(code, issues, clip, optimize) {
     var errLines = (issues || []).slice(0, 12).map(function (e) {
       return '- خط ' + e.line + ' (' + (e.severity === 'warning' ? 'هشدار' : 'خطا') + '): ' + e.message;
     }).join('\n');
     var prompt = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
     if (errLines) prompt += '\nایرادهایی که باید برطرف شوند:\n' + errLines + '\n';
+    if (optimize) prompt += '\nعلاوه بر رفع ایرادها، بهبود بی‌خطر و بدون تغییر رفتار هم مجاز است: خوانایی، نام‌گذاری واضح و حذف کد تکراری — به شرط آنکه ورودی، خروجی و رفتار کد دقیقاً همان بماند.\n';
     prompt += '\nکد:\n' + clip.text;
     // بودجهٔ خروجی از حجم خود کد تخمین زده می‌شود (کد تقریباً ۳ کاراکتر بر توکن)
     var budget = Math.min(16000, Math.max(1500, Math.ceil(clip.text.length / 3) + 600));
@@ -3220,6 +3336,8 @@ try {
   workspace = WorkspaceFeatures.create({
     ta: ta, toast: toast, openSheet: openSheet, closeSheets: closeSheets,
     jumpToLine: jumpToLine, runAnalysis: runAnalysis, renderMarkdown: renderMarkdown,
+    aiErrorText: function (e) { return aiErrorText(e); },
+    peekProblems: function () { if (problems && !problems.hidden) problems.classList.add('peek'); },
     beginOperation: beginOperation, finishOperation: finishOperation, checkOperation: checkOperation, chat: chat,
     settings: function () { return settings; }, historyEnabled: function () { return settings.hist; },
     langMode: function () { return langMode; }, langKey: function () { return langKey; },

@@ -11,6 +11,10 @@ const assert = require('node:assert/strict');
     for (const scenario of ['native-success', 'native-error', 'native-exception', 'pwa']) {
       const native = scenario !== 'pwa';
       const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
+      // Isolate storage: a draft left in IndexedDB by an earlier iteration is restored
+      // into the editor after this test's fill(), so runAnalysis sees an empty editor
+      // and bails out before ever disabling the button.
+      await page.addInitScript(() => { localStorage.clear(); localStorage.setItem('cognicode.launch-seen.v1', '1'); });
       await page.addInitScript(native => {
         window.activityMessages = [];
         if (native) window.webkit = { messageHandlers: {
@@ -18,6 +22,8 @@ const assert = require('node:assert/strict');
         } };
       }, native);
       await page.goto(pathToFileURL(path.resolve(__dirname, native ? '../native/Web/index.html' : '../index.html')).href);
+      await page.evaluate(() => window.WorkspaceStore ? window.WorkspaceStore.ready.then(() => true) : true);
+      await page.waitForTimeout(600);
       if (scenario === 'native-error') {
         await page.evaluate(() => { Checker.staticCheck = () => [{ line: 1, column: 1, severity: 'error', message: 'Test error' }]; });
       }

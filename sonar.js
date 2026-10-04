@@ -5,7 +5,7 @@ window.Sonar = (() => {
   const host = document.getElementById('particles-js');
   const canvas = host?.querySelector('canvas');
   const ctx = canvas?.getContext('2d');
-  if (!ctx) return { refresh() {}, ripple() {}, setPulse() {} };
+  if (!ctx) return { refresh() {}, setFocus() {} };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let width = 0, height = 0, particles = [], frame = 0, last = 0, time = 0;
   let suspended = false, light = false, pointer = null, focused = false;
@@ -87,5 +87,5 @@ window.Sonar = (() => {
     if (particles.length > 140) particles.splice(0, particles.length - 140);
   }, { passive: true });
   resize(); playback();
-  return { refresh, setFocus(value) { focused = !!value; pointer = null; }, ripple() {}, setPulse() {} };
+  return { refresh, setFocus(value) { focused = !!value; pointer = null; } };
 })();

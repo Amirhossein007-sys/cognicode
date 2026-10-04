@@ -666,6 +666,14 @@ html[data-theme="light"] .zoom-hud {
 .p-flex { flex: 1; }
 .p-close { width: 30px; height: 30px; display: grid; place-items: center; color: var(--txt3); }
 .p-close svg { width: 17px; height: 17px; }
+/* ردیف ابزار پنل مشکلات: دکمهٔ اصلاح هوشمند همیشه در دسترس است، مستقل از نتیجهٔ تحلیل */
+.p-tools { display: flex; align-items: center; gap: 10px; padding: 8px 14px 4px; flex: 0 0 auto; }
+.p-tools-note { font-size: 11px; color: var(--txt3); line-height: 1.6; }
+.btn-magic-fix:disabled { opacity: 0.55; filter: saturate(0.5); }
+/* حالت «نگاه سریع»: پنل جمع می‌شود تا ادیتور جا باز کند؛ لمس نوار عنوان برمی‌گرداند */
+.problems.peek { max-height: none; }
+.problems.peek .problems-scroll, .problems.peek .p-tools { display: none; }
+.problems.peek > header { cursor: pointer; }
 .problems-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -1866,35 +1874,6 @@ html.launch-pending body > :not(#launch-splash):not(#particles-js) { visibility:
 .topbar .brand .logo { width: 32px; height: 32px; border-radius: 10px; }
 .topbar .top-actions { justify-self: end; gap: 0; }
 .topbar .icon-btn { width: 40px; height: 44px; }
-.orbital-clock {
-  --orb-primary: #7dd3fc;
-  --orb-face: #0f172a;
-  --orb-marker: #94a3b8;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  min-width: 0; color: #e2e8f0;
-}
-html[data-theme="light"] .orbital-clock {
-  --orb-primary: #0369a1; --orb-face: #f8fafc; --orb-marker: #64748b;
-  color: #1e293b;
-}
-.orbital-clock svg {
-  width: 58px; height: 58px; overflow: visible;
-  transition: transform .25s ease-out;
-  filter: drop-shadow(0 2px 4px #0002);
-}
-.orbital-face { fill: var(--orb-face); stroke: var(--orb-marker); stroke-width: 1; }
-.orbital-ring { stroke: var(--orb-marker); stroke-width: .5; opacity: .35; }
-.orbital-marker { fill: var(--orb-marker); stroke: none; }
-.orbital-cardinal { fill: currentColor; }
-.orbital-active { fill: var(--orb-primary); }
-.orbital-hour { stroke-width: 3.5; }
-.orbital-minute { stroke-width: 2; }
-.orbital-second { stroke: var(--orb-primary); stroke-width: 1.5; }
-.orbital-center { fill: currentColor; stroke: none; }
-.orbital-date { font-size: 12px; line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.orbital-calendar { display: flex; align-items: center; flex-direction: column; padding: 2px 6px; border-radius: 9px; background: var(--orb-face); border: 1px solid var(--orb-marker); width: 94px; }
-.orbital-weekday { font-size: 9px; line-height: 12px; color: var(--orb-primary); }
-.orbital-calendar .orbital-date { font-size: 11px; line-height: 16px; font-weight: 700; }
 .brain-marquee {
   flex: 0 0 30px; height: 30px; min-height: 30px;
   margin: 2px 14px 4px; border: 1px solid #334155; border-radius: 10px;
@@ -1913,7 +1892,7 @@ html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; bo
 .brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
 @keyframes brainMarquee { to { transform: translateX(-50%); } }
 /* Keep the existing flex editor and all its overlay/scroll metrics intact. */
-.bottom .play { width: 94%; margin-inline: auto; height: 44px; font-size: 15px; border-radius: 14px; }
+.bottom .play { width: 94%; margin-inline: auto; border-radius: 14px; }
 @media (min-width: 480px) {
   .topbar .brand-txt span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar .brand-txt b { font-size: 15px; }
@@ -1924,14 +1903,11 @@ html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; bo
   .topbar { column-gap: 2px; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  .orbital-clock svg { width: 38px; height: 38px; }
   .brain-marquee { flex-basis: 24px; height: 24px; min-height: 24px; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .orbital-clock:hover svg { transform: perspective(600px) rotateX(5deg) rotateY(-5deg); }
   .brain-marquee:hover .brain-marquee-track { animation-play-state: paused; }
 }
 @media (prefers-reduced-motion: reduce) {
   .brain-marquee-track { animation: none; }
-  .orbital-clock svg { transition: none; }
 }

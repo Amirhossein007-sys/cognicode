@@ -350,7 +350,10 @@ window.Syntax = (function () {
     ['swift', /import\s+(?:SwiftUI|Foundation|UIKit|Combine)\b|@(?:State|Binding|Observable|main|Environment|StateObject|Published)\b|\bfunc\s+\w+\s*\(|\bguard\s+(?:let|var)\b|\blet\s+\w+\s*[:=]|->\s*[A-Za-z]|\bstruct\s+\w+\s*[:{]|\bnil\b|\.font\(|\.padding\(|\bsome\s+View\b/g],
     ['lua', /--\[\[|\blocal\s+(?:function|\w+\s*=)|\bthen\b|\belseif\b|\brepeat\b|\buntil\b|~=|pairs?\s*\(|ipairs\s*\(|io\.|\brequire\s*[("']|\bprint\s*\(|\.\.\.|\bend\)\s*$/gm],
     ['python', /(?:^|\n)\s{0,200}(?:def\s+\w+\s*\(|import\s+\w+|from\s+[\w.]+\s+import\s+\w+|class\s+\w+[^:]*:)|\belif\b|\bprint\s*\(|\bTrue\b|\bNone\b/g],
-    ['elixir', /defmodule\s+\w+|\bdefp?\s+\w+|\bdef\s+\w+.*do\s*$|\bIO\.(?:puts|inspect)|\|>|\bend\b|\bfn\b[\s\S]{0,40}->|\b:[a-z_]\w*|:ok\b|\buse\s+\w+/g],
+    /* الکسیر: «use» فقط با نام ماژول حرف‌بزرگ و تا انتهای خط (بدون «;» که نشانهٔ
+       use در PHP است) شمرده می‌شود تا «use the website» در کامنت‌های انگلیسیِ کد
+       PHP فریب ندهد؛ «end» هم باید تنها در انتهای خط بیاید. (m برای $ خطی لازم است) */
+    ['elixir', /defmodule\s+\w+|\bdefp?\s+\w+|\bdef\s+\w+.*do\s*$|\bIO\.(?:puts|inspect)|\|>|\bend\b\s*(?:#.*)?$|\bfn\b[\s\S]{0,40}->|\b:[a-z_]\w*|:ok\b|\buse\s+[A-Z][\w.]*[^;\n]*$/gm],
     ['ruby', /\bdef\s+\w+|\bputs\b|\bend\b\s*(?:#.*)?(?:\n|$)|:\w+\s*=>|\bdo\s*\|[\w, ]*\|/g],
     ['sql', /\bSELECT\b[^;]{0,200}\bFROM\b|\bINSERT\s+INTO\b|\bCREATE\s+TABLE\b|\bUPDATE\b[^;]{0,100}\bSET\b/gi],
     /* سقف ۲۰۰ نویسه روی وسط الگو: سلکتور واقعی CSS هرگز تا این حد طولانی نیست
@@ -361,7 +364,7 @@ window.Syntax = (function () {
     ['html', /<\/(?:html|body|div|p|span|head|section)\s*>|<html[\s>]|<!DOCTYPE\s+html/gi],
     ['bash', /^#!.*\b(?:bash|sh|zsh)\b|\becho\s+["']?[ $\w]|\$\([^)]+\)|\bfi\b\s*$|\bdone\b\s*$|\bexport\s+\w+=|\bsudo\s+\w+/gm],
     ['json', /^\s*[{\[][\s\S]*[}\]]\s*$/g],
-    ['php', /<\?php|\$\w+\s*=\s*[^=]|->\w+\s*\(|\becho\s+["'$]/g],
+    ['php', /<\?php|<\?=|\$\w+\s*=\s*[^=]|\$\w+->\w+|->\w+\s*\(|\becho\s+["'$]|\bforeach\s*\([^)]*\bas\s+\$|\bnamespace\s+[\w\\]+;|\buse\s+[\w\\]+;|\$_(?:GET|POST|SERVER|SESSION|REQUEST|COOKIE)\b/g],
     ['rust', /\bfn\s+\w+\s*\(|\blet\s+mut\b|println!|\bimpl\s+\w+|::[a-z]|->\s*Result|#!\[/g],
     ['go', /\bpackage\s+\w+|\bfunc\s+[ (]|fmt\.|:=|\bimport\s+\(|\bgo\s+func\b/g],
     ['kotlin', /\bfun\s+\w+\s*\(|\bval\s+\w+|println\(|\bdata class\b|\bcompanion object\b/g],
@@ -390,6 +393,10 @@ window.Syntax = (function () {
 
   function detect(code) {
     if (!code || !code.trim()) return 'text';
+    /* لنگر قطعی: تگ باز PHP نشانهٔ قاطع PHP است و پیش از شمارش عمومی بررسی
+       می‌شود؛ وگرنه در فایل‌های PHPِ پرکامنتِ انگلیسی، الگوهای ضعیف الکسیر/روبی
+       (مثل «use the…») امتیاز بیشتری می‌گرفتند و زبان اشتباه اعلام می‌شد. */
+    if (/<\?php\b|<\?=/.test(code)) return 'php';
     let best = 'text', bestScore = 0;
     for (var i = 0; i < DETECT.length; i++) {
       var m = code.match(DETECT[i][1]);
