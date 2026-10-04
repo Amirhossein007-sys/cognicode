@@ -5,11 +5,26 @@ html[data-theme="light"] .glass-workspace { background: rgba(255,255,255,.24); }
 .quick-start b { font-size: 18px; }.quick-start p { font-size: 13px; color: var(--txt2); margin: 8px 0 16px; }
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .quick-start small { display: block; margin-top: 14px; font-size: 11px; color: var(--txt2); }
+/* پنل «از کجا شروع کنیم؟» باید یک «سطح» واقعی باشد، نه فقط متن شناور.
+   اندازه‌گیری پیکسلی نشان داد background قبلی (.glass-workspace) در موتور WebKit
+   عملاً با ادیتور پشتش یکی می‌شد (اختلاف کانالی ۷–۸ از ۷۶۵) و پنل فقط با متن و
+   دکمه‌ها دیده می‌شد — روی دستگاه همان «نمایش داده نمی‌شود». حالا از رنگ سطحِ
+   بالارفتهٔ خود برنامه استفاده می‌کند: --bg2 = #1e293b در تیره و #ffffff در روشن. */
+.quick-start {
+  background: rgba(30,41,59,.94);
+  border-color: rgba(148,163,184,.30);
+  box-shadow: 0 18px 38px -18px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.10);
+}
+html[data-theme="light"] .quick-start {
+  background: rgba(255,255,255,.96);
+  border-color: rgba(2,132,199,.28);
+  box-shadow: 0 16px 34px -18px rgba(15,23,42,.30), inset 0 1px 0 rgba(255,255,255,.9);
+}
 .quick-grid button, .selection-actions button, .operation-bar button, .patch-action, .session-action { min-height: 44px; padding: 8px 12px; border-radius: 12px; color: var(--txt1); border: 1px solid var(--line); background: rgba(56,189,248,.12); font: inherit; }
 .quick-grid button:hover, .session-action:hover { background: rgba(56,189,248,.23); }
 .key { min-width: 44px; min-height: 44px; }.key.sq { width: 44px; }.keys-scroll { padding-block: 2px; }
 .topbar .icon-btn { width: 44px; min-width: 44px; }
-@media(max-width:359px) { .topbar .icon-btn { width: 44px; min-width: 44px; }.topbar { grid-template-columns: 1fr 94px 132px; padding-inline: 5px; }.topbar .brand-txt b { font-size: 11px; } }
+@media(max-width:359px) { .topbar { padding-inline: 5px; } .topbar .brand-txt b { font-size: 11px; } }
 html.focus-mode .brain-marquee { flex-basis: 24px; min-height: 24px; height: 24px; }
 html.focus-mode .brain-marquee-track { animation-duration: 28s; }
 #key-focus[aria-pressed="true"] { border-color: var(--accent); background: rgba(56,189,248,.22); }
@@ -37,50 +52,85 @@ html[class*="text-scale-"] .md { font-size: 1em; }html[class*="text-scale-"] .md
 .brain-marquee { background-color: rgba(15,23,42,.65); background-image: linear-gradient(rgba(148,163,184,.19) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.19) 1px, transparent 1px); background-size: 8px 8px; }
 html[data-theme="light"] .brain-marquee { background-color: rgba(248,250,252,.68); background-image: linear-gradient(rgba(51,65,85,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(51,65,85,.16) 1px, transparent 1px); background-size: 8px 8px; }
 
-/* Analysis button adapted from the supplied Vue design; selectors stay local.
-   Persian text stays joined. Loading follows the existing operation, never focus. */
+/* دکمهٔ تحلیل — انفجار ستاره‌ای فیروزه‌ای، اقتباس از همان طرح Vue ارسالی.
+   رفتار عیناً همان دکمه است: پنل توپُر → قاب خطی + پرتاب ۶ ستاره با اندازه، مسیر و
+   زمان‌بندی متفاوت. فقط رنگ فیروزه‌ای شده و متن در هر دو تم جوهری تیره است تا
+   کنتراست ≥ ۴.۵:۱ بماند. متن فارسی جدا نمی‌شود؛ لودینگ به عملیات وصل است، نه فوکوس. */
 #btn-play {
-  --analysis-primary: #fda4af; --analysis-neutral-1: #253449; --analysis-neutral-2: #162234;
-  --analysis-edge: rgba(255,255,255,.25); --analysis-trail: rgba(255,255,255,.5);
-  height: 68px; min-width: 0; padding: 16px 20px; border-radius: 14px; flex-direction: row; gap: 0;
-  color: #f8fafc; background: transparent; overflow: hidden; isolation: isolate;
-  font: 700 18px var(--fa); text-shadow: 0 1px 1px rgba(0,0,0,.2);
-  box-shadow: 0 .5px .5px 1px rgba(255,255,255,.2), 0 10px 20px rgba(0,0,0,.2), 0 4px 5px rgba(0,0,0,.05);
-  transition: transform .3s ease, box-shadow .3s ease; animation: none;
+  --burst-fill-1: #38bdf8; --burst-fill-2: #1aa3e8;
+  --burst-ink: #0b1622; --burst-accent: #7dd3fc; --burst-star: #e6f8ff;
+  --burst-glow: rgba(56,189,248,.9); --burst-ring: rgba(56,189,248,.5);
+  --analysis-primary: #7dd3fc; --analysis-trail: rgba(255,255,255,.75);
+  --analysis-neutral-1: #38bdf8; --analysis-neutral-2: #1aa3e8;
+  height: 68px; min-width: 0; padding: 0; border: 0; border-radius: 14px;
+  flex-direction: row; gap: 0;
+  color: var(--burst-ink); background: transparent; overflow: visible; isolation: isolate;
+  font: 700 18px var(--fa); text-shadow: none;
+  box-shadow: 0 8px 20px -6px rgba(2,132,199,.55);
+  transition: transform .3s ease, box-shadow .45s ease, color .45s ease; animation: none;
 }
 html[data-theme="light"] #btn-play {
-  --analysis-primary: #be123c; --analysis-neutral-1: #f7f8f7; --analysis-neutral-2: #e7e7e7;
-  --analysis-edge: rgba(0,0,0,.35); --analysis-trail: rgba(0,0,0,.5);
-  color: #172033; text-shadow: 0 1px 1px rgba(255,255,255,.5);
+  --burst-accent: #075985; --burst-star: #075985;
+  --burst-glow: rgba(7,89,133,.35); --burst-ring: rgba(2,132,199,.4);
+  --analysis-primary: #075985; --analysis-trail: rgba(2,132,199,.6);
+  box-shadow: 0 8px 20px -6px rgba(2,132,199,.4);
 }
+/* پنل توپُر (رنگ دکمه) — روی هاور/لمس محو می‌شود تا قاب و ستاره‌ها دیده شوند */
+#btn-play::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-radius: inherit; animation: none; mix-blend-mode: normal; background-size: auto;
+  background: linear-gradient(180deg,var(--burst-fill-1),var(--burst-fill-2));
+  transition: opacity .45s ease;
+}
+/* قاب دکمه — در حالت عادی نامرئی، روی هاور/لمس فیروزه‌ای.
+   width/height عمداً auto است تا اسپینر قدیمیِ .play.loading::after دوباره ظاهر نشود. */
 #btn-play::after {
   content: ""; position: absolute; inset: 0; width: auto; height: auto;
-  border-radius: inherit; border: 2.5px solid transparent; z-index: 0;
-  background: linear-gradient(var(--analysis-neutral-1),var(--analysis-neutral-2)) padding-box,
-    linear-gradient(to bottom,rgba(128,128,128,.1),var(--analysis-edge)) border-box;
-  box-shadow: none; animation: none; transition: transform .4s ease;
+  border-radius: inherit; border: 2.5px solid transparent; z-index: 1;
+  pointer-events: none; box-shadow: none; animation: none;
+  transition: border-color .45s ease, box-shadow .45s ease;
 }
-#btn-play::before {
-  content: ""; position: absolute; inset: 7px 6px 6px; z-index: 2;
-  background: linear-gradient(to top,var(--analysis-neutral-1),var(--analysis-neutral-2));
-  border-radius: 30px; filter: blur(.5px); mix-blend-mode: normal; animation: none;
-}
-#btn-play .analysis-state { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; z-index: 3; }
+/* دکمه حالا overflow: visible دارد؛ ریپل لمسی داخل همین لایه بریده می‌شود */
+#btn-play .ripple-layer { position: absolute; inset: 0; z-index: 10; border-radius: inherit; overflow: hidden; pointer-events: none; }
+#btn-play .analysis-state { display: flex; align-items: center; justify-content: center; gap: 12px; position: relative; z-index: 4; }
 #btn-play .play-label { line-height: 28px; white-space: nowrap; animation: analysis-label-in .6s ease both; }
 #btn-play .analysis-plane { display: flex; position: relative; width: 24px; height: 24px; transform: scale(1.15); transition: transform .3s ease; }
 #btn-play .analysis-plane svg { overflow: visible; filter: drop-shadow(0 1px .6px rgba(0,0,0,.3)); animation: analysis-land .6s ease both; }
 #btn-play .analysis-plane::before { content: ""; position: absolute; top: 50%; height: 2px; width: 0; left: -5px; background: linear-gradient(to right,transparent,var(--analysis-trail)); }
-#btn-play .analysis-outline { position: absolute; inset: -2px -3.5px; border-radius: inherit; overflow: hidden; z-index: 1; opacity: 0; transition: opacity .4s ease; }
-#btn-play .analysis-outline::before { content: ""; position: absolute; inset: -100%; background: conic-gradient(from 180deg,transparent 60%,white 80%,transparent); animation: analysis-spin 2s linear infinite; animation-play-state: paused; }
-@media(hover:hover) {
-  #btn-play:not(:disabled):hover { transform: scale(1.02); box-shadow: 0 0 1px 2px rgba(255,255,255,.3),0 15px 30px rgba(0,0,0,.3); }
-  #btn-play:not(:disabled):hover::after { transform: scale(1.05,1.1); }
-  #btn-play:not(:disabled):hover .analysis-outline { opacity: 1; }
-  #btn-play:not(:disabled):hover .analysis-outline::before { animation-play-state: running; }
-  #btn-play:not(:disabled):hover .analysis-plane { transform: rotate(45deg) scale(1.15); }
-  #btn-play:not(:disabled):hover .play-label { animation: analysis-label-wave .5s ease both; }
+
+/* ── انفجار ستاره‌ای: هر ستاره اندازه، مسیر و زمان‌بندی خودش را دارد ──
+   مسیرها عمداً به پایین و دو طرف متمایل‌اند: نوار ابزار بالای دکمه z-index=4 دارد و
+   هر ستاره‌ای که بالاتر از لبهٔ دکمه برود پشت همان نوار پنهان می‌شود. */
+#btn-play .burst { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#btn-play .burst-star {
+  position: absolute; left: 50%; top: 50%; display: block;
+  color: var(--burst-star); opacity: 0;
+  transform: translate(-50%,-50%) translate(0,0) scale(.35);
+  filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+  transition: transform 1s cubic-bezier(0.05,0.83,0.43,0.96), opacity .45s ease, filter .5s ease;
 }
-#btn-play:not(:disabled):active { transform: scale(1); filter: none; box-shadow: 0 0 1px 2px rgba(255,255,255,.3),0 10px 3px -3px rgba(0,0,0,.2); }
+#btn-play .burst-star svg { display: block; width: 100%; height: auto; fill: currentColor; stroke: none; }
+#btn-play .bs-1 { width: 25px; --burst-to: translate(-138px,-10px); }
+#btn-play .bs-2 { width: 15px; --burst-to: translate(-70px,32px);   transition-duration: 1s,.45s,.5s; transition-timing-function: cubic-bezier(0,0.4,0,1.01),ease,ease; }
+#btn-play .bs-3 { width: 5px;  --burst-to: translate(-26px,58px);   transition-duration: 1s,.45s,.5s; transition-timing-function: cubic-bezier(0,0.4,0,1.01),ease,ease; }
+#btn-play .bs-4 { width: 8px;  --burst-to: translate(90px,16px);    transition-duration: .8s,.45s,.5s; transition-timing-function: cubic-bezier(0,0.4,0,1.01),ease,ease; }
+#btn-play .bs-5 { width: 15px; --burst-to: translate(min(170px,44vw),-4px); transition-duration: .6s,.45s,.5s; transition-timing-function: cubic-bezier(0,0.4,0,1.01),ease,ease; }
+#btn-play .bs-6 { width: 5px;  --burst-to: translate(32px,-26px);   transition-duration: .8s,.45s,.5s; transition-timing-function: ease,ease,ease; }
+
+/* حالت انفجار: لمس → کلاس burst | اشاره‌گر → :hover/:active (فقط دستگاه‌های دارای اشاره‌گر) */
+#btn-play.burst { color: var(--burst-accent); }
+#btn-play.burst::before { opacity: 0; }
+#btn-play.burst::after { border-color: var(--burst-accent); box-shadow: 0 0 25px var(--burst-ring); }
+#btn-play.burst .burst-star { opacity: 1; filter: drop-shadow(0 0 10px var(--burst-glow)); transform: translate(-50%,-50%) var(--burst-to) scale(1); }
+@media(hover:hover) {
+  #btn-play:not(:disabled):is(:hover,:active) { color: var(--burst-accent); }
+  #btn-play:not(:disabled):is(:hover,:active)::before { opacity: 0; }
+  #btn-play:not(:disabled):is(:hover,:active)::after { border-color: var(--burst-accent); box-shadow: 0 0 25px var(--burst-ring); }
+  #btn-play:not(:disabled):is(:hover,:active) .burst-star { opacity: 1; filter: drop-shadow(0 0 10px var(--burst-glow)); transform: translate(-50%,-50%) var(--burst-to) scale(1); }
+  #btn-play:not(:disabled):is(:hover,:active) .analysis-plane { transform: rotate(45deg) scale(1.15); }
+  #btn-play:not(:disabled):is(:hover,:active) .play-label { animation: analysis-label-wave .5s ease both; }
+}
+#btn-play:not(:disabled):active { transform: scale(.98); }
 #btn-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 #btn-play.loading { opacity: 1; animation: none !important; }
 #btn-play.loading .analysis-plane { transform: scale(1.15); }
@@ -88,7 +138,6 @@ html[data-theme="light"] #btn-play {
 #btn-play.loading .analysis-plane::before { animation: analysis-contrail .8s linear forwards; }
 #btn-play.loading .play-label { animation: none; opacity: 1; }
 #btn-play.shake { animation: shake .4s ease; }
-@keyframes analysis-spin { to { transform: rotate(360deg); } }
 @keyframes analysis-label-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
 @keyframes analysis-label-wave { 30% { transform: translateY(4px); } 50% { transform: translateY(-3px); color: var(--analysis-primary); } 100% { transform: none; } }
 @keyframes analysis-land { from { transform: translateX(-40px) translateY(20px) rotate(-50deg) scale(2); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -119,6 +168,7 @@ html[data-theme="light"] #res-loading .terminal-loader {
 @keyframes analysis-type-delete { 0%,10% { width: 0; } 45%,55% { width: 10ch; } 90%,100% { width: 0; } }
 @media(prefers-reduced-motion:reduce) {
   #btn-play, #btn-play *, #btn-play *::before { animation: none !important; transition: none; }
+  #btn-play .burst { display: none; }
   #btn-play .analysis-plane svg { opacity: 1; transform: none; }
   #res-loading .terminal-text { animation: none; width: 10ch; border-right-color: var(--terminal-ink); }
 }

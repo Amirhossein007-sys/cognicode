@@ -38,15 +38,15 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.10"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Info.plist طھظ†ظ‡ط§ ظ…ظ†ط¨ط¹ ط­ظ‚غŒظ‚طھ ط§ط³طھط› طھظˆظ„غŒط¯ ط®ظˆط¯ع©ط§ط± ط±ط§ ظ‚ط·ط¹ ظ…غŒâ€Œع©ظ†غŒظ… طھط§ ع©ظ„غŒط¯ظ‡ط§غŒ
-        # UILaunchScreen / UILaunchStoryboardName ظ‡ظ…غŒط´ظ‡ ط¯ط³طھâ€Œظ†ط®ظˆط±ط¯ظ‡ ط¨ظ…ط§ظ†ظ†ط¯
+        # Info.plist تنها منبع حقیقت است؛ تولید خودکار را قطع می‌کنیم تا کلیدهای
+        # UILaunchScreen / UILaunchStoryboardName همیشه دست‌نخورده بمانند
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "7"
+        CURRENT_PROJECT_VERSION: "13"
         CADisableMinimumFrameDurationOnPhone: true
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
 
@@ -73,4 +73,4 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "7"
+        CURRENT_PROJECT_VERSION: "13"

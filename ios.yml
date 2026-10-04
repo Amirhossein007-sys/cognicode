@@ -12,6 +12,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The artifact name used to be hardcoded and drifted two builds behind, so the
+      # downloaded IPA was labelled with the wrong build. Read it from release.json.
+      - name: Read release identity
+        id: release
+        run: |
+          echo "version=$(node -p 'require("./release.json").version')" >> "$GITHUB_OUTPUT"
+          echo "build=$(node -p 'require("./release.json").build')" >> "$GITHUB_OUTPUT"
+
       - name: Install xcodegen
         run: brew install xcodegen
 
@@ -24,8 +32,47 @@ jobs:
           node --check workspace-features.js
           node --check change-set.js
 
+      # The checkers launch with channel 'chrome' (the runner image ships Google
+      # Chrome), so the bundled-browser download is skipped on purpose.
+      - name: Install Playwright
+        run: npm install --no-save playwright
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      # The shipped app is WKWebView, but every browser check above launches
+      # Chromium. check-quick-start.cjs runs the editor-panel contract in both
+      # engines, so a WebKit-only rendering difference cannot reach the device
+      # unnoticed again. The checker skips WebKit gracefully if it is missing.
+      - name: Install WebKit for the engine-parity check
+        run: npx playwright install webkit
+
+      # Must run before the browser checks: they exercise native/Web/index.html too,
+      # so a stale bundle would be tested instead of the sources just edited.
       - name: Sync Web files to native
         run: pwsh -NoProfile -File tools/sync-native.ps1
+
+      - name: Run browser checks
+        env:
+          BROWSER_CHANNEL: chrome
+        run: |
+          node tools/check-malwatch.cjs
+          node tools/check-report-rendering.cjs
+          node tools/check-ai-report.cjs
+          node tools/check-code-import.cjs
+          node tools/check-workspace.cjs
+          node tools/check-analysis-terminal.cjs
+          node tools/check-star-burst.cjs
+          node tools/check-native-activity.cjs
+          node tools/check-layout.cjs
+          node tools/check-editor-sync.cjs
+          node tools/check-ui-refinements.cjs
+          node tools/check-orbital-header.cjs
+          node tools/check-persian-font.cjs
+          node tools/check-glass.cjs
+          node tools/check-gradient.cjs
+          node tools/check-gallery-particles.cjs
+          node tools/check-launch.cjs
+          node tools/check-quick-start.cjs
 
       - name: Verify release resources and version
         run: node tools/verify-release.cjs --manifest
@@ -79,7 +126,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniCode-1.1.0-build-7-${{ github.run_number }}
+          name: CogniCode-${{ steps.release.outputs.version }}-build-${{ steps.release.outputs.build }}-${{ github.run_number }}
           path: |
             native/CogniCode-unsigned.ipa
             release.json

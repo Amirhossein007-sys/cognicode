@@ -22,6 +22,18 @@ const assert = require('node:assert/strict');
         const alpha = Number(color.match(/,\s*([\d.]+)\)$/)[1]);
         assert.ok(theme === 'light' ? alpha >= .2 && alpha <= .25 : alpha >= .4 && alpha <= .5, color);
       }
+      // The quick-start panel is an elevated surface of its own, so it may be far
+      // more opaque than the shared glass — but it must never become the colour of
+      // the editor behind it. Measured on device engines, the old value differed by
+      // only 7-8 channel steps out of 765, which reads as "the panel is missing".
+      const panel = await page.locator('.quick-start').evaluate(el => ({
+        own: getComputedStyle(el).backgroundColor,
+        editor: getComputedStyle(document.querySelector('.editor')).backgroundColor,
+      }));
+      assert.match(panel.own, /^rgba\(/);
+      assert.notEqual(panel.own, panel.editor, 'the quick-start panel must not be the editor colour');
+      const panelAlpha = Number(panel.own.match(/,\s*([\d.]+)\)$/)[1]);
+      assert.ok(panelAlpha >= .9, 'the quick-start panel must stay a solid, readable surface: ' + panel.own);
       await page.screenshot({ path: path.resolve(__dirname, `../glass-${theme}.png`) });
     }
     await page.emulateMedia({ contrast: 'more' });

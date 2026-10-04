@@ -16,15 +16,19 @@ window.WorkspaceFeatures = {
     function saveDraft() {
       clearTimeout(draftTimer);
       if (!loaded || restoring) return;
-      const draft = { id: 'current', code: ta.value, langMode: api.langMode(), updated: Date.now() };
+      const draft = { id: 'current', code: ta.value, langMode: api.langMode(), name: api.fileName(), updated: Date.now() };
       draftTime = draft.updated;
       // Synchronous last-edit journal covers pagehide/crashes before IDB commits.
       try { localStorage.setItem('cognicode.draft.v1', JSON.stringify(draft)); } catch (e) { /* IDB remains the primary store. */ }
       if (window.webkit?.messageHandlers?.draftBridge) window.webkit.messageHandlers.draftBridge.postMessage(draft);
       enqueue(() => store.saveDraft(draft)).then(() => { $('draft-status').textContent = 'پیش‌نویس ذخیره شد'; }).catch(() => {});
     }
+    // تنها منبع حقیقت برای پنل «از کجا شروع کنیم؟»: فقط وقتی ادیتور خالی است.
+    // جدا شد تا پس از آماده‌شدن حافظه هم دوباره اجرا شود؛ قبلاً فقط داخل onEdit بود
+    // و اگر مسیر راه‌اندازی کامل نمی‌شد، پنل تا اولین کلید کاربر پنهان می‌ماند.
+    function syncQuickStart() { $('quick-start').hidden = !!ta.value.trim(); }
     function onEdit() {
-      $('quick-start').hidden = !!ta.value.trim();
+      syncQuickStart();
       if (restoring) return;
       if (firstEditorUpdate) { firstEditorUpdate = false; return; }
       editedDuringLoad = true;
@@ -37,9 +41,9 @@ window.WorkspaceFeatures = {
       if (!draft || typeof draft.code !== 'string' || !Number.isFinite(draft.updated)) return;
       if (editedDuringLoad || draft.updated <= draftTime) return;
       restoring = true;
-      api.loadCode(draft.code, draft.langMode || 'auto');
+      api.loadCode(draft.code, draft.langMode || 'auto', typeof draft.name === 'string' ? draft.name : undefined);
       restoring = false; draftTime = draft.updated;
-      $('quick-start').hidden = !!ta.value.trim();
+      syncQuickStart();
       if (draft.code) api.toast('پیش‌نویس قبلی بازیابی شد');
     }
     async function initialize(legacy) {
@@ -70,6 +74,8 @@ window.WorkspaceFeatures = {
         if (pendingNative) { restoreDraft(pendingNative); pendingNative=null; }
         failure(e);
       }
+      // حتی اگر مسیر موفق اجرا نشد، وضعیت پنل پس از آماده‌شدن حافظه قطعی می‌شود.
+      syncQuickStart();
     }
     window.__onNativeDraft = draft => { if (loaded) restoreDraft(draft); else pendingNative = draft; };
     window.addEventListener('pagehide', saveDraft);
@@ -80,6 +86,7 @@ window.WorkspaceFeatures = {
       $('key-focus').setAttribute('aria-pressed', String(focused));
       try { localStorage.setItem('cognicode.focus.v1', String(focused)); } catch (_) {}
       window.Sonar?.setFocus?.(focused);
+      api.toast(focused ? 'تمرکز روشن شد؛ حرکت پس‌زمینه کمتر و ساعت جمع‌وجور شد' : 'تمرکز خاموش شد؛ نمایش عادی برگشت', 3500);
     });
     try { if (localStorage.getItem('cognicode.focus.v1') === 'true') { document.documentElement.classList.add('focus-mode'); $('key-focus').setAttribute('aria-pressed','true'); window.Sonar?.setFocus?.(true); } } catch (_) {}
     function textScale(value) {
@@ -124,7 +131,7 @@ window.WorkspaceFeatures = {
         if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}
         const chosen=Array.from(list.querySelectorAll('input:checked')).map(e=>e.dataset.patch);
         if(!chosen.length){api.toast('حداقل یک تغییر را انتخاب کن');return;}
-        try {const next=ChangeSet.apply(p.base,ta.value,p.patches,chosen); api.loadCode(next,api.langMode()); addHistory('تغییرات انتخاب‌شده؛ نیازمند بررسی دوباره','err','',p.base,next); api.closeSheets();api.toast('تغییرات اعمال شد؛ بررسی دوباره آغاز می‌شود');setTimeout(()=>api.runAnalysis(!!api.settings().key),150);}catch(e){api.toast(e.message);}
+        try {const next=ChangeSet.apply(p.base,ta.value,p.patches,chosen); api.loadCode(next,api.langMode(),api.fileName()); addHistory('تغییرات انتخاب‌شده؛ نیازمند بررسی دوباره','err','',p.base,next); api.closeSheets();api.toast('تغییرات اعمال شد؛ بررسی دوباره آغاز می‌شود');setTimeout(()=>api.runAnalysis(!!api.settings().key),150);}catch(e){api.toast(e.message);}
       };
       $('diff-viewer-wrap').insertBefore(list,$('diff-viewer-body'));
       $('diff-viewer-wrap').insertBefore(apply,$('diff-viewer-body'));
@@ -135,7 +142,7 @@ window.WorkspaceFeatures = {
     $('btn-magic-fix').addEventListener('click', e=>{if(!proposal || proposal.base!==ta.value || api.busy()){e.stopImmediatePropagation();api.toast('کد تغییر کرده یا بررسی دیگری در حال اجراست؛ دوباره تحلیل کن');}else addHistory('نسخهٔ پیش از اعمال اصلاحات','err',api.report(),proposal.base,proposal.proposed);},true);
     function addHistory(sum,type,report,before,after) {
       if(!api.historyEnabled())return;
-      const h={id:id(),t:Date.now(),lang:api.langKey(),name:Syntax.LANGS[api.langKey()].file,code:ta.value,sum:String(sum||'').slice(0,140),type:type||'ok',report:report||'',review:review?{...review,proposed:null}:null,beforeCode:before===undefined?review?.code:before,afterCode:after===undefined?review?.proposed:after,verdict:$('res-verdict').textContent};
+      const h={id:id(),t:Date.now(),lang:api.langKey(),name:api.fileName()||Syntax.LANGS[api.langKey()].file,code:ta.value,sum:String(sum||'').slice(0,140),type:type||'ok',report:report||'',review:review?{...review,proposed:null}:null,beforeCode:before===undefined?review?.code:before,afterCode:after===undefined?review?.proposed:after,verdict:$('res-verdict').textContent};
       history.unshift(h); const overflow=history.splice(40);
       enqueue(async()=>{if(!api.historyEnabled())return;await store.put(h);for(const old of overflow)await store.remove(old.id);}).catch(()=>{});
     }
@@ -147,12 +154,12 @@ window.WorkspaceFeatures = {
       for(const h of matches){
         const row=document.createElement('div');row.className='session-row glass-workspace';
         const main=document.createElement('button');main.className='hist';main.textContent=h.name+' · '+new Intl.DateTimeFormat('fa-IR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(h.t)+' — '+h.sum;
-        main.onclick=()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto');api.closeSheets();api.toast(h.legacyPartial?'این نشست قدیمی ناقص است؛ فایل اصلی را دوباره وارد کن':'کد کامل نشست بازیابی شد',4500);};
+        main.onclick=()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto',h.name);api.closeSheets();api.toast(h.legacyPartial?'این نشست قدیمی ناقص است؛ فایل اصلی را دوباره وارد کن':'کد کامل نشست بازیابی شد',4500);};
         row.append(main);const actions=document.createElement('div');actions.className='session-actions';
         function action(text,run){const button=document.createElement('button');button.className='session-action';button.textContent=text;button.onclick=run;actions.append(button);}
-        if(h.report) action('گزارش کامل',()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto');api.showReport(h);summary(h.review||{errors:[],mode:'local'});});
-        if(typeof h.beforeCode==='string')action('نسخهٔ قبل',()=>{if(api.busy())return;api.loadCode(h.beforeCode,'auto');api.closeSheets();api.toast('نسخهٔ قبل بازیابی شد');});
-        if(typeof h.afterCode==='string')action('نسخهٔ پیشنهادی',()=>{if(api.busy())return;api.loadCode(h.afterCode,'auto');api.closeSheets();api.toast('نسخهٔ پیشنهادی بازیابی شد؛ دوباره بررسی کن');});
+        if(h.report) action('گزارش کامل',()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto',h.name);api.showReport(h);summary(h.review||{errors:[],mode:'local'});});
+        if(typeof h.beforeCode==='string')action('نسخهٔ قبل',()=>{if(api.busy())return;api.loadCode(h.beforeCode,'auto',h.name);api.closeSheets();api.toast('نسخهٔ قبل بازیابی شد');});
+        if(typeof h.afterCode==='string')action('نسخهٔ پیشنهادی',()=>{if(api.busy())return;api.loadCode(h.afterCode,'auto',h.name);api.closeSheets();api.toast('نسخهٔ پیشنهادی بازیابی شد؛ دوباره بررسی کن');});
         action('حذف',()=>{enqueue(()=>store.remove(h.id)).then(()=>{history=history.filter(s=>s.id!==h.id);renderHistory();api.toast('نشست حذف شد');}).catch(()=>{});});
         row.append(actions);if(h.legacyPartial){const warning=document.createElement('p');warning.className='session-warning';warning.textContent='نشست قدیمی ممکن است فقط ۶۰۰۰ نویسهٔ اول را داشته باشد.';row.append(warning);}list.append(row);
       }
@@ -163,7 +170,16 @@ window.WorkspaceFeatures = {
     function captureSelection(){if(ta.selectionEnd>ta.selectionStart)selection={text:ta.value.slice(ta.selectionStart,ta.selectionEnd),start:ta.selectionStart,end:ta.selectionEnd,base:ta.value,line:ta.value.slice(0,ta.selectionStart).split('\n').length};}
     ta.addEventListener('select',captureSelection);ta.addEventListener('keyup',captureSelection);ta.addEventListener('pointerup',captureSelection);
     $('key-explain').addEventListener('click',()=>{
-      captureSelection();if(!selection||selection.base!==ta.value){api.toast('ابتدا چند خط از کد را انتخاب کن');return;}
+      if (!ta.value.trim()) { api.toast('ابتدا کدی وارد کن؛ سپس خط یا بخش دلخواه را توضیح بده', 4000); ta.focus(); return; }
+      // Capture the current selection at activation, never reuse an old selection.
+      let start = ta.selectionStart, end = ta.selectionEnd;
+      if (end <= start) {
+        start = start === 0 ? 0 : ta.value.lastIndexOf('\n', start - 1) + 1;
+        end = ta.value.indexOf('\n', ta.selectionStart);
+        if (end < 0) end = ta.value.length;
+        if (!ta.value.slice(start, end).trim()) { api.toast('این خط خالی است؛ خطی از کد را انتخاب کن', 3500); return; }
+      }
+      selection = {text:ta.value.slice(start,end),start,end,base:ta.value,line:ta.value.slice(0,start).split('\n').length};
       $('selection-code').textContent=selection.text;$('selection-location').textContent='از خط '+label(selection.line)+' · '+label(selection.text.split('\n').length)+' خط انتخاب‌شده';$('selection-result').replaceChildren();api.openSheet('sheet-selection');
     });
     document.querySelectorAll('[data-selection-action]').forEach(button=>button.addEventListener('click',async()=>{
@@ -185,6 +201,6 @@ window.WorkspaceFeatures = {
       }catch(e){$('selection-result').textContent=e.name==='AbortError'?'بررسی انتخاب متوقف شد؛ کد تغییر نکرد.':'بررسی انجام نشد: '+e.message;}
       finally{api.finishOperation(op);$('selection-stop').hidden=true;document.querySelectorAll('[data-selection-action]').forEach(b=>b.disabled=false);}
     }));
-    return {initialize,onEdit,saveDraft,setReview,startReview(){review=null;proposal=null;$('review-summary').hidden=true;},renderHistory,addHistory,clearHistory};
+    return {initialize,onEdit,syncQuickStart,saveDraft,setReview,startReview(){review=null;proposal=null;$('review-summary').hidden=true;},renderHistory,addHistory,clearHistory};
   }
 };

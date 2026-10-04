@@ -166,6 +166,9 @@ try {
   var cfgBase = $('cfg-base'), cfgProxy = $('cfg-proxy'), cfgKey = $('cfg-key'), cfgModel = $('cfg-model'), cfgHist = $('cfg-hist');
   var cfgTest = $('cfg-test'), cfgTestLine = $('cfg-test-line');
   var lastFixedCode = '';
+  /* نام فایل/تصویر واردشده — در سربرگ گزارش نمایش داده می‌شود و در تاریخچه ذخیره
+     می‌گردد؛ خالی‌بودنش یعنی «کد دستی» و نام پیش‌فرض زبان جایگزین می‌شود. */
+  var currentFileName = '';
 
   var langMode = 'auto';      // 'auto' یا کلید زبان
   var langKey = 'text';
@@ -730,9 +733,6 @@ try {
     setBrainState('idle');
     pushUndoState(false);
     updateEditor();
-    if (window.Sonar && window.Sonar.setPulse) {
-      window.Sonar.setPulse('idle');
-    }
   });
   ta.addEventListener('scroll', syncScroll);
   ta.addEventListener('keyup', updateCaretLine);
@@ -947,13 +947,18 @@ try {
           langMode = 'auto';
         }
 
+        currentFileName = fileName;
+        /* کد تازه هیچ حکمی ندارد؛ نوار مغزی نباید حالت قبلی (مثلاً «در حال بررسی»)
+           را نگه دارد. */
+        setBrainState('idle');
         updateEditor();
         updateUndoButtons();
         ta.scrollTop = 0;
         syncScroll();
         haptic('success');
-        toast('فایل «' + fileName + '» با موفقیت باز شد ✨');
-        runAnalysis(!!settings.key);
+        /* تحلیل عمداً خودکار شروع نمی‌شود: کاربر باید بازبینی کند و خودش
+           دکمهٔ «تحلیل کد» را بزند. */
+        toast('فایل «' + fileName + '» باز شد — برای بررسی، «تحلیل کد» را بزن ✨', 4000);
       };
       reader.onerror = function () {
         haptic('error');
@@ -1000,6 +1005,7 @@ try {
       lastSnapshotValue = ta.value;
       lastSnapshot = getEditorSnapshot();
       langMode = 'auto';
+      currentFileName = '';
       updateEditor();
       updateUndoButtons();
       ta.scrollTop = 0;
@@ -1018,6 +1024,7 @@ try {
       ta.value = '';
       lastSnapshotValue = '';
       lastSnapshot = getEditorSnapshot();
+      currentFileName = '';
       updateEditor();
       updateUndoButtons();
       toast('ادیتور پاک شد (با دکمه واگرد قابل بازیابی است)');
@@ -1108,18 +1115,25 @@ try {
       lastSnapshot = getEditorSnapshot();
       langMode = normalizeLangName(langName);
       if (langMode !== 'auto') setLang(langMode);
+      currentFileName = file.name || 'تصویر کد';
       updateEditor();
       updateUndoButtons();
       ta.scrollTop = 0;
       syncScroll();
       success = true;
-      toast(uncertain ? 'کد وارد شد؛ چند خط با تردید خوانده شده — قبل از تحلیل بازبینی کن' : 'کد تصویر وارد شد؛ تحلیل آن شروع می‌شود', 4000);
+      /* تحلیل عمداً خودکار شروع نمی‌شود: متن استخراج‌شده باید اول توسط کاربر
+         بازبینی شود و بعد با دکمهٔ «تحلیل کد» بررسی گردد. */
+      toast(uncertain
+        ? 'کد وارد شد؛ چند خط با تردید خوانده شده — بازبینی کن و بعد «تحلیل کد» را بزن'
+        : 'کد تصویر وارد شد — برای بررسی، «تحلیل کد» را بزن', 4500);
     } catch (error) {
       toast(error.name === 'AbortError' ? 'خواندن تصویر متوقف شد؛ کد قبلی حفظ شد' : 'خواندن تصویر ناموفق بود: ' + (error.message === 'IMAGE_DECODE' ? 'این تصویر قابل خواندن نیست؛ نسخهٔ JPEG یا PNG را انتخاب کن' : aiErrorText(error)), 5000);
     } finally {
       finishOperation(op);
       scanningImage = false;
-      if (!success) setBrainState('idle');
+      /* ورود کد حکمی تولید نمی‌کند: تحلیل فقط با دکمهٔ «تحلیل کد» شروع می‌شود، پس
+         نوار مغزی باید بدون توجه به موفق/ناموفق بودن استخراج به idle برگردد. */
+      setBrainState('idle');
       ta.readOnly = false;
       scanline.hidden = true;
       keyOpen.disabled = keyCamera.disabled = playBtn.disabled = false;
@@ -1127,7 +1141,6 @@ try {
       playLabel.textContent = 'تحلیل کد';
       DynamicIsland.stop(success ? 'done' : 'error');
     }
-    if (success && !op.cancelled) await runAnalysis(true);
   }
 
   function parseTranscription(response) {
@@ -1599,21 +1612,16 @@ try {
     '- هیچ متنی خارج از JSON ننویس؛ حتی یک کلمه.'
   ].join('\n');
 
-  /* Bound the model input without silently dropping the middle of a file.
-     runAnalysis reports an explicit limit before sending oversized code. */
+  /* سقف ورودی مدل. هیچ بخشی از فایل به‌صورت پنهانی حذف نمی‌شود: فایل بزرگ‌تر از سقف
+     اصلاً به مدل نمی‌رود و runAnalysis پیش از ارسال، محدودیت را صریح به کاربر می‌گوید.
+     پس `truncated` فقط یک مصرف‌کننده دارد — همان گارد — و پیام‌ها هیچ‌وقت متن بریده نمی‌بینند. */
   var MAX_CODE_CHARS = 48000;
   function clipForAI(code) {
-    return { text: code, truncated: code.length > MAX_CODE_CHARS, dropped: 0 };
+    return { text: code, truncated: code.length > MAX_CODE_CHARS };
   }
 
   function buildCodeMessage(clip) {
-    var head = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
-    if (clip.truncated) {
-      head += 'توجه: فایل بزرگ‌تر از سقف ارسال است؛ بخشی از میانهٔ فایل حذف شده و کد زیر ' +
-        'عمداً ناقص است. به‌خاطر این حذف، هیچ ایرادی با عنوان «کد ناقص» یا «بسته نشدن ' +
-        'بخش‌ها» ثبت نکن و فقط ایرادهای قابل‌اثبات در همین متن را گزارش بده.\n';
-    }
-    return head + '\nکد:\n```\n' + clip.text + '\n```';
+    return 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n\nکد:\n```\n' + clip.text + '\n```';
   }
 
   /* ── ترمیم JSON ──
@@ -1719,12 +1727,10 @@ try {
     rip.style.width = rip.style.height = size + 'px';
     rip.style.left = x + 'px';
     rip.style.top = y + 'px';
-    btn.appendChild(rip);
+    /* دکمهٔ تحلیل حالا overflow: visible دارد (برای پرتاب ستاره‌ها)، پس ریپل باید
+       داخل لایهٔ مخصوص خودش بریده شود؛ بقیهٔ دکمه‌ها همان رفتار قبلی را دارند. */
+    (btn.querySelector('.ripple-layer') || btn).appendChild(rip);
     setTimeout(function () { if (rip.parentNode) rip.remove(); }, 500);
-
-    if (window.Sonar && window.Sonar.ripple) {
-      window.Sonar.ripple(e.clientX, e.clientY);
-    }
   }, { passive: true });
 
   /* ── پل نیتیو iOS: در اپ نصبی، درخواست‌ها از سوی Swift زده می‌شوند و CORS اصلاً وجود ندارد ── */
@@ -1912,10 +1918,6 @@ try {
     }).join('\n');
     var prompt = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
     if (errLines) prompt += '\nایرادهایی که باید برطرف شوند:\n' + errLines + '\n';
-    if (clip.truncated) {
-      prompt += '\nتوجه: بخشی از میانهٔ فایل برای محدودیت طول حذف شده است؛ فقط ایرادهای ' +
-        'همین متن را برطرف کن و کد را کامل برگردان.\n';
-    }
     prompt += '\nکد:\n' + clip.text;
     // بودجهٔ خروجی از حجم خود کد تخمین زده می‌شود (کد تقریباً ۳ کاراکتر بر توکن)
     var budget = Math.min(16000, Math.max(1500, Math.ceil(clip.text.length / 3) + 600));
@@ -1966,6 +1968,27 @@ try {
 
   /* ── بخش امنیتی: پالایش حکم هوش مصنوعی و ساخت گزارش 🛡 ── */
 
+  /* یک متن تک‌خطی و امن برای مارک‌داون. اسکیپ‌کردن کارِ renderMarkdown است؛
+     اگر اینجا هم esc شود، هر & و < دو بار تبدیل می‌شود و کاربر به‌جای
+     «a && b» متن «a &amp;&amp; b» را می‌بیند. پس فقط فشرده‌سازی و حذف بک‌تیک
+     (تا اسپن کد نشکند) انجام می‌شود و اسکیپ به همان یک لایه واگذار می‌شود. */
+  function mdInline(s, max) {
+    return String(s == null ? '' : s).replace(/\s+/g, ' ').replace(/`/g, '’').slice(0, max || 300);
+  }
+
+  /* حکم نهایی امنیتی از اجتماع موتور آفلاین و حکم مدل ساخته می‌شود.
+     این تنها منبع حقیقت است تا بج بالای گزارش هرگز با بدنهٔ گزارش تناقض پیدا نکند
+     (پیش‌تر بج فقط از موتور آفلاین ساخته می‌شد و می‌توانست «کد سالم است» بگوید
+     درحالی‌که بدنه «🚨 خطرناک» بود). */
+  function effectiveSecurityVerdict(mal, aiSec) {
+    var verdict = mal ? mal.verdict : 'clean';
+    if (aiSec) {
+      if (aiSec.verdict === 'malicious') verdict = 'malicious';
+      else if (aiSec.verdict === 'suspicious' && verdict === 'clean') verdict = 'suspicious';
+    }
+    return verdict;
+  }
+
   /* حکم قطعیِ بدون شواهدِ معتبر، توهم مدل است؛ به‌جای نمایش، به «مشکوک/کم» پایین می‌آید */
   function sanitizeSecurity(sec, code) {
     if (!sec || typeof sec !== 'object') return null;
@@ -2000,11 +2023,7 @@ try {
 
   function securityToMd(mal, aiSec) {
     if (!mal && !aiSec) return '';
-    var verdict = mal ? mal.verdict : 'clean';
-    if (aiSec) {
-      if (aiSec.verdict === 'malicious') verdict = 'malicious';
-      else if (aiSec.verdict === 'suspicious' && verdict === 'clean') verdict = 'suspicious';
-    }
+    var verdict = effectiveSecurityVerdict(mal, aiSec);
     var label = verdict === 'malicious' ? '🚨 **خطرناک** — به اجرای این کد اعتماد نکن'
       : verdict === 'suspicious' ? '⚠️ **مشکوک** — قبل از هر استفاده بازبینی کن'
       : '✅ **فعالیت مخرب مشخصی پیدا نشد**';
@@ -2014,22 +2033,22 @@ try {
       md += '- موتور آفلاین: امتیاز ریسک **' + fa(mal.score) + '/۱۰۰**' +
         (mal.findings.length ? ' با ' + fa(mal.findings.length) + ' یافته' : '') + '\n';
       mal.findings.slice(0, 8).forEach(function (f) {
-        md += '  - خط ' + fa(f.line) + ': ' + esc(f.message) + (f.attack ? ' — `' + esc(f.attack) + '`' : '') + '\n';
+        md += '  - خط ' + fa(f.line) + ': ' + mdInline(f.message) + (f.attack ? ' — `' + mdInline(f.attack, 40) + '`' : '') + '\n';
       });
       (mal.evidence || []).forEach(function (v) {
-        md += '  - شاهد (خط ' + fa(v.line) + '): ' + esc(v.message) + '\n';
+        md += '  - شاهد (خط ' + fa(v.line) + '): ' + mdInline(v.message) + '\n';
       });
     }
     if (aiSec) {
       md += '- هوش مصنوعی: ' + (aiSec.verdict === 'malicious' ? '🚨 خطرناک' : aiSec.verdict === 'suspicious' ? '⚠️ مشکوک' : '✅ پاک') +
         ' · اطمینان: ' + (aiSec.confidence === 'high' ? 'زیاد' : aiSec.confidence === 'medium' ? 'متوسط' : 'کم') + '\n';
       (aiSec.techniques || []).forEach(function (t) {
-        md += '  - تکنیک ATT&CK: `' + esc(t) + '`\n';
+        md += '  - تکنیک ATT&CK: `' + mdInline(t, 40) + '`\n';
       });
       (aiSec.evidence || []).forEach(function (v) {
-        md += '  - خط ' + fa(v.line) + ': ' + esc(v.reason || 'نشانهٔ مشکوک') + (v.quote ? ' — `' + esc(v.quote) + '`' : '') + '\n';
+        md += '  - خط ' + fa(v.line) + ': ' + mdInline(v.reason || 'نشانهٔ مشکوک', 200) + (v.quote ? ' — `' + mdInline(v.quote, 120) + '`' : '') + '\n';
       });
-      if (aiSec.note) md += '  - ' + esc(aiSec.note) + '\n';
+      if (aiSec.note) md += '  - ' + mdInline(aiSec.note) + '\n';
     }
     md += '\n> تحلیل استاتیک سورس‌کد تضمین مطلق نیست؛ باینری‌ها، وابستگی‌ها و رفتار زمان اجرا بیرون از بردِ این بررسی‌اند.\n';
     return md;
@@ -2102,9 +2121,6 @@ try {
     }
     try {
     DynamicIsland.start('تحلیل هوشمند کد', useAI ? 'در حال ارتباط با هوش مصنوعی…' : 'در حال بررسی ساختار کد…');
-    if (window.Sonar && window.Sonar.setPulse) {
-      window.Sonar.setPulse('analyzing');
-    }
     playBtn.disabled = true;
     playBtn.classList.add('loading');
     playLabel.textContent = 'در حال تحلیل…';
@@ -2213,9 +2229,6 @@ try {
       resVerdict.className = 'verdict warn';
       setBrainState('error');
       stopOnce('error');
-      if (window.Sonar && window.Sonar.setPulse) {
-        window.Sonar.setPulse('error');
-      }
       stopLoading();
       closeSheets();
       showProblems(all, adv, fixCode, fixExp);
@@ -2229,7 +2242,6 @@ try {
     var incomplete = useAI && (!ai || ai.raw || ai.incomplete || clip.truncated);
     var needsCorrection = !!(ai && !ai.raw && ai.valid === false) || warns.length > 0 || aiErrList.length > 0;
     setBrainState(incomplete ? 'idle' : needsCorrection ? (ai && ai.valid === false ? 'error' : 'warning') : 'healthy');
-    if (window.Sonar && window.Sonar.setPulse) window.Sonar.setPulse(incomplete ? 'idle' : needsCorrection ? 'error' : 'healthy');
     // اگر اصلاح واقعی وجود دارد، دکمهٔ «اعمال اصلاحات» باید در دسترس باشد — نه فقط
     // وقتی خطای سخت هست. پنل مشکلات زیر شیت نتیجه باز می‌ماند تا با بستن شیت، کارت
     // اصلاح جادویی دیده شود.
@@ -2279,12 +2291,25 @@ try {
       setBrainState('idle');
       stopOnce('error');
       stopLoading();
-      if (error.name === 'AbortError') { resBody.textContent = 'بررسی متوقف شد؛ کد تغییر نکرد.'; resBody.hidden = false; toast('بررسی متوقف شد'); }
-      else { toast('بررسی کامل نشد؛ دوباره تلاش کنید'); console.error('Analysis failed', error); }
+      if (error.name === 'AbortError') {
+        resBody.textContent = 'بررسی متوقف شد؛ کد تغییر نکرد.';
+        resBody.hidden = false;
+        toast('بررسی متوقف شد');
+      } else {
+        console.error('Analysis failed', error);
+        /* مسیر خطای غیرمنتظره نباید شیتِ باز و بی‌محتوا با بج پیش‌فرض باقی بگذارد */
+        resBody.textContent = 'بررسی کامل نشد. یک‌بار دیگر «تحلیل کد» را بزن؛ اگر تکرار شد، اتصال هوش مصنوعی را در تنظیمات تست کن یا کد را کوتاه‌تر کن.';
+        resBody.hidden = false;
+        resVerdict.textContent = '⚠️ بررسی کامل نشد';
+        resVerdict.className = 'verdict warn';
+        toast('بررسی کامل نشد؛ دوباره تلاش کنید');
+      }
     } finally {
       finishOperation(op);
       analyzing = false;
       scanline.hidden = true;
+      // End this visual on every exit, including a discarded stale result.
+      resLoading.hidden = true;
       playBtn.disabled = false;
       playBtn.classList.remove('loading');
       playLabel.textContent = 'تحلیل کد';
@@ -2330,11 +2355,13 @@ try {
     resBody.innerHTML = renderMarkdown(md);
     var kids = resBody.children;
     for (var i = 0; i < kids.length; i++) kids[i].style.setProperty('--i', i);
-    resFile.textContent = Syntax.LANGS[langKey].file;
-    /* حکم امنیتی روی بج بالای گزارش اثر می‌گذارد: «ساختار سالم» برای کدِ مخرب گمراه‌کننده است */
-    var secBadge = (lastMal && lastMal.verdict !== 'clean')
+    resFile.textContent = currentFileName || Syntax.LANGS[langKey].file;
+    /* حکم امنیتی روی بج بالای گزارش اثر می‌گذارد: «ساختار سالم» برای کدِ مخرب گمراه‌کننده است.
+       حکم از همان اجتماع موتور آفلاین و حکم مدل می‌آید تا بج و بدنهٔ گزارش همیشه یکی باشند. */
+    var secVerdict = effectiveSecurityVerdict(lastMal, ai && !ai.raw ? ai.security : null);
+    var secBadge = secVerdict !== 'clean'
       ? {
-          txt: lastMal.verdict === 'malicious' ? '🚨 نشانه‌های کد مخرب' : '⚠️ کد مشکوک (بررسی امنیتی)',
+          txt: secVerdict === 'malicious' ? '🚨 نشانه‌های کد مخرب' : '⚠️ کد مشکوک (بررسی امنیتی)',
           cls: 'verdict warn'
         }
       : null;
@@ -2370,6 +2397,18 @@ try {
     }
   }
 
+  /* ── انفجار ستاره‌ای دکمهٔ تحلیل روی لمس ──
+     عمداً روی touchstart است، نه pointerdown: روی دسکتاپ همان :hover کار را می‌کند
+     و اگر کلیک ماوس هم کلاس را می‌گذاشت، اندازه‌گیری کنتراست چکرها بی‌اعتبار می‌شد. */
+  var burstTimer = 0;
+  playBtn.addEventListener('touchstart', function () {
+    if (playBtn.disabled) return;
+    clearTimeout(burstTimer);
+    playBtn.classList.remove('burst');
+    void playBtn.offsetWidth;   /* ری‌فلو تا انفجار پشت‌سرهم دوباره از صفر شروع شود */
+    playBtn.classList.add('burst');
+    burstTimer = setTimeout(function () { playBtn.classList.remove('burst'); }, 1500);
+  }, { passive: true });
   playBtn.addEventListener('click', analyze);
   $('api-choice-offline').addEventListener('click', function () {
     closeSheets();
@@ -3052,8 +3091,9 @@ try {
     beginOperation: beginOperation, finishOperation: finishOperation, checkOperation: checkOperation, chat: chat,
     settings: function () { return settings; }, historyEnabled: function () { return settings.hist; },
     langMode: function () { return langMode; }, langKey: function () { return langKey; },
+    fileName: function () { return currentFileName; },
     busy: function () { return !!activeOperation || analyzing || scanningImage; }, report: function () { return currentMd; },
-    loadCode: function (code, mode) { saveSnapshot(); ta.value = code; langMode = Syntax.LANGS[mode] ? mode : 'auto'; lastSnapshotValue = code; lastSnapshot = getEditorSnapshot(); updateEditor(); updateUndoButtons(); ta.scrollTop = 0; syncScroll(); },
+    loadCode: function (code, mode, name) { if (typeof name === 'string') currentFileName = name; saveSnapshot(); ta.value = code; langMode = Syntax.LANGS[mode] ? mode : 'auto'; lastSnapshotValue = code; lastSnapshot = getEditorSnapshot(); updateEditor(); updateUndoButtons(); ta.scrollTop = 0; syncScroll(); },
     showReport: function (h) { lastMal = h.review && h.review.security; currentMd = h.report; stopLoading(); renderResult(h.report, 'local', false, null); resFile.textContent = h.name; resMode.textContent = 'گزارش ذخیره‌شده · ' + (h.review && h.review.mode === 'ai' ? h.review.model : 'آفلاین'); resMode.className = h.review && h.review.mode === 'ai' ? 'mode-badge ai' : 'mode-badge'; resVerdict.textContent = h.verdict || 'گزارش نشست قبلی'; resVerdict.className = h.type === 'err' ? 'verdict warn' : 'verdict ok'; openSheet('sheet-result'); }
   });
   workspace.initialize(history);
