@@ -377,7 +377,7 @@ struct WebViewContainer: UIViewRepresentable {
                 if let json = try? JSONSerialization.data(withJSONObject: payload),
                    let jsArgs = String(data: json, encoding: .utf8) {
                     DispatchQueue.main.async {
-                        self.webView.evaluateJavaScript("window.__nativeAI.apply(null, \(jsArgs));", completionHandler: nil)
+                        self.webView.evaluateJavaScript("window.__nativeAI && window.__nativeAI.apply(null, \(jsArgs));", completionHandler: nil)
                     }
                 }
                 return
@@ -409,7 +409,7 @@ struct WebViewContainer: UIViewRepresentable {
                 DispatchQueue.main.async {
                     guard let self, self.requests.removeValue(forKey: id) != nil else { return }
                     // Only the web operation's stop message ends the full multi-step activity.
-                    self.webView.evaluateJavaScript("window.__nativeAI.apply(null, \(jsArgs));", completionHandler: nil)
+                    self.webView.evaluateJavaScript("window.__nativeAI && window.__nativeAI.apply(null, \(jsArgs));", completionHandler: nil)
                 }
             }
             requests[id] = task

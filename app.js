@@ -1239,9 +1239,11 @@ try {
       if (response.finishReason === 'length') throw new Error('کد تصویر برای یک پاسخ طولانی است؛ تصویر را به دو بخش تقسیم کن');
       throw new Error('مدل پاسخ معتبر استخراج کد نداد؛ مدل پشتیبان تصویر را در تنظیمات انتخاب کن');
     }
-    if (typeof data.code !== 'string' || typeof data.noCode !== 'boolean' || !Array.isArray(data.uncertainLines)) {
+    if (typeof data.code !== 'string') {
       throw new Error('پاسخ استخراج تصویر ناقص بود؛ دوباره تلاش کن');
     }
+    data.noCode = Boolean(data.noCode);
+    if (!Array.isArray(data.uncertainLines)) data.uncertainLines = [];
     // شماره‌های تردید هرچه باشند (عدد، رشته یا شیءِ {line:n}) به شمارهٔ خط تمیز تبدیل می‌شوند
     data.uncertainLines = data.uncertainLines
       .map(function (x) { return parseInt(x && x.line !== undefined ? x.line : x, 10); })
@@ -1602,6 +1604,7 @@ try {
         if (diffToggleText) diffToggleText.textContent = 'مشاهدهٔ مقایسهٔ تغییرات';
         renderDiffViewer(code, candidate);
         magicFixCard.hidden = false;
+        if (problems) problems.classList.remove('peek');
         // proposal ورک‌اسپیس باید با همین نسخه همگام شود وگرنه گارد دکمهٔ اعمال،
         // کلیک را می‌بلعد و «اعمال اصلاحات» بی‌اثر می‌ماند
         if (workspace) workspace.setReview({ code: code, errors: currentErrors, mode: 'ai', model: settings.model, incomplete: false, proposed: candidate, explanation: desc, security: lastMal });
@@ -1833,6 +1836,14 @@ try {
       else if (ch === '}' || ch === ']') stack.pop();
     }
     if (inStr) out += '"';
+    if (/:\s*$/.test(out)) out += ' null';
+    if (stack.length > 0 && stack[stack.length - 1] === '{') {
+      var lastCommaOrBrace = Math.max(out.lastIndexOf(','), out.lastIndexOf('{'));
+      var tail = out.slice(lastCommaOrBrace + 1).trim();
+      if (/^"[^"]+"\s*$/.test(tail)) {
+        out += ': null';
+      }
+    }
     out = out.replace(/,\s*$/, '');
     for (var j = stack.length - 1; j >= 0; j--) out += (stack[j] === '{' ? '}' : ']');
     return out;
@@ -2005,6 +2016,12 @@ try {
     // می‌کنند و به‌جای max_tokens، max_completion_tokens می‌خواهند؛ فرستادن بدنهٔ
     // ثابت باعث خطای ۴۰۰ برای این مدل‌ها می‌شد
     var model = settings.model || 'gpt-4o-mini';
+    var hasImage = messages && messages.some(function (m) {
+      return Array.isArray(m.content) && m.content.some(function (p) { return p.type === 'image_url'; });
+    });
+    if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(model)) {
+      model = 'gpt-4o-mini';
+    }
     var body = { model: model, messages: messages, stream: false };
     if (/^(?:o[1-9]|gpt-5)/i.test(model)) {
       body.max_completion_tokens = maxTokens || 2200;
@@ -2394,8 +2411,10 @@ try {
       } catch (e) {
         checkOperation(op);
         aiErr = e;
-        aiConnected = false;
-        updateAiStatus();
+        if (!clip.truncated) {
+          aiConnected = false;
+          updateAiStatus();
+        }
       }
     }
 
@@ -2686,7 +2705,11 @@ try {
   }
 
   async function renderSocialCard() {
-    await Promise.all([document.fonts.load('400 16px "Yekan Bakh"'), document.fonts.load('700 16px "Yekan Bakh"'), document.fonts.load('500 16px "Yekan Bakh Persian"', 'کد فارسی')]);
+    try {
+      if (document.fonts && document.fonts.load) {
+        await Promise.all([document.fonts.load('400 16px "Yekan Bakh"'), document.fonts.load('700 16px "Yekan Bakh"'), document.fonts.load('500 16px "Yekan Bakh Persian"', 'کد فارسی')]);
+      }
+    } catch (_) {}
     if (!socialCanvas) return;
     var ctx = socialCanvas.getContext('2d');
     if (!ctx) return;
@@ -2867,6 +2890,15 @@ try {
   if (btnSocialShareNative && socialCanvas) {
     btnSocialShareNative.addEventListener('click', async function () {
       haptic('light');
+      var name = 'cognicode-' + langKey + '-' + Date.now() + '.png';
+      var saveBridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.saveImage;
+      if (saveBridge) {
+        try {
+          var dataUrl = socialCanvas.toDataURL('image/png');
+          saveBridge.postMessage({ data: dataUrl.split(',')[1] || '', name: name });
+          return;
+        } catch (_) {}
+      }
       if (socialCanvas.toBlob && navigator.canShare) {
         socialCanvas.toBlob(async function (blob) {
           if (!blob) {

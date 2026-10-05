@@ -28,7 +28,7 @@ window.Checker = (function () {
     go:         { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     rust:       { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true },
     php:        CLIKE,
-    ruby:       { line: '#', block: null, quotes: ['"'], escape: true },
+    ruby:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
     python:     { line: '#', block: null, quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     bash:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
     css:        { line: null, block: ['/*', '*/'], quotes: ['"', "'"], escape: false },
@@ -98,6 +98,16 @@ window.Checker = (function () {
     while (j >= 0 && (code[j] === ' ' || code[j] === '\t')) j--;
     return j >= 0 && /[A-Za-z0-9_\)\]\}.'"]/.test(code[j]);
   }
+  /* کاراکتر-لیترال زبان راست ('c' یا '\n' یا '\'') تا با پرانتز/براکت اشتباه نشود و لایف‌تایم ('a) را خراب نکند */
+  function isRustCharLiteral(code, i) {
+    if (code[i] !== "'") return false;
+    if (code[i + 1] !== '\\' && code[i + 1] !== '\n' && code[i + 2] === "'") return true;
+    if (code[i + 1] === '\\') {
+      var q = code.indexOf("'", i + 2);
+      if (q > 0 && q <= i + 12 && code.slice(i, q).indexOf('\n') === -1) return true;
+    }
+    return false;
+  }
 
   /* ── بررسی ساختاری: براکت، رشته، کامنت ── */
   function staticCheck(code, langKey) {
@@ -149,6 +159,10 @@ window.Checker = (function () {
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
           if (reEnd > 0) { col += (reEnd - i); i = reEnd; continue; }
+        }
+        if (langKey === 'rust' && isRustCharLiteral(code, i)) {
+          var endQr = code.indexOf("'", i + (code[i + 1] === '\\' ? 2 : 1));
+          if (endQr > i) { col += (endQr + 1 - i); i = endQr + 1; continue; }
         }
         if (conf.quotes.indexOf(ch) >= 0) {
           if (conf.aposAfterAtom && prevAtomEnd(code, i)) { i++; col++; continue; } // ترنسپوز، نه رشته
@@ -344,6 +358,10 @@ window.Checker = (function () {
           var reEnd = regexLiteralEnd(code, i);
           if (reEnd > 0) { out[line] += code.slice(i, reEnd); i = reEnd; continue; }
         }
+        if (langKey === 'rust' && isRustCharLiteral(code, i)) {
+          var endQr2 = code.indexOf("'", i + (code[i + 1] === '\\' ? 2 : 1));
+          if (endQr2 > i) { i = endQr2 + 1; continue; }
+        }
         if (conf.quotes.indexOf(ch) >= 0) {
           if (conf.aposAfterAtom && prevAtomEnd(code, i)) { out[line] += ch; i++; continue; } // ترنسپوز، نه رشته
           var isTriple = false;
@@ -388,6 +406,16 @@ window.Checker = (function () {
   function looksLikeCodeCheck(code, langKey) {
     var errors = [];
     if (langKey === 'html' || !CONF[langKey]) return errors; // HTML متن داخل تگ دارد؛ بررسی نمی‌شود
+
+    /* جیسون با مقادیر صرفاً رشته‌ای، در codeOnlyLines تهی می‌شود و نباید هشدار کاذب بگیرد */
+    if (langKey === 'json') {
+      try {
+        JSON.parse(code);
+        return errors;
+      } catch (e) {
+        if (/^\s*[\{\[]/.test(code)) return errors;
+      }
+    }
 
     var lines = codeOnlyLines(code, langKey);
     var body = lines.join('\n');
@@ -589,6 +617,24 @@ window.Checker = (function () {
     return out;
   }
 
+  var FENCE_LANG_ALIASES = {
+    js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    py: 'python', py3: 'python',
+    rb: 'ruby', rs: 'rust',
+    cs: 'csharp', 'c#': 'csharp',
+    'c++': 'cpp',
+    sh: 'bash', zsh: 'bash',
+    golang: 'go', kt: 'kotlin'
+  };
+  function resolveFenceLang(name) {
+    if (!name) return null;
+    var k = String(name).trim().toLowerCase();
+    if (CONF[k]) return k;
+    if (FENCE_LANG_ALIASES[k] && CONF[FENCE_LANG_ALIASES[k]]) return FENCE_LANG_ALIASES[k];
+    return null;
+  }
+
   function extractCode(text, langHint) {
     text = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
     if (!text.trim()) return { code: '', dropped: 0, langHint: 'text' };
@@ -597,7 +643,8 @@ window.Checker = (function () {
     var fence = extractFenced(text);
     if (fence) {
       var fenceCode = fence.code.replace(/^\n+/, '').replace(/\s+$/, '');
-      var fenceLang = fence.lang && CONF[fence.lang] ? fence.lang : (Syntax.detect(fenceCode) !== 'text' ? Syntax.detect(fenceCode) : null);
+      var resolved = resolveFenceLang(fence.lang);
+      var fenceLang = resolved ? resolved : (Syntax.detect(fenceCode) !== 'text' ? Syntax.detect(fenceCode) : null);
       return { code: fenceCode, dropped: fence.dropped, langHint: fenceLang || 'text' };
     }
 
@@ -606,7 +653,7 @@ window.Checker = (function () {
 
     /* ۳) فیلتر خط‌به‌خط متن عادی. برای HTML متنِ آزاد داخل فایل مجاز است،
        پس فیلتر نمی‌شود؛ برای بقیه زبان detect داخلی هم کمک می‌کند. */
-    var conf = (langHint && CONF[langHint] !== undefined) ? langHint : null;
+    var conf = resolveFenceLang(langHint);
     if (!conf) {
       var det = Syntax.detect(text);
       if (det !== 'text') conf = det;

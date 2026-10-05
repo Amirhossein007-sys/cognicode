@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+14">
+<meta name="cognicode-release" content="1.1.0+15">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -129,6 +129,13 @@
         <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </header>
+    <div class="p-tools">
+      <button class="btn-magic-fix" id="btn-smart-fix" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span id="smart-fix-label">اصلاح هوشمند</span>
+      </button>
+      <span class="p-tools-note">رفع ایراد و بهینه‌سازی با هوش مصنوعی</span>
+    </div>
     <div class="problems-scroll" id="problems-scroll">
       <div class="review-summary glass-workspace" id="problems-summary"></div>
       <div class="magic-fix-card" id="magic-fix-card" hidden>
@@ -477,7 +484,7 @@
       <p class="hint-line">پیش‌نویس جاری جدا از تاریخچه ذخیره می‌شود؛ پاک‌کردن ادیتور، پیش‌نویس خالی را جایگزین می‌کند. واگرد همچنان در جلسهٔ باز در دسترس است.</p>
       <div class="about">
         <b>کوگنی کد (CogniCode)</b>
-        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۱۱ · ۱۲ مهر ۱۴۰۵</p>
+        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۱۵ · ۱۴ مهر ۱۴۰۵</p>
         <p>تحلیل‌گر هوشمند کد، طراحی‌شده برای آیفون به سبک VS Code با پشتیبانی از ۳۴ زبان برنامه‌نویسی. این برنامه کد را اجرا نمی‌کند؛ فقط صحت آن را بررسی و رفتارش را توضیح می‌دهد.</p>
       </div>
     </div>
@@ -489,7 +496,7 @@
   <div class="grabber"></div>
   <header class="sheet-head"><h2>افزودن کد</h2><button class="icon-btn" data-close aria-label="بستن">×</button></header>
   <div class="sheet-body">
-    <p class="api-msg">کد فایل وارد و تحلیل می‌شود. تصویر برای استخراج و بازبینی دقیق به مدل پشتیبان تصویر ارسال می‌شود؛ پس از انتقال متن به ادیتور، تحلیل خودکار شروع می‌شود. متن ناخوانا جای کد فعلی را نمی‌گیرد.</p>
+    <p class="api-msg">کد فایل وارد و آمادهٔ بررسی می‌شود. تصویر برای استخراج و بازبینی دقیق به مدل پشتیبان تصویر ارسال می‌شود؛ پس از انتقال متن به ادیتور، بررسی با دکمهٔ تحلیل کد انجام می‌گیرد. متن ناخوانا جای کد فعلی را نمی‌گیرد.</p>
     <div class="api-choices">
       <button class="choice" id="import-file"><b>فایل کد</b><span>انتخاب فایل متنی از دستگاه</span></button>
       <button class="choice" id="import-gallery"><b>تصویر از گالری</b><span>عکس یا اسکرین‌شات کد — نیازمند اینترنت و مدل پشتیبان تصویر</span></button>

@@ -345,55 +345,325 @@ window.Syntax = (function () {
     text: { toks: [] }
   };
 
-  /* ── تشخیص خودکار زبان (فلگ g برای شمارش تطبیق‌ها) ── */
-  const DETECT = [
-    ['swift', /import\s+(?:SwiftUI|Foundation|UIKit|Combine)\b|@(?:State|Binding|Observable|main|Environment|StateObject|Published)\b|\bfunc\s+\w+\s*\(|\bguard\s+(?:let|var)\b|\blet\s+\w+\s*[:=]|->\s*[A-Za-z]|\bstruct\s+\w+\s*[:{]|\bnil\b|\.font\(|\.padding\(|\bsome\s+View\b/g],
-    ['lua', /--\[\[|\blocal\s+(?:function|\w+\s*=)|\bthen\b|\belseif\b|\brepeat\b|\buntil\b|~=|pairs?\s*\(|ipairs\s*\(|io\.|\brequire\s*[("']|\bprint\s*\(|\.\.\.|\bend\)\s*$/gm],
-    ['python', /(?:^|\n)\s{0,200}(?:def\s+\w+\s*\(|import\s+\w+|from\s+[\w.]+\s+import\s+\w+|class\s+\w+[^:]*:)|\belif\b|\bprint\s*\(|\bTrue\b|\bNone\b/g],
-    ['elixir', /defmodule\s+\w+|\bdefp?\s+\w+|\bdef\s+\w+.*do\s*$|\bIO\.(?:puts|inspect)|\|>|\bend\b|\bfn\b[\s\S]{0,40}->|\b:[a-z_]\w*|:ok\b|\buse\s+\w+/g],
-    ['ruby', /\bdef\s+\w+|\bputs\b|\bend\b\s*(?:#.*)?(?:\n|$)|:\w+\s*=>|\bdo\s*\|[\w, ]*\|/g],
-    ['sql', /\bSELECT\b[^;]{0,200}\bFROM\b|\bINSERT\s+INTO\b|\bCREATE\s+TABLE\b|\bUPDATE\b[^;]{0,100}\bSET\b/gi],
-    /* سقف ۲۰۰ نویسه روی وسط الگو: سلکتور واقعی CSS هرگز تا این حد طولانی نیست
-       و بدون سقف، روی ورودی‌های پر از «.» بدون آکولاد، جست‌وجو چندجمله‌ای می‌شود */
-    ['css', /[.#@][\w-]+[^{}]{0,200}\{|@media|@import|@keyframes|\b(?:display|color|margin|padding|font-size)\s*:/g],
-    ['html', /<\/(?:html|body|div|p|span|head|section)\s*>|<html[\s>]|<!DOCTYPE\s+html/gi],
-    ['bash', /^#!.*\b(?:bash|sh|zsh)\b|\becho\s+["']?[ $\w]|\$\([^)]+\)|\bfi\b\s*$|\bdone\b\s*$|\bexport\s+\w+=|\bsudo\s+\w+/gm],
-    ['json', /^\s*[{\[][\s\S]*[}\]]\s*$/g],
-    ['php', /<\?php|\$\w+\s*=\s*[^=]|->\w+\s*\(|\becho\s+["'$]/g],
-    ['rust', /\bfn\s+\w+\s*\(|\blet\s+mut\b|println!|\bimpl\s+\w+|::[a-z]|->\s*Result|#!\[/g],
-    ['go', /\bpackage\s+\w+|\bfunc\s+[ (]|fmt\.|:=|\bimport\s+\(|\bgo\s+func\b/g],
-    ['kotlin', /\bfun\s+\w+\s*\(|\bval\s+\w+|println\(|\bdata class\b|\bcompanion object\b/g],
-    ['dart', /\bvoid\s+main\s*\(|\bWidget\s+build\b|import\s+'package:|setState\(\s*\(\s*\)|StatelessWidget|StatefulWidget/g],
-    ['csharp', /\busing\s+System\b|\bnamespace\s+[\w.]+|Console\.Write|public\s+class\b|\bget;\s*(?:set;)?\s*\}/g],
-    ['java', /\bpublic\s+(?:class|static\s+void|final)\b|System\.out\.print|\bprivate\s+\w+\s+\w+\s*;|\bnew\s+ArrayList/g],
-    ['cpp', /#include\s*<|std::|cout\s*<<|\btemplate\s*<|\bnamespace\s+\w+\s*\{/g],
-    ['c', /#include\s*"|\bprintf\s*\(|\bmalloc\s*\(|\bstruct\s+\w+\s*\{|\btypedef\s+struct\b/g],
-    ['objectivec', /@interface|@implementation|NSLog\(|\[\s*\w+\s+\w+[\s\]]|#\s*import\s*[<"]/g],
-    ['scala', /\bobject\s+\w+|case class|\bval\s+\w+\s*[:=]|<-\s|\bdef\s+\w+\s*\(|extends\s+App\b|\bimport scala\./g],
-    ['perl', /use strict|use warnings|\bsub\s+\w+\s*\{|my\s+[\$\(@]|\bmy\s*\(|#!.*perl|foreach\s+my\b|=>\s*[\w'"]/g],
-    ['r', /<-\s|<<-\s|\blibrary\(|\bc\(\s*\)|\bTRUE\b|\bFALSE\b|ggplot|\bdata\.frame\b|\bNA\b/g],
-    ['julia', /::\s*[A-Z]|println\(|\bfunction\s+\w+|using\s+\w+|\bstruct\s+\w+|\w+!\s*\(/g],
-    ['haskell', /\bmodule\s+\w+\s+where|::\s*[A-Z]|->\s*\[|main\s*=\s*do\b|\bwhere\b|\bderiving\b|\bimport\s+Data\./g],
-    ['matlab', /%[^\n]*|\bdisp\(|\bclc\b|\.\*\b|\bzeros?\s*\(|\bend\b\s*\n\s*\bend\b/gm],
-    ['groovy', /\bdef\s+\w+\s*=|println\s+|\w+\.each\s*\{|\bClosure\b|:\s*String\b/g],
-    ['fsharp', /\blet\s+rec\b|\bopen\s+System|\[<[A-Za-z]+>\]|\bmatch\b[\s\S]{0,80}\bwith\b|\bmodule\s+\w+\s*$/gm],
-    ['vb', /\bDim\s+\w+\s+As\b|\bSub\s+\w+\(\)|\bEnd Sub\b|\bConsole\.WriteLine\b|\bModule\s+\w+\b|\bImports\s+\w+/gi],
-    ['pascal', /\bprogram\s+\w+;|\bbegin\b\s*$|\bend\.\s*$|:=|\bwriteln\s*\(|\bprocedure\s+\w+/gim],
-    ['solidity', /pragma solidity|\bcontract\s+\w+|msg\.sender|\bpayable\b|\bmapping\s*\(|\brequire\s*\(/g],
-    ['asm', /\bsection\s+\.[\w.]+|^\s*mov\s+\w|%[re][abcde]x|\bglobal\s+_?start|\bpush\s+r?ax|^\s*\.?\w+:\s*$/gm],
-    ['typescript', /:\s*(?:string|number|boolean|any|void|unknown)\b|\binterface\s+\w+\s*\{|\bexport\s+(?:type|interface)\b|\bas\s+const\b|<[A-Z]\w*>\(/g],
-    ['javascript', /\b(?:function|const|let|var)\s+\w+|=>|console\.(?:log|warn|error)|document\.|require\(|module\.exports|\bnew\s+Promise/g]
-  ];
-
+  /* ── تشخیص هوشمند و چندلایه‌ای زبان (دقت بالا روی ۳۴ زبان) ── */
   function detect(code) {
     if (!code || !code.trim()) return 'text';
-    let best = 'text', bestScore = 0;
-    for (var i = 0; i < DETECT.length; i++) {
-      var m = code.match(DETECT[i][1]);
-      var score = m ? m.length : 0;
-      if (score > bestScore) { bestScore = score; best = DETECT[i][0]; }
+    var trimmed = code.trim();
+
+    // ۱) لنگرهای قطعی و منحصر‌به‌فرد (تطابق آنی بدون ابهام)
+    if (/<\?php\b|<\?=/i.test(code)) return 'php';
+    if (/<!DOCTYPE\s+html|<html[\s>]|<\/(?:html|head|body|div|p|span|section)>/i.test(code)) return 'html';
+    if (/^\s*\/\/\s*SPDX-License-Identifier|\bpragma\s+solidity\b/i.test(code)) return 'solidity';
+    if (/^#!.*\b(?:bash|sh|zsh)\b/m.test(code)) return 'bash';
+    if (/\b(?:import\s+SwiftUI|import\s+Combine|import\s+UIKit)\b/.test(code)) return 'swift';
+    if (/\bpublic\s+static\s+void\s+main\s*\(\s*String\[\]/.test(code) || /System\.out\.print/.test(code)) return 'java';
+    if (/\bdefmodule\s+[A-Z]\w*\s+do\b/.test(code)) return 'elixir';
+    if (/\bmodule\s+[A-Za-z_]\w*\s+where\b/.test(code)) return 'haskell';
+
+    // لنگرهای قطعی ویژوال بیسیک در برابر سی‌شارپ
+    if (/\b(?:Dim\s+\w+\s+As|End\s+Sub|Sub\s+Main|End\s+Module)\b/i.test(code)) return 'vb';
+    if (/\bConsole\.WriteLine\b|\busing\s+System\b/.test(code)) return 'csharp';
+
+    // لنگرهای قطعی پاسکال (برنامه، یونیت، کتابخانه، بلوک begin..end. یا uses)
+    if (/\b(?:program|unit|library)\s+[A-Za-z_]\w*\s*;/i.test(code) ||
+        /\buses\s+[A-Za-z_][\w,\s]*;/i.test(code) ||
+        (/\bbegin\b/i.test(code) && /\bend\.\s*$/m.test(code))) {
+      return 'pascal';
     }
-    return bestScore > 0 ? best : 'text';
+
+    // لنگر قطعی گو
+    if (/\bpackage\s+main\b/.test(code) && /\bfunc\s+main\s*\(/.test(code)) return 'go';
+
+    // لنگر قطعی آبجکتیو-سی
+    if (/#import\s*<Foundation\/Foundation\.h>|#import\s*<UIKit\/UIKit\.h>|@interface\s+\w+\s*:\s*NSObject/i.test(code)) return 'objectivec';
+
+    // جیسون خالص
+    if (/^\s*[\{\[][\s\S]*[\}\]]\s*$/.test(trimmed)) {
+      try {
+        var parsed = JSON.parse(trimmed);
+        if (typeof parsed === 'object' && parsed !== null) {
+          if (!/;\s*$/m.test(trimmed)) return 'json';
+        }
+      } catch (_) {}
+    }
+
+    // کوئری استاندارد اس‌کیو‌ال
+    if (/^\s*(?:SELECT\b[\s\S]+?\bFROM\b|INSERT\s+INTO\b|CREATE\s+TABLE\b|UPDATE\b[\s\S]+?\bSET\b|DELETE\s+FROM\b|ALTER\s+TABLE\b|DROP\s+TABLE\b)/i.test(trimmed)) {
+      return 'sql';
+    }
+
+    // ۲) وزن‌دهی الگوهای اختصاصی و ساختاری زبان‌ها
+    var scores = {};
+    function add(lang, pts) {
+      scores[lang] = (scores[lang] || 0) + pts;
+    }
+
+    // پاسکال (Pascal)
+    var pas = 0;
+    if (/\b(?:writeln|readln)\s*\(/i.test(code)) pas += 6;
+    if (/\b(?:write|read)\s*\(/i.test(code) && !/console\.|sys\.|io\.|file\./i.test(code)) pas += 3;
+    if (/\bprocedure\s+[A-Za-z_]\w*/i.test(code)) pas += 6;
+    if (/\bfunction\s+[A-Za-z_]\w*[^;]*:\s*[A-Za-z_]\w*\s*;/i.test(code)) pas += 6;
+    if (/\bbegin\b/i.test(code) && /\bend[;.]/i.test(code)) pas += 6;
+    if (/\btype\s+\w+\s*=\s*(?:record|class|array|set\s+of|\^)\b/i.test(code)) pas += 6;
+    if (/\bvar\s+(?:[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s*:\s*(?:integer|real|boolean|string|char|byte|word|longint|double)\s*;)/i.test(code)) pas += 6;
+    if (/\bfor\s+\w+\s*:=\s*.*?\bto\b.*?\bdo\b/i.test(code)) pas += 6;
+    if (/\brepeat\b[\s\S]*?\buntil\b/i.test(code)) pas += 5;
+    if (/\bcase\s+\w+\s+of\b/i.test(code)) pas += 5;
+    if (/\bif\b.*?\bthen\b/i.test(code) && !/\b(?:function|local)\b/.test(code)) pas += 4;
+    if (/:=/.test(code)) pas += 2;
+    if (/\bend;/i.test(code)) pas += 3;
+    if (/\b(?:integer|boolean|real)\b/i.test(code) && !/:\s*(?:number|boolean)/.test(code)) pas += 2;
+    if (pas > 0) add('pascal', pas);
+
+    // سی (C)
+    var cPts = 0;
+    if (/#include\s*<stdio\.h>|#include\s*<stdlib\.h>|#include\s*<string\.h>|#include\s*<unistd\.h>|#include\s*<stdbool\.h>|#include\s*<math\.h>/i.test(code)) cPts += 6;
+    if (/\bprintf\s*\(|\bscanf\s*\(|\bmalloc\s*\(|\bfree\s*\(/.test(code)) cPts += 4;
+    if (/\btypedef\s+struct\b|\bstruct\s+\w+\s*\{/.test(code)) cPts += 3;
+    if (/\b(?:int|void)\s+main\s*\(\s*(?:void|int\s+argc)?\s*\)/.test(code)) cPts += 5;
+    if (/\b(?:int|char|void|float|double)\s*\*\s*[A-Za-z_]\w*/.test(code)) cPts += 3;
+    if (/\bvoid\s+[A-Za-z_]\w*\s*\([^\)]*\*[\s\S]*?\{/.test(code)) cPts += 4;
+    if (cPts > 0) add('c', cPts);
+
+    // سی‌پلاس‌پلاس (C++)
+    var cppPts = 0;
+    if (/#include\s*<iostream>|#include\s*<vector>|#include\s*<string>|#include\s*<algorithm>|#include\s*<map>|#include\s*<memory>/i.test(code)) cppPts += 6;
+    if (/\bstd::|\bcout\s*<<|\bcin\s*>>|\bstd::endl\b/.test(code)) cppPts += 6;
+    if (/\btemplate\s*<|\btypename\b|\bnamespace\s+\w+\s*\{/.test(code)) cppPts += 5;
+    if (/\bclass\s+\w+[^;]*\{[\s\S]*?\b(?:public|private|protected)\s*:/.test(code)) cppPts += 5;
+    if (/\b(?:nullptr|constexpr)\b/.test(code)) cppPts += 4;
+    if (cppPts > 0) {
+      add('cpp', cppPts);
+      add('c', -10); // نشانه‌های C++ زبان C را بی‌اعتبار می‌کنند
+    }
+
+    // گو (Go)
+    var goPts = 0;
+    if (/\bpackage\s+\w+/.test(code)) goPts += 5;
+    if (/\bfunc\s+(?:\(\w+\s*\*?\w+\)\s*)?\w+\s*\(/.test(code)) goPts += 5;
+    if (/\bfmt\.(?:Println|Printf|Sprintf|Print)\b/.test(code)) goPts += 5;
+    if (/\bmake\s*\(\s*(?:chan|map|\[\])/.test(code)) goPts += 5;
+    if (/\bgo\s+func\b|\bgo\s+\w+\(/.test(code)) goPts += 5;
+    if (/:=/.test(code) && !/\bbegin\b|\bend[;.]|\bthen\b/i.test(code)) goPts += 2;
+    if (/\btype\s+\w+\s+struct\s*\{/.test(code)) goPts += 5;
+    if (/\btype\s+\w+\s+interface\s*\{/.test(code)) goPts += 5;
+    if (/\bbegin\b|\bend[;.]|\bprocedure\b|\bthen\b/i.test(code)) goPts -= 15; // تضاد با پاسکال
+    if (goPts > 0) add('go', goPts);
+
+    // راست (Rust)
+    var rsPts = 0;
+    if (/\bfn\s+\w+\s*\(|\bpub\s+fn\b/.test(code)) rsPts += 5;
+    if (/println!|eprintln!|vec!\[|format!/.test(code)) rsPts += 6;
+    if (/\bimpl\s+\w+|\bimpl\s+.*?\bfor\b/.test(code)) rsPts += 5;
+    if (/\blet\s+mut\b/.test(code)) rsPts += 5;
+    if (/\bmatch\s+\w+[\s\S]*?=>/.test(code)) rsPts += 5;
+    if (/\bstruct\s+\w+[\s\S]*?impl\b/.test(code)) rsPts += 5;
+    if (/\bResult<|\bOption<|\bSome\(|\bNone\b|\bOk\(|\bErr\(/.test(code) && /fn\b/.test(code)) rsPts += 4;
+    if (rsPts > 0) add('rust', rsPts);
+
+    // پایتون (Python)
+    var pyPts = 0;
+    if (/(?:^|\n)\s*def\s+\w+\s*\(/.test(code)) pyPts += 5;
+    if (/(?:^|\n)\s*class\s+\w+.*:/.test(code)) pyPts += 4;
+    if (/\belif\b|\bif\s+__name__\s*==/.test(code)) pyPts += 5;
+    if (/(?:^|\n)\s*(?:import\s+\w+|from\s+[\w.]+\s+import\s+\w+)/.test(code)) pyPts += 4;
+    if (/\bprint\s*\(/.test(code) && !/System\.|\bprintf\b|\bfmt\./.test(code)) pyPts += 2;
+    if (/\[\s*[\w.]+\s+for\s+\w+\s+in\s+/.test(code)) pyPts += 5;
+    if (/\brange\s*\(|\bin\s+range\b|\b\w+\s*\*\*\s*\d+/.test(code)) pyPts += 4;
+    if (/\bself\.\w+|\b__init__\b/.test(code)) pyPts += 5;
+    if (pyPts > 0) add('python', pyPts);
+
+    // تایپ‌اسکریپت (TypeScript)
+    var tsPts = 0;
+    if (/\binterface\s+\w+\s*\{|\btype\s+\w+\s*=(?!\s*record)/.test(code)) tsPts += 6;
+    if (/\benum\s+\w+\s*\{/.test(code) && !/\b(?:public|private|static)\b/.test(code)) tsPts += 6;
+    if (/:\s*(?:string|number|boolean|any|void|unknown|never)\s*[;,\)=]/.test(code) && !/\bbegin\b/i.test(code)) tsPts += 4;
+    if (/<[A-Z]\w*>\(|\bas\s+const\b|\bas\s+[A-Z]\w*/.test(code)) tsPts += 5;
+    if (/\bdeclare\s+(?:const|let|var|function|module)\b/.test(code)) tsPts += 6;
+    if (tsPts > 0) add('typescript', tsPts);
+
+    // جاوااسکریپت (JavaScript)
+    var jsPts = 0;
+    if (/(?:^|\W)(?:const|let|var)\s+\w+\s*=/.test(code) && !/\b(?:integer|boolean|real|string)\s*;/i.test(code)) jsPts += 3;
+    if (/=>/.test(code) && !/match\b|case\b|fn\b/.test(code)) jsPts += 3;
+    if (/console\.(?:log|warn|error|info)/.test(code)) jsPts += 5;
+    if (/document\.|window\.|localStorage|sessionStorage/.test(code)) jsPts += 5;
+    if (/require\(['"][\w@/.-]+['"]\)|module\.exports/.test(code)) jsPts += 5;
+    if (/\bnew\s+Promise\b|\basync\s+function\b/.test(code)) jsPts += 4;
+    if (jsPts > 0) add('javascript', jsPts);
+
+    // سوئیفت (Swift)
+    var swPts = 0;
+    if (/@(?:State|Binding|ObservedObject|Published|Environment|StateObject)\b/.test(code)) swPts += 6;
+    if (/\bguard\s+(?:let|var)\b|\bsome\s+View\b/.test(code)) swPts += 6;
+    if (/\bfunc\s+\w+\s*\(.*->\s*[A-Z]\w*/.test(code)) swPts += 4;
+    if (/\bstruct\s+\w+\s*:\s*View\b/.test(code)) swPts += 6;
+    if (swPts > 0) add('swift', swPts);
+
+    // جاوا (Java)
+    var jvPts = 0;
+    if (/\bpublic\s+class\s+\w+/.test(code)) jvPts += 4;
+    if (/\bpublic\s+(?:void|int|String|boolean)\s+\w+\s*\(/.test(code)) jvPts += 3;
+    if (/\bimport\s+java\./.test(code)) jvPts += 5;
+    if (/@Override\b/.test(code)) jvPts += 4;
+    if (/\bnew\s+ArrayList<|\bnew\s+HashMap</.test(code)) jvPts += 5;
+    if (jvPts > 0) add('java', jvPts);
+
+    // سی‌شارپ (C#)
+    var csPts = 0;
+    if (/\bnamespace\s+[\w.]+/.test(code)) csPts += 5;
+    if (/\bget;\s*(?:set;)?\s*\}/.test(code)) csPts += 5;
+    if (/\bpublic\s+class\s+\w+/.test(code) && !/\bimport\s+java/.test(code)) csPts += 3;
+    if (/\basync\s+Task(?:<[\w.]+>)?\b/.test(code)) csPts += 5;
+    if (/\bList<[A-Za-z]\w*>\b/.test(code) && /using\b/.test(code)) csPts += 4;
+    if (csPts > 0) add('csharp', csPts);
+
+    // کاتلین (Kotlin)
+    var ktPts = 0;
+    if (/\bdata\s+class\b|\bcompanion\s+object\b/.test(code)) ktPts += 6;
+    if (/\bfun\s+\w+\s*\(/.test(code) && !/\bpackage\s+\w+/.test(code)) ktPts += 4;
+    if (/\bval\s+\w+\s*[:=]/.test(code)) ktPts += 3;
+    if (/\bimport\s+kotlin\./.test(code)) ktPts += 5;
+    if (ktPts > 0) add('kotlin', ktPts);
+
+    // دارت (Dart)
+    var dtPts = 0;
+    if (/\bWidget\s+build\b|StatelessWidget|StatefulWidget|setState\s*\(/.test(code)) dtPts += 6;
+    if (/import\s+['"]package:flutter\//.test(code)) dtPts += 6;
+    if (/\bvoid\s+main\s*\(\s*\)\s*\{[\s\S]*?runApp/.test(code)) dtPts += 6;
+    if (dtPts > 0) add('dart', dtPts);
+
+    // پی‌اچ‌پی (PHP)
+    var phpPts = 0;
+    if (/\$\w+\s*=\s*[^=]|\$\w+->\w+/.test(code)) phpPts += 4;
+    if (/\bnamespace\s+[\w\\]+;|\buse\s+[\w\\]+;/.test(code) && /\$/.test(code)) phpPts += 5;
+    if (/\$_(?:GET|POST|SERVER|SESSION|REQUEST)\b/.test(code)) phpPts += 6;
+    if (phpPts > 0) add('php', phpPts);
+
+    // روبی (Ruby)
+    var rbPts = 0;
+    if (/\bdef\s+\w+.*?\bend\b/s.test(code) && !/defmodule|function|begin/.test(code)) rbPts += 4;
+    if (/\bputs\s+["']|\battr_accessor\b|\battr_reader\b/.test(code)) rbPts += 5;
+    if (/\bdo\s*\|[\w,\s]*\|/.test(code)) rbPts += 4;
+    if (/\brequire\s+['"][A-Za-z_.-]+['"]/.test(code) && !/node|express/.test(code)) rbPts += 4;
+    if (rbPts > 0) add('ruby', rbPts);
+
+    // بش / شل (Bash)
+    var shPts = 0;
+    if (/\becho\s+["']|\bif\s*\[.*?\];\s*then\b|\bfor\s+\w+\s+in\s+.*?;?\s*do\b/.test(code) && !/begin\b/i.test(code)) shPts += 4;
+    if (/\$\([^\)]+\)|\bfi\b\s*$|\bdone\b\s*$/m.test(code)) shPts += 4;
+    if (/\bexport\s+\w+=|\bsudo\s+\w+/.test(code)) shPts += 4;
+    if (shPts > 0) add('bash', shPts);
+
+    // سی‌اس‌اس (CSS)
+    var cssPts = 0;
+    if (/@media|@keyframes|\b(?:margin|padding|background|display|font-size|border-radius)\s*:\s*[^;]+;/i.test(code)) cssPts += 5;
+    if (/[.#][A-Za-z][\w-]*\s*\{[\s\S]*?\}/.test(code)) cssPts += 4;
+    if (cssPts > 0) add('css', cssPts);
+
+    // اس‌کیو‌ال (SQL)
+    var sqlPts = 0;
+    if (/\bSELECT\b[\s\S]{0,100}\bFROM\b/i.test(code)) sqlPts += 5;
+    if (/\bWHERE\b[\s\S]{0,100}\b(?:AND|OR|=|LIKE)\b/i.test(code) && /\bFROM\b/i.test(code)) sqlPts += 4;
+    if (/\bGROUP\s+BY\b|\bORDER\s+BY\b/i.test(code)) sqlPts += 4;
+    if (sqlPts > 0) add('sql', sqlPts);
+
+    // لوآ (Lua)
+    var luaPts = 0;
+    if (/\blocal\s+(?:function|\w+\s*=)/.test(code)) luaPts += 5;
+    if (/\bfunction\s*\([^\)]*\)[\s\S]*?\bend\b/.test(code) && !/begin\b/i.test(code)) luaPts += 4;
+    if (/\brepeat\b[\s\S]*?\buntil\b/.test(code) && /\blocal\b/.test(code)) luaPts += 5;
+    if (/pairs\s*\(|ipairs\s*\(|~=/.test(code)) luaPts += 5;
+    if (luaPts > 0) add('lua', luaPts);
+
+    // آر (R)
+    var rPts = 0;
+    if (/<-|<<-/.test(code)) rPts += 4;
+    if (/\blibrary\s*\(\w+\)/.test(code)) rPts += 5;
+    if (/\bdata\.frame\s*\(|\bc\s*\([^\)]+\)/.test(code)) rPts += 4;
+    if (rPts > 0) add('r', rPts);
+
+    // جولیا (Julia)
+    var jlPts = 0;
+    if (/\busing\s+[A-Z]\w*/.test(code)) jlPts += 5;
+    if (/::(?:Float64|Int64|Matrix|Vector)\b/.test(code)) jlPts += 5;
+    if (/\bfunction\s+\w+\([^\)]*\)::[A-Za-z]/.test(code)) jlPts += 5;
+    if (jlPts > 0) add('julia', jlPts);
+
+    // هسکل (Haskell)
+    var hsPts = 0;
+    if (/\bmodule\s+\w+\s+where\b/.test(code)) hsPts += 6;
+    if (/::\s*[A-Z]\w*(?:\s*->\s*[A-Z]\w*)+/.test(code)) hsPts += 6;
+    if (/\bmain\s*=\s*do\b|\bputStrLn\b/.test(code)) hsPts += 5;
+    if (hsPts > 0) add('haskell', hsPts);
+
+    // الکسیر (Elixir)
+    var exPts = 0;
+    if (/\bdefp?\s+\w+.*do\s*$/m.test(code)) exPts += 5;
+    if (/\|\>|\bIO\.(?:puts|inspect)/.test(code)) exPts += 5;
+    if (exPts > 0) add('elixir', exPts);
+
+    // متلب (Matlab)
+    var matPts = 0;
+    if (/\bfunction\s+.*?=\s*\w+\([^\)]*\)[\s\S]*?\bend\b/.test(code)) matPts += 5;
+    if (/\bclc\b|\bclearvars\b|\bzeros\s*\(|\bones\s*\(/.test(code)) matPts += 5;
+    if (/\.\*|\.\/|\.\^/.test(code)) matPts += 4;
+    if (matPts > 0) add('matlab', matPts);
+
+    // گرووی (Groovy)
+    var grvPts = 0;
+    if (/\bdef\s+\w+\s*=/.test(code) && /\.each\s*\{/.test(code)) grvPts += 5;
+    if (/pipeline\s*\{|stage\s*\(['"]/.test(code)) grvPts += 6;
+    if (grvPts > 0) add('groovy', grvPts);
+
+    // اف‌شارپ (F#)
+    var fsPts = 0;
+    if (/\bopen\s+System\b|\blet\s+rec\b/.test(code)) fsPts += 5;
+    if (/\bmatch\s+\w+\s+with\s*\|\s*/.test(code)) fsPts += 5;
+    if (/\bprintfn\b/.test(code)) fsPts += 5;
+    if (fsPts > 0) add('fsharp', fsPts);
+
+    // ویژوال بیسیک (VB)
+    var vbPts = 0;
+    if (/\b(?:Dim\s+\w+\s+As|End\s+Sub|Sub\s+Main|Module\s+\w+|End\s+Module)\b/i.test(code)) vbPts += 6;
+    if (/\bConsole\.WriteLine\b/i.test(code) && /\bEnd\s+(?:Sub|Function)\b/i.test(code)) vbPts += 6;
+    if (vbPts > 0) add('vb', vbPts);
+
+    // اسمبلی (Assembly)
+    var asmPts = 0;
+    if (/\b(?:section\s+\.(?:text|data|bss)|global\s+_start|_start:)\b/i.test(code)) asmPts += 6;
+    if (/\b(?:mov|push|pop|call|ret|syscall|int\s+0x80)\b/i.test(code) && /%?[er]?[abcd]x\b/i.test(code)) asmPts += 6;
+    if (asmPts > 0) add('asm', asmPts);
+
+    // اسکالا (Scala)
+    var scaPts = 0;
+    if (/\bobject\s+\w+\s+extends\s+App\b|\bcase\s+class\b/.test(code)) scaPts += 6;
+    if (/\bval\s+\w+\s*[:=]/.test(code) && /\bimport\s+scala\./.test(code)) scaPts += 5;
+    if (scaPts > 0) add('scala', scaPts);
+
+    // پرل (Perl)
+    var plPts = 0;
+    if (/use\s+strict;|use\s+warnings;|\bmy\s+\$[\w]+/.test(code)) plPts += 6;
+    if (/\bopen\s*\(\s*my\s+\$fh/.test(code)) plPts += 5;
+    if (plPts > 0) add('perl', plPts);
+
+    // آبجکتیو-سی (Objective-C)
+    var objcPts = 0;
+    if (/@interface\s+\w+|@implementation\s+\w+|@end\b/.test(code)) objcPts += 6;
+    if (/NSLog\s*\(|\[\w+\s+\w+\]/.test(code)) objcPts += 5;
+    if (objcPts > 0) add('objectivec', objcPts);
+
+    // انتخاب زبانی با بالاترین امتیاز با حداقل آستانه ۲ امتیاز
+    var bestLang = 'text', maxScore = 0;
+    for (var k in scores) {
+      if (scores[k] > maxScore) {
+        maxScore = scores[k];
+        bestLang = k;
+      }
+    }
+
+    return maxScore >= 2 ? bestLang : 'text';
   }
 
   /* تعداد کلیدواژه‌های واقعی زبان در متن (برای موتور بررسی سخت‌گیر) */
