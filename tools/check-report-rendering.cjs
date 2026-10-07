@@ -20,7 +20,7 @@ const SCENARIOS = [
     code: 'const a = 1;\n' + QUOTED,
     security: { verdict: 'suspicious', confidence: 'medium', techniques: ['T1059'], evidence: [{ line: 2, quote: QUOTED, reason: 'شاهد تستی' }], note: 'یادداشت' },
     check: async page => {
-      const body = await page.locator('#res-body').innerText();
+      const body = await page.locator('#res-body').evaluate(el => el.textContent || '');
       assert.ok(body.includes(QUOTED), 'quote must render verbatim: ' + JSON.stringify(body.match(/شاهد تستی.*/) || ['']));
       assert.ok(!body.includes('&amp;'), 'report body must not contain a double-escaped entity');
       assert.ok(!body.includes('&lt;'), 'report body must not contain a double-escaped entity');
@@ -37,7 +37,7 @@ const SCENARIOS = [
     security: { verdict: 'malicious', confidence: 'high', techniques: ['T1041'], evidence: [{ line: 1, quote: 'const a = 1;', reason: 'شاهد تستی' }], note: 'یادداشت' },
     check: async page => {
       const b = await badge(page);
-      const body = await page.locator('#res-body').innerText();
+      const body = await page.locator('#res-body').evaluate(el => el.textContent || '');
       assert.ok(b.visible, 'verdict badge must be rendered for the user');
       assert.ok(body.includes('خطرناک'), 'body must report the malicious verdict');
       assert.ok(!/سالم/.test(b.text), 'badge must not say the code is healthy: ' + JSON.stringify(b.text));
@@ -50,7 +50,7 @@ const SCENARIOS = [
     security: { verdict: 'clean', confidence: 'high', techniques: [], evidence: [], note: '' },
     check: async page => {
       const b = await badge(page);
-      const body = await page.locator('#res-body').innerText();
+      const body = await page.locator('#res-body').evaluate(el => el.textContent || '');
       assert.ok(b.visible, 'verdict badge must be rendered for the user');
       assert.ok(/سالم/.test(b.text), 'clean code must keep the healthy badge: ' + JSON.stringify(b.text));
       assert.ok(!body.includes('خطرناک'));

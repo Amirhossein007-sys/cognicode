@@ -666,6 +666,14 @@ html[data-theme="light"] .zoom-hud {
 .p-flex { flex: 1; }
 .p-close { width: 30px; height: 30px; display: grid; place-items: center; color: var(--txt3); }
 .p-close svg { width: 17px; height: 17px; }
+/* ردیف ابزار پنل مشکلات: دکمهٔ اصلاح هوشمند همیشه در دسترس است، مستقل از نتیجهٔ تحلیل */
+.p-tools { display: flex; align-items: center; gap: 10px; padding: 8px 14px 4px; flex: 0 0 auto; }
+.p-tools-note { font-size: 11px; color: var(--txt3); line-height: 1.6; }
+.btn-magic-fix:disabled { opacity: 0.55; filter: saturate(0.5); }
+/* حالت «نگاه سریع»: پنل جمع می‌شود تا ادیتور جا باز کند؛ لمس نوار عنوان برمی‌گرداند */
+.problems.peek { max-height: none; }
+.problems.peek .problems-scroll, .problems.peek .p-tools { display: none; }
+.problems.peek > header { cursor: pointer; }
 .problems-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -1895,7 +1903,20 @@ html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; bo
   .topbar { column-gap: 2px; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  .brain-marquee { flex-basis: 24px; height: 24px; min-height: 24px; }
+  .app { max-width: 840px; }
+  .brain-marquee { flex-basis: 22px; height: 22px; min-height: 22px; font-size: 11px; }
+  .topbar { padding: 4px 12px 2px; padding-top: max(4px, env(safe-area-inset-top, 0px)); min-height: 36px; }
+  .topbar .brand .logo { width: 28px; height: 28px; border-radius: 8px; }
+  .topbar .icon-btn { width: 34px; height: 34px; border-radius: 10px; }
+  .topbar .brand-txt b { font-size: 13px; }
+  .editor-shell { margin-top: 2px; padding: 0 8px; min-height: 120px; }
+  .bottom { margin: 2px 8px 0; margin-bottom: max(4px, env(safe-area-inset-bottom)); border-radius: 14px; }
+  .playbar { padding: 4px 8px 1px; }
+  .play { height: 36px; font-size: 14px; border-radius: 12px; }
+  .keys { margin: 2px 4px 0; padding: 2px 4px; }
+  .key { height: 26px; font-size: 11px; }
+  .quick-start { inset: 36px 12px auto 12px; padding: 10px; max-height: calc(100% - 40px); }
+  .problems { max-height: 35vh; }
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .brain-marquee:hover .brain-marquee-track { animation-play-state: paused; }

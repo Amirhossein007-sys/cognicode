@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+15">
+<meta name="cognicode-release" content="1.1.0+16">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -171,7 +171,7 @@
   <!-- ═══ کیبورد کمکی یکپارچه با قابلیت سوایپ کامل ═══ -->
   <div class="keys" id="keys" role="toolbar" aria-label="ابزارهای ویرایشگر">
     <!-- ورودی‌های فایل مخفی و امن -->
-    <input type="file" id="file-input" class="sr-only-input" accept=".js,.ts,.jsx,.tsx,.py,.swift,.html,.htm,.css,.scss,.json,.c,.cpp,.h,.cs,.java,.kt,.php,.rb,.go,.rs,.sql,.sh,.bash,.txt,text/*" hidden>
+    <input type="file" id="file-input" class="sr-only-input" accept=".js,.ts,.jsx,.tsx,.py,.swift,.html,.htm,.css,.scss,.json,.c,.cpp,.h,.cs,.java,.kt,.php,.rb,.go,.rs,.sql,.sh,.bash,.txt,.zip,application/zip,application/x-zip-compressed,text/*" hidden>
     <input type="file" id="camera-input" class="sr-only-input" accept="image/*" capture="environment" hidden>
     <input type="file" id="gallery-input" accept="image/*" hidden>
 
@@ -456,7 +456,7 @@
               <svg class="eye-off" viewBox="0 0 24 24" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
-          <small class="hint-line" id="credential-hint">کلید فقط در حافظه همین دستگاه و همین مرورگر می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود. روی گوشی/سیستم اشتراکی ذخیره نکن.</small>
+          <small class="hint-line" id="credential-hint">کلید فقط در حافظه همین مرورگر (غیررمزنگاری‌شده) می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود.</small>
         </label>
         <label class="fld">
           <span>نام مدل</span>
@@ -498,10 +498,43 @@
   <div class="sheet-body">
     <p class="api-msg">کد فایل وارد و آمادهٔ بررسی می‌شود. تصویر برای استخراج و بازبینی دقیق به مدل پشتیبان تصویر ارسال می‌شود؛ پس از انتقال متن به ادیتور، بررسی با دکمهٔ تحلیل کد انجام می‌گیرد. متن ناخوانا جای کد فعلی را نمی‌گیرد.</p>
     <div class="api-choices">
-      <button class="choice" id="import-file"><b>فایل کد</b><span>انتخاب فایل متنی از دستگاه</span></button>
+      <button class="choice" id="import-file"><b>فایل کد یا بستهٔ پروژه (ZIP)</b><span>انتخاب فایل متنی (.php, .js, .html, ...) یا پروژه و افزونه کامل (.zip)</span></button>
       <button class="choice" id="import-gallery"><b>تصویر از گالری</b><span>عکس یا اسکرین‌شات کد — نیازمند اینترنت و مدل پشتیبان تصویر</span></button>
       <button class="choice" id="import-camera"><b>عکس با دوربین</b><span>خواندن کد از کتاب یا نمایشگر</span></button>
     </div>
+  </div>
+</section>
+
+<!-- ═══ شیت بازرسی پروژه و افزونه فشرده (ZIP) ═══ -->
+<section class="sheet" id="sheet-project" role="dialog" aria-modal="true" aria-label="بازرسی پروژه و افزونه">
+  <div class="grabber"></div>
+  <header class="sheet-head">
+    <div class="project-head-info">
+      <span class="project-type-badge" id="proj-badge">🔌 افزونه وردپرس</span>
+      <h2 id="proj-title">نام پروژه</h2>
+      <span class="project-meta-line" id="proj-stats">۰ فایل · ۰ خط</span>
+    </div>
+    <div class="sheet-tools">
+      <button class="icon-btn" data-close aria-label="بستن">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="sheet-body project-body">
+    <div class="project-actions">
+      <button class="project-btn-main" id="btn-project-analyze" type="button">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span>تحلیل جامع رفتار و معماری پروژه</span>
+      </button>
+      <button class="project-btn-sub" id="btn-project-load-all" type="button">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>بارگذاری کل پروژه در ادیتور</span>
+      </button>
+    </div>
+    <div class="project-search-wrap">
+      <input type="search" id="project-file-search" placeholder="جستجو در فایل‌های پروژه..." dir="ltr">
+    </div>
+    <div class="project-files-list" id="project-files-list"></div>
   </div>
 </section>
 <section class="sheet" id="sheet-api" role="dialog" aria-modal="true" aria-label="انتخاب نوع بررسی">
@@ -557,6 +590,7 @@
 <div class="operation-bar glass-workspace" id="operation-bar" hidden role="status"><span id="operation-stage"></span><button id="operation-stop" type="button">توقف</button></div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="project-zip.js"></script>
 <script src="launch.js"></script>
 <script src="syntax.js"></script>
 <script src="checker.js"></script>

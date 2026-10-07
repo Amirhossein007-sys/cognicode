@@ -18,9 +18,10 @@ window.Syntax = (function () {
 
   /* ── سازنده توکن‌های زبان‌های شبیه C ── */
   function cLike(opts) {
+    const strPat = (opts.triple ? String.raw`"""[\s\S]*?"""|` : '') + STR2 + (opts.tpl ? '|' + TPL : '');
     const toks = [
       ['c-com', opts.com || (String.raw`//[^\n]*|/\*[\s\S]*?\*/`)],
-      ['c-str', STR2 + (opts.tpl ? '|' + TPL : '')],
+      ['c-str', strPat],
       ['c-num', NUM]
     ];
     if (opts.hash) toks.push(['c-pre', String.raw`#[ \t]*\w+`]);
@@ -40,6 +41,7 @@ window.Syntax = (function () {
   const SPECS = {
     swift: {
       toks: cLike({
+        triple: true,
         kw: 'associatedtype|class|deinit|enum|extension|fileprivate|func|import|init|inout|internal|operator|private|protocol|public|static|struct|subscript|typealias|var|break|case|continue|default|defer|do|else|fallthrough|for|guard|if|in|repeat|return|switch|where|while|as|Any|catch|false|is|nil|rethrows|super|self|Self|throw|throws|true|try|async|await|some|any|weak|unowned|lazy|mutating|nonmutating|required|convenience|distributed|indirect|infix|postfix|prefix',
         types: 'Int|Double|Float|Bool|String|Character|Void|AnyObject|Array|Dictionary|Set|Optional|Result|CGFloat|CGPoint|CGSize|CGRect|Date|Data|URL|View|Color|Image|Text|State|Binding|ObservableObject|Published|EnvironmentObject|Error|Never'
       })
@@ -66,6 +68,7 @@ window.Syntax = (function () {
     },
     java: {
       toks: cLike({
+        triple: true,
         kw: 'abstract|assert|break|case|catch|class|const|continue|default|do|else|enum|extends|final|finally|for|goto|if|implements|import|instanceof|interface|native|new|package|private|protected|public|record|return|sealed|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|var|void|volatile|while|yield|permits|non-sealed',
         types: 'String|Integer|Double|Float|Boolean|Character|Byte|Short|Long|Object|List|Map|Set|ArrayList|HashMap|HashSet|LinkedList|Optional|Stream|System|Thread|Exception|RuntimeException'
       })
@@ -128,6 +131,7 @@ window.Syntax = (function () {
     },
     kotlin: {
       toks: cLike({
+        triple: true,
         kw: 'as|break|by|class|continue|do|else|false|for|fun|if|in|interface|is|null|object|package|return|super|this|throw|true|try|typealias|typeof|val|var|when|while|import|data|sealed|open|override|private|public|internal|protected|companion|init|constructor|suspend|inline|reified|crossinline|noinline|lateinit|const|lazy|where|get|set|operator|infix|out|vararg|field|it',
         types: 'Int|Double|Float|Boolean|Char|String|Unit|Any|Nothing|List|Map|Set|MutableList|MutableMap|MutableSet|Array|Pair|Triple|Sequence|Flow|println|print|listOf|mapOf|setOf|mutableListOf|mutableMapOf'
       })

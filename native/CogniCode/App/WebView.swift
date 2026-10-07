@@ -126,6 +126,43 @@ final class NativeKeyboardManager: NSObject {
     }
 }
 
+// MARK: - هیأت امنیتی URLSession (جلوگیری از Downgrade و سرقت توکن در Redirect)
+final class SecureSessionDelegate: NSObject, URLSessionTaskDelegate {
+    private var taskRedirectCounts: [Int: Int] = [:]
+    private let lock = NSLock()
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        lock.lock()
+        let count = taskRedirectCounts[task.taskIdentifier] ?? 0
+        taskRedirectCounts[task.taskIdentifier] = count + 1
+        lock.unlock()
+
+        guard count < 3,
+              let newUrl = request.url,
+              let comps = URLComponents(url: newUrl, resolvingAgainstBaseURL: false),
+              newUrl.scheme == "https",
+              comps.user == nil, comps.password == nil,
+              comps.port == nil || comps.port == 443,
+              let host = comps.host, !host.isEmpty,
+              !WebViewContainer.Coordinator.isBlockedHost(host) else {
+            completionHandler(nil)
+            return
+        }
+
+        var safeRequest = request
+        if let origHost = task.originalRequest?.url?.host, origHost.lowercased() != host.lowercased() {
+            safeRequest.setValue(nil, forHTTPHeaderField: "Authorization")
+        }
+        completionHandler(safeRequest)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        lock.lock()
+        taskRedirectCounts.removeValue(forKey: task.taskIdentifier)
+        lock.unlock()
+    }
+}
+
 // MARK: - ساختار نمایش وب‌ویو نیتیو (فول‌اسکرین واقعی بدون Letterboxing)
 struct WebViewContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
@@ -144,6 +181,8 @@ struct WebViewContainer: UIViewRepresentable {
         DynamicIslandManager.shared.endAnalysis(success: false)
         coordinator.keyboardManager.stopObserving()
         coordinator.cancelRequests()
+        coordinator.stabilityTimer?.invalidate()
+        coordinator.stabilityTimer = nil
         uiView.stopLoading()
         uiView.navigationDelegate = nil
         // WKUserContentController retains its handlers; break the cycle.
@@ -158,6 +197,9 @@ struct WebViewContainer: UIViewRepresentable {
         let keyboardManager = NativeKeyboardManager()
         private var requests: [String: URLSessionDataTask] = [:]
         private var recoveryAttempts = 0
+        fileprivate var stabilityTimer: Timer?
+        private var secureSession: URLSession!
+
         func cancelRequests() {
             for task in requests.values { task.cancel() }
             requests.removeAll()
@@ -206,6 +248,11 @@ struct WebViewContainer: UIViewRepresentable {
             wv.allowsBackForwardNavigationGestures = false
             self.webView = wv
 
+            let sessionConfig = URLSessionConfiguration.ephemeral
+            sessionConfig.timeoutIntervalForRequest = 90
+            sessionConfig.timeoutIntervalForResource = 90
+            self.secureSession = URLSession(configuration: sessionConfig, delegate: SecureSessionDelegate(), delegateQueue: nil)
+
             super.init()
 
             // Initialize session cleanup at app launch, not at the next Play tap.
@@ -226,7 +273,7 @@ struct WebViewContainer: UIViewRepresentable {
 
         /// IP-literal و نام‌های محلی مسدود می‌شوند تا پل نیتیو نتواند به سرویس‌های
         /// داخلیِ دستگاه/شبکه درخواست بزند (endpoint فقط باید یک سرویس https عمومی باشد).
-        func isBlockedHost(_ host: String) -> Bool {
+        static func isBlockedHost(_ host: String) -> Bool {
             var v4 = in_addr()
             var v6 = in6_addr()
             if host.withCString({ inet_pton(AF_INET, $0, &v4) == 1 || inet_pton(AF_INET6, $0, &v6) == 1 }) {
@@ -276,7 +323,15 @@ struct WebViewContainer: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame, message.frameInfo.request.url?.isFileURL == true else { return }
+            guard message.frameInfo.isMainFrame,
+                  let messageUrl = message.frameInfo.request.url,
+                  messageUrl.isFileURL else { return }
+
+            if let bundleWeb = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Web")?.deletingLastPathComponent() {
+                let bundlePath = bundleWeb.standardizedFileURL.path
+                let messagePath = messageUrl.standardizedFileURL.path
+                guard messagePath.hasPrefix(bundlePath) else { return }
+            }
             if message.name == "aiCancelBridge", let object = message.body as? [String: Any], let id = object["id"] as? String {
                 requests.removeValue(forKey: id)?.cancel()
                 return
@@ -394,7 +449,7 @@ struct WebViewContainer: UIViewRepresentable {
                 request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
             }
             request.timeoutInterval = 90
-            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            let task = secureSession.dataTask(with: request) { [weak self] data, response, error in
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let text: String
                 if let error = error {
@@ -419,7 +474,14 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let draft = NativeDraft.read() { notify("__onNativeDraft", arguments: [draft]) }
             notify("__onNativeRecovery", arguments: [recoveryAttempts > 0])
-            recoveryAttempts = 0
+            // F21: پایداری ۳۰ ثانیه‌ای قبل از صفرکردن شمارنده خرابی برای جلوگیری از حلقه بارگذاری مجدد
+            stabilityTimer?.invalidate()
+            stabilityTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.recoveryAttempts = 0
+                    self?.stabilityTimer = nil
+                }
+            }
         }
 
         // ورودی‌های <input type=file> در iOS به‌صورت بومی توسط WebKit مدیریت می‌شوند
@@ -427,6 +489,8 @@ struct WebViewContainer: UIViewRepresentable {
         // در WKUIDelegateِ iOS وجود ندارد و افزودنش باعث خطای کامپایل می‌شود.
 
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            stabilityTimer?.invalidate()
+            stabilityTimer = nil
             DynamicIslandManager.shared.endAnalysis(success: false)
             cancelRequests()
             recoveryAttempts += 1
@@ -445,14 +509,29 @@ struct WebViewContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if navigationAction.navigationType == .linkActivated,
-               let url = navigationAction.request.url,
-               url.scheme == "http" || url.scheme == "https" {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.cancel)
+                return
+            }
+
+            if url.scheme == "http" || url.scheme == "https" {
                 UIApplication.shared.open(url)
                 decisionHandler(.cancel)
                 return
             }
-            decisionHandler(.allow)
+
+            if url.isFileURL {
+                if let bundleWeb = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Web")?.deletingLastPathComponent() {
+                    let bundlePath = bundleWeb.standardizedFileURL.path
+                    let targetPath = url.standardizedFileURL.path
+                    if targetPath.hasPrefix(bundlePath) {
+                        decisionHandler(.allow)
+                        return
+                    }
+                }
+            }
+
+            decisionHandler(.cancel)
         }
     }
 }

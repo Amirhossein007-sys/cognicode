@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v29-smart-fix';
+var CACHE = 'cognicode-v30-smart-fix';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -12,6 +12,7 @@ var PRECACHE = [
   './workspace-store.js',
   './workspace-features.js',
   './change-set.js',
+  './project-zip.js',
   './syntax.js',
   './checker.js',
   './malwatch.js',
@@ -32,7 +33,7 @@ var PRECACHE = [
 
 /* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
    هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
-var FRESH_NAMES = ['index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'syntax.js', 'checker.js', 'malwatch.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
+var FRESH_NAMES = ['index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
 
 function isFresh(url) {
   var name = url.pathname.split('/').pop();
@@ -65,7 +66,7 @@ self.addEventListener('fetch', function (e) {
     e.respondWith(
       fetch(e.request).then(function (res) {
         var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); }).catch(function () {});
         return res;
       }).catch(function () {
         return caches.match(e.request).then(function (hit) { return hit || Response.error(); });
@@ -79,7 +80,7 @@ self.addEventListener('fetch', function (e) {
       if (hit) return hit;
       return fetch(e.request).then(function (res) {
         var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); }).catch(function () {});
         return res;
       });
     })

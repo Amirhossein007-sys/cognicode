@@ -144,40 +144,29 @@ final class DeviceIntelligence {
             hasDynamicIsland = true
             isProMotion = true
         default:
-            // تشخیص پویا برای مدل‌های جدیدتر بر مبنای رزولوشن و تناسب صفحه
+            // برای مدل‌های ناشناخته، نام بازاری یا قابلیت‌های اختصاصی را بر مبنای ابعاد حدس نزن
             if minDim >= 435 || maxDim >= 950 {
-                modelName = "iPhone Pro Max (6.9\")"
+                modelName = "iPhone"
                 screenClass = "large-max"
-                isPro = true
                 isMax = true
-                hasDynamicIsland = true
-                isProMotion = true
             } else if minDim >= 420 || maxDim >= 920 {
-                modelName = "iPhone Pro Max / Plus (6.7\")"
+                modelName = "iPhone"
                 screenClass = "large"
                 isMax = true
-                hasDynamicIsland = true
-                isProMotion = true
             } else if minDim >= 398 || (maxDim >= 865 && maxDim < 900) {
-                modelName = "iPhone 16 Pro (6.3\")"
+                modelName = "iPhone"
                 screenClass = "standard-pro"
-                isPro = true
-                hasDynamicIsland = true
-                isProMotion = true
             } else if minDim <= 380 {
-                modelName = "iPhone mini"
+                modelName = "iPhone"
                 screenClass = "compact"
-                hasNotch = true
             } else {
-                modelName = "iPhone (6.1\")"
+                modelName = "iPhone"
                 screenClass = "standard"
-                hasDynamicIsland = true
             }
         }
 
-        if screen.maximumFramesPerSecond >= 120 {
-            isProMotion = true
-        }
+        // بررسی اندازه‌گیری‌شدهٔ نرخ نوسازی (ProMotion واقعی)
+        isProMotion = screen.maximumFramesPerSecond >= 120
 
         return DeviceSpec(
             identifier: id,

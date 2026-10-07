@@ -37,19 +37,7 @@ try {
   try {
     var savedSet = JSON.parse(localStorage.getItem(LS_SET) || '{}');
     if (!localStorage.getItem(LS_MIG)) {
-      var migrated = false;
-      if (savedSet.base && (savedSet.base.indexOf('bigmodel') >= 0 || savedSet.base === 'https://api.openai.com/v1')) {
-        savedSet.base = DEFAULT_BASE;
-        migrated = true;
-      }
-      if (savedSet.model === 'glm-4-flash') {
-        savedSet.model = 'gpt-4o-mini';
-        migrated = true;
-      }
-      // نتیجهٔ مهاجرت باید فوری ذخیره شود وگرنه بوت بعدی مقدار قدیمی را برمی‌گرداند
-      if (migrated) {
-        try { localStorage.setItem(LS_SET, JSON.stringify(savedSet)); } catch (e2) {}
-      }
+      // ثبت نشانگر مهاجرت — بدون تغییر خودسرانه آدرس یا کلید کاربر
       try { localStorage.setItem(LS_MIG, '1'); } catch (e2) {}
     }
     for (var k in savedSet) if (k in settings) settings[k] = savedSet[k];
@@ -743,27 +731,14 @@ try {
   ta.addEventListener('scroll', syncScroll);
   ta.addEventListener('keyup', updateCaretLine);
   ta.addEventListener('click', updateCaretLine);
-  /* چسباندن مستقیم (Ctrl+V / لانگ‌پرس) هم از همان پالایش «فقط کد» می‌گذرد؛
-     اگر متن پاک است، preventDefault نمی‌شود تا رفتار بومی و undo مرورگر حفظ شود */
+  /* چسباندن مستقیم (Ctrl+V / لانگ‌پرس):
+     رفتار بومی مرورگر برای حفظ دقیق نویسه‌ها، فاصله‌ها، ایندنت‌ها و تاریخچهٔ Undo حفظ می‌شود */
   ta.addEventListener('paste', function (e) {
-    var cd = e.clipboardData || (window.clipboardData || null);
-    if (!cd || typeof cd.getData !== 'function') return;
-    var raw = '';
-    try { raw = cd.getData('text/plain') || ''; } catch (eP) { return; }
-    if (!raw) return;
-    var ex = purifyPastedText(raw);
-    if (!ex || !ex.code) {
-      if (ex && ex.dropped > 0) {
-        e.preventDefault();
-        toast('در متن کپی‌شده چیزی شبیه کد پیدا نشد؛ وارد نشد', 3800);
-      }
-      return; // متن پاک یا پالایش ناموفق → مرورگر همان متن را وارد کند
-    }
-    var normalized = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\s+$/, '');
-    if (ex.code === normalized) return; // چیزی حذف نشده؛ رفتار عادی بهتر است
-    e.preventDefault();
-    insertText(ex.code);
-    if (ex.dropped > 0) toast('چسبانده شد ✓ — ' + fa(ex.dropped) + ' خط غیرکد حذف شد', 3800);
+    setTimeout(function () {
+      updateCaretLine();
+      autoDetectAndRender();
+      persistDraftDebounced();
+    }, 0);
   });
   document.addEventListener('selectionchange', function () {
     if (document.activeElement === ta) updateCaretLine();
@@ -907,21 +882,6 @@ try {
   }
   function pasteIntoEditor(text) {
     if (!text) { toast('کلیپ‌بورد خالی است'); return; }
-    var ex = purifyPastedText(text);
-    if (ex && ex.code) {
-      insertText(ex.code);
-      ensureCaretVisible();
-      if (ex.dropped > 0) toast('متن چسبانده شد ✓ — ' + fa(ex.dropped) + ' خط غیرکد حذف شد', 3800);
-      else toast('متن چسبانده شد ✓');
-      haptic('success');
-      return;
-    }
-    if (ex && ex.dropped > 0 && !ex.code) {
-      /* همهٔ متن عادی بود؛ چیزی که «کد نیست» وارد باکس کد نمی‌شود */
-      toast('در متن کپی‌شده چیزی شبیه کد پیدا نشد؛ وارد نشد', 3800);
-      haptic('error');
-      return;
-    }
     insertText(text);
     ensureCaretVisible();
     toast('متن چسبانده شد ✓');
@@ -963,13 +923,193 @@ try {
       fileInput.click();
     });
 
+    var extMap = {
+      'js': 'javascript', 'mjs': 'javascript', 'cjs': 'javascript',
+      'ts': 'typescript', 'tsx': 'typescript', 'jsx': 'javascript',
+      'py': 'python', 'pyw': 'python',
+      'swift': 'swift',
+      'html': 'html', 'htm': 'html',
+      'css': 'css', 'scss': 'css', 'less': 'css',
+      'json': 'json',
+      'c': 'c', 'h': 'c',
+      'cpp': 'cpp', 'hpp': 'cpp', 'cc': 'cpp', 'cxx': 'cpp',
+      'cs': 'csharp',
+      'java': 'java', 'kt': 'kotlin',
+      'php': 'php', 'rb': 'ruby',
+      'go': 'go', 'rs': 'rust',
+      'sql': 'sql', 'sh': 'bash', 'bash': 'bash'
+    };
+
+    function openProjectSheet(project) {
+      var badge = $('proj-badge');
+      var title = $('proj-title');
+      var stats = $('proj-stats');
+      var list = $('project-files-list');
+      var searchInput = $('project-file-search');
+
+      if (badge) badge.textContent = project.typeIcon + ' ' + project.typeLabel;
+      if (title) title.textContent = project.meta.pluginName || project.meta.themeName || project.meta.pkgName || project.name;
+      if (stats) stats.textContent = project.files.length + ' فایل کد · ' + project.totalLines.toLocaleString('fa-IR') + ' سطر · ' + Math.round(project.totalBytes / 1024) + ' KB';
+
+      function renderFileList(filterText) {
+        if (!list) return;
+        list.innerHTML = '';
+        var q = (filterText || '').toLowerCase().trim();
+        var filtered = project.files.filter(function (f) {
+          return !q || f.path.toLowerCase().indexOf(q) !== -1;
+        });
+
+        if (filtered.length === 0) {
+          list.innerHTML = '<div class="project-files-empty">فایلی با این نام پیدا نشد</div>';
+          return;
+        }
+
+        var extIcons = {
+          'php': '🐘', 'js': '📜', 'ts': '📘', 'html': '🌐', 'htm': '🌐',
+          'css': '🎨', 'scss': '🎨', 'json': '📦', 'sql': '🗄️', 'py': '🐍',
+          'sh': '⚙️', 'bash': '⚙️', 'md': '📝', 'txt': '📄', 'swift': '🐦'
+        };
+
+        filtered.forEach(function (f) {
+          var item = document.createElement('div');
+          var isEntry = project.entryFiles.indexOf(f) !== -1;
+          item.className = 'project-file-item' + (isEntry ? ' is-entry' : '');
+
+          var icon = extIcons[f.ext] || '📄';
+          var badgeHtml = '<span class="project-file-badge">' + f.lines + ' سطر</span>';
+          if (isEntry) {
+            badgeHtml = '<span class="project-file-badge badge-entry">فایل اصلی</span> ' + badgeHtml;
+          }
+
+          item.innerHTML =
+            '<div class="project-file-meta-left">' +
+              '<span class="project-file-icon">' + icon + '</span>' +
+              '<span class="project-file-name">' + esc(f.path) + '</span>' +
+            '</div>' +
+            '<div class="project-file-badges">' + badgeHtml + '</div>';
+
+          item.addEventListener('click', function () {
+            haptic('medium');
+            saveSnapshot();
+            ta.value = f.content;
+            lastSnapshotValue = f.content;
+            lastSnapshot = getEditorSnapshot();
+            currentFileName = project.name + ' > ' + f.path;
+
+            var ext = f.ext;
+            if (ext && extMap[ext] && Syntax.LANGS[extMap[ext]]) {
+              langMode = extMap[ext];
+              setLang(extMap[ext]);
+            } else {
+              langMode = 'auto';
+            }
+
+            setBrainState('idle');
+            updateEditor();
+            updateUndoButtons();
+            ta.scrollTop = 0;
+            syncScroll();
+            closeSheets();
+            toast('فایل «' + f.name + '» باز شد — برای بررسی، «تحلیل کد» را بزن ✨', 3500);
+          });
+
+          list.appendChild(item);
+        });
+      }
+
+      renderFileList('');
+
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.oninput = function () {
+          renderFileList(searchInput.value);
+        };
+      }
+
+      var btnAnalyze = $('btn-project-analyze');
+      if (btnAnalyze) {
+        btnAnalyze.onclick = function () {
+          if (analyzing || scanningImage || activeOperation) {
+            toast('بررسی دیگری در حال اجراست؛ ابتدا آن را متوقف کن');
+            return;
+          }
+          haptic('heavy');
+          var dossier = ProjectZip.generateDossier(project);
+          saveSnapshot();
+          ta.value = dossier;
+          lastSnapshotValue = dossier;
+          lastSnapshot = getEditorSnapshot();
+          currentFileName = project.name + ' (تحلیل جامع پروژه)';
+          langMode = 'auto';
+          updateEditor();
+          updateUndoButtons();
+          closeSheets();
+          toast('در حال آماده‌سازی و ارسال برای تحلیل رفتار پروژه...', 2500);
+          setTimeout(function () {
+            analyze();
+          }, 350);
+        };
+      }
+
+      var btnLoadAll = $('btn-project-load-all');
+      if (btnLoadAll) {
+        btnLoadAll.onclick = function () {
+          haptic('medium');
+          var dossier = ProjectZip.generateDossier(project);
+          saveSnapshot();
+          ta.value = dossier;
+          lastSnapshotValue = dossier;
+          lastSnapshot = getEditorSnapshot();
+          currentFileName = project.name + ' (پرونده کامل پروژه)';
+          langMode = 'auto';
+          updateEditor();
+          updateUndoButtons();
+          closeSheets();
+          toast('پرونده و کدهای پروژه در ادیتور قرار گرفت ✨', 3000);
+        };
+      }
+
+      openSheet('sheet-project');
+    }
+
     fileInput.addEventListener('change', function (e) {
       if (analyzing || scanningImage) { fileInput.value = ''; return; }
       var file = e.target.files && e.target.files[0];
       if (!file) return;
 
-      if (file.size > 3 * 1024 * 1024) {
-        toast('حجم فایل بیشتر از ۳ مگابایت است');
+      if (file.size > 25 * 1024 * 1024) {
+        toast('حجم فایل بیشتر از ۲۵ مگابایت است');
+        fileInput.value = '';
+        return;
+      }
+
+      // بررسی باز کردن بسته فشرده پروژه (ZIP)
+      if (typeof ProjectZip !== 'undefined' && (ProjectZip.isZip(file) || /\.zip$/i.test(file.name))) {
+        toast('در حال استخراج و تحلیل بستهٔ پروژه...', 3000);
+        var zipReader = new FileReader();
+        zipReader.onload = async function (evt) {
+          try {
+            var files = await ProjectZip.parseZip(evt.target.result);
+            if (!files || files.length === 0) {
+              toast('هیچ فایل کدی درون این فایل ZIP پیدا نشد');
+              return;
+            }
+            var project = ProjectZip.detectProject(files, file.name);
+            window.__currentProject = project;
+            openProjectSheet(project);
+            haptic('success');
+            toast('پروژهٔ «' + project.name + '» استخراج شد (' + files.length + ' فایل) ✨', 4000);
+          } catch (err) {
+            console.error(err);
+            haptic('error');
+            toast('خطا در خواندن فایل ZIP: ' + (err.message || 'فایل نامعتبر است'));
+          }
+        };
+        zipReader.onerror = function () {
+          haptic('error');
+          toast('خطا در خواندن فایل از حافظه');
+        };
+        zipReader.readAsArrayBuffer(file);
         fileInput.value = '';
         return;
       }
@@ -996,23 +1136,6 @@ try {
         lastSnapshotValue = content;
         lastSnapshot = getEditorSnapshot();
 
-        var extMap = {
-          'js': 'javascript', 'mjs': 'javascript', 'cjs': 'javascript',
-          'ts': 'typescript', 'tsx': 'typescript', 'jsx': 'javascript',
-          'py': 'python', 'pyw': 'python',
-          'swift': 'swift',
-          'html': 'html', 'htm': 'html',
-          'css': 'css', 'scss': 'css', 'less': 'css',
-          'json': 'json',
-          'c': 'c', 'h': 'c',
-          'cpp': 'cpp', 'hpp': 'cpp', 'cc': 'cpp', 'cxx': 'cpp',
-          'cs': 'csharp',
-          'java': 'java', 'kt': 'kotlin',
-          'php': 'php', 'rb': 'ruby',
-          'go': 'go', 'rs': 'rust',
-          'sql': 'sql', 'sh': 'bash', 'bash': 'bash'
-        };
-
         if (ext && extMap[ext] && Syntax.LANGS[extMap[ext]]) {
           langMode = extMap[ext];
           setLang(extMap[ext]);
@@ -1021,16 +1144,12 @@ try {
         }
 
         currentFileName = fileName;
-        /* کد تازه هیچ حکمی ندارد؛ نوار مغزی نباید حالت قبلی (مثلاً «در حال بررسی»)
-           را نگه دارد. */
         setBrainState('idle');
         updateEditor();
         updateUndoButtons();
         ta.scrollTop = 0;
         syncScroll();
         haptic('success');
-        /* تحلیل عمداً خودکار شروع نمی‌شود: کاربر باید بازبینی کند و خودش
-           دکمهٔ «تحلیل کد» را بزند. */
         toast('فایل «' + fileName + '» باز شد — برای بررسی، «تحلیل کد» را بزن ✨', 4000);
       };
       reader.onerror = function () {
@@ -1813,6 +1932,9 @@ try {
   }
 
   function buildCodeMessage(clip) {
+    if (clip.text.indexOf('/* ═══ درخت فایل‌های پروژه ═══ */') !== -1 || (window.__currentProject && currentFileName.indexOf('پروژه') !== -1)) {
+      return 'نوع ورودی: بسته و پرونده ساختار کامل پروژه / افزونه چندفایلی\n\nپرونده و کدهای ساختاری پروژه:\n```\n' + clip.text + '\n```\n\nدستور مهم: این یک پروژه/افزونه چندفایلی است. لطفاً در بخش‌های explanation (شامل summary, steps, uses, notes) و security رفتار کلی، هدف پروژه، نحوه لود و اجرای اکشن‌ها/هوک‌ها، جریان داده و هرگونه ریسک امنیتی یا باگ را بسیار دقیق، عمیق و تخصصی توضیح بده.';
+    }
     return 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n\nکد:\n```\n' + clip.text + '\n```';
   }
 
@@ -2213,26 +2335,53 @@ try {
     return verdict;
   }
 
-  /* حکم قطعیِ بدون شواهدِ معتبر، توهم مدل است؛ به‌جای نمایش، به «مشکوک/کم» پایین می‌آید */
+  /* F05: حکم قطعیِ بدون شواهدِ معتبر، توهم مدل است؛ به‌جای نمایش، به «مشکوک/کم» پایین می‌آید */
   function sanitizeSecurity(sec, code) {
     if (!sec || typeof sec !== 'object') return null;
     var verdict = sec.verdict === 'malicious' || sec.verdict === 'suspicious' || sec.verdict === 'clean' ? sec.verdict : null;
     if (!verdict) return null;
-    var total = code.split('\n').length;
+    var codeLines = typeof code === 'string' ? code.split('\n') : [];
+    var total = codeLines.length;
     var ev = [];
+    var verifiedCount = 0;
     if (Array.isArray(sec.evidence)) {
       sec.evidence.forEach(function (x) {
         if (!x || typeof x !== 'object') return;
-        var ln = parseInt(x.line, 10);
-        if (!ln || ln < 1 || ln > total) return;
+        if (typeof x.line !== 'number' && typeof x.line !== 'string') return;
+        var num = Number(x.line);
+        if (!Number.isInteger(num)) return;
+        var ln = num;
+        if (ln < 1 || ln > total) return;
         var quote = String(x.quote || '').slice(0, 120);
         var reason = String(x.reason || '').slice(0, 200);
         if (!quote && !reason) return;
-        if (ev.length < 8) ev.push({ line: ln, quote: quote, reason: reason });
+
+        // F05: Verify quote against actual source code lines (at ln or adjacent ±1 line)
+        var lineText = codeLines[ln - 1] || '';
+        var windowText = codeLines.slice(Math.max(0, ln - 2), Math.min(total, ln + 1)).join('\n');
+        var verified = false;
+        if (quote) {
+          if (lineText.includes(quote) || windowText.includes(quote)) {
+            verified = true;
+          }
+        }
+        if (verified) verifiedCount++;
+        if (ev.length < 8) {
+          ev.push({
+            line: ln,
+            quote: quote,
+            reason: reason,
+            verified: verified
+          });
+        }
       });
     }
     var conf = sec.confidence === 'high' || sec.confidence === 'medium' || sec.confidence === 'low' ? sec.confidence : 'low';
-    if (verdict !== 'clean' && ev.length === 0) {
+    // F05: Fake quote or unevidenced verdict cannot produce high-confidence malicious verdict
+    if (verdict === 'malicious' && verifiedCount === 0) {
+      verdict = 'suspicious';
+      conf = 'low';
+    } else if (verdict !== 'clean' && ev.length === 0) {
       verdict = 'suspicious';
       conf = 'low';
     }
@@ -2241,6 +2390,8 @@ try {
       confidence: conf,
       techniques: Array.isArray(sec.techniques) ? sec.techniques.slice(0, 6).map(function (t) { return String(t).slice(0, 24); }) : [],
       evidence: ev,
+      verifiedCount: verifiedCount,
+      unverified: (verdict !== 'clean' && verifiedCount === 0),
       note: String(sec.note || '').slice(0, 300)
     };
   }
@@ -2264,13 +2415,16 @@ try {
       });
     }
     if (aiSec) {
-      md += '- هوش مصنوعی: ' + (aiSec.verdict === 'malicious' ? '🚨 خطرناک' : aiSec.verdict === 'suspicious' ? '⚠️ مشکوک' : '✅ پاک') +
+      var verdictLabel = aiSec.verdict === 'malicious' ? '🚨 خطرناک' : aiSec.verdict === 'suspicious' ? '⚠️ مشکوک' : '✅ پاک';
+      if (aiSec.unverified) verdictLabel += ' (شاهد ناموجود در سورس؛ نیازمند بازبینی)';
+      md += '- هوش مصنوعی: ' + verdictLabel +
         ' · اطمینان: ' + (aiSec.confidence === 'high' ? 'زیاد' : aiSec.confidence === 'medium' ? 'متوسط' : 'کم') + '\n';
       (aiSec.techniques || []).forEach(function (t) {
         md += '  - تکنیک ATT&CK: `' + mdInline(t, 40) + '`\n';
       });
       (aiSec.evidence || []).forEach(function (v) {
-        md += '  - خط ' + fa(v.line) + ': ' + mdInline(v.reason || 'نشانهٔ مشکوک', 200) + (v.quote ? ' — `' + mdInline(v.quote, 120) + '`' : '') + '\n';
+        var marker = v.verified ? ' [تأییدشده در سورس]' : (v.quote ? ' [شاهد در متن کد یافت نشد]' : '');
+        md += '  - خط ' + fa(v.line) + ': ' + mdInline(v.reason || 'نشانهٔ مشکوک', 200) + (v.quote ? ' — `' + mdInline(v.quote, 120) + '`' : '') + marker + '\n';
       });
       if (aiSec.note) md += '  - ' + mdInline(aiSec.note) + '\n';
     }
@@ -2445,12 +2599,14 @@ try {
        کد درست» بود. */
     var fixable = all.filter(function (x) { return x.severity !== 'warning' && x.source !== 'malwatch'; });
     var fixCode = null;
-    // A repaired or incomplete report is not a reliable basis for a rewrite.
-    if (useAI && ai && !ai.raw && !ai.incomplete && fixable.length > 0) {
+    // F29: If valid === false, or fixable.length > 0, request AI fix
+    var shouldFix = useAI && ai && !ai.raw && !ai.incomplete && (fixable.length > 0 || (ai.valid === false && (fixExp || adv || (ai.errors && ai.errors.length))));
+    if (shouldFix) {
       setLoadingText('در حال اصلاح کد با هوش مصنوعی…');
       setOperationStage('در حال ساخت اصلاح پیشنهادی…');
       try {
-        var candidate = await askAIFix(code, fixable, clip);
+        var issuesForFix = fixable.length > 0 ? fixable : [{ line: 1, message: fixExp || adv || 'اشکال در منطق یا ساختار کد', severity: 'error' }];
+        var candidate = await askAIFix(code, issuesForFix, clip);
         if (candidate && candidate.trim() && candidate.trim() !== code.trim()) {
           /* گیت صحت اصلاح: نسخهٔ پیشنهادی باید دست‌کم به‌اندازهٔ کد فعلی سالم
              باشد؛ اگر خطای ساختاریِ تازه دارد، اعمال نمی‌شود. */
@@ -2482,7 +2638,17 @@ try {
     analyzing = false;
 
     setErrors(all);
-    if (workspace) workspace.setReview({ code: code, errors: all, mode: useAI && ai && !ai.raw && !ai.incomplete ? 'ai' : 'local', model: useAI ? settings.model : '', incomplete: !!(useAI && (!ai || ai.raw || ai.incomplete)), proposed: fixCode, explanation: fixExp || adv || '', security: mal });
+    if (workspace) workspace.setReview({
+      code: code,
+      errors: all,
+      mode: useAI && ai && !ai.raw && !ai.incomplete ? 'ai' : 'local',
+      model: useAI ? settings.model : '',
+      incomplete: !!(useAI && (!ai || ai.raw || ai.incomplete)),
+      proposed: fixCode,
+      explanation: fixExp || adv || '',
+      security: mal,
+      aiSecurity: ai && !ai.raw ? ai.security : null
+    });
 
     if (hard.length > 0) {
       resVerdict.textContent = '⚠️ کد دارای ' + fa(hard.length) + ' خطا';
@@ -2501,8 +2667,11 @@ try {
     }
 
     var incomplete = useAI && (!ai || ai.raw || ai.incomplete || clip.truncated);
-    var needsCorrection = !!(ai && !ai.raw && ai.valid === false) || warns.length > 0 || aiErrList.length > 0;
-    setBrainState(incomplete ? 'idle' : needsCorrection ? (ai && ai.valid === false ? 'error' : 'warning') : 'healthy');
+    // F29: Avoid contradiction between "needs correction" badge and 0 visible items / 0 fix proposals
+    var hasConcreteIssues = hard.length > 0 || warns.length > 0 || aiErrList.length > 0 || !!fixCode;
+    var needsCorrection = (ai && !ai.raw && ai.valid === false && hasConcreteIssues) || warns.length > 0 || aiErrList.length > 0;
+    var isAiInvalid = ai && !ai.raw && ai.valid === false;
+    setBrainState(incomplete ? 'idle' : ((isAiInvalid && hasConcreteIssues) || hard.length > 0) ? 'error' : (needsCorrection ? 'warning' : (isAiInvalid && !hasConcreteIssues ? 'idle' : 'healthy')));
     // اگر اصلاح واقعی وجود دارد، دکمهٔ «اعمال اصلاحات» باید در دسترس باشد — نه فقط
     // وقتی خطای سخت هست. پنل مشکلات زیر شیت نتیجه باز می‌ماند تا با بستن شیت، کارت
     // اصلاح جادویی دیده شود.
@@ -2536,7 +2705,7 @@ try {
     if (secMd) md += '\n' + secMd;
     currentMd = md;
     stopLoading();
-    renderResult(md, mode, warns.length > 0, ai);
+    renderResult(md, mode, warns.length > 0, ai, hasConcreteIssues);
     if (incomplete) {
       resVerdict.textContent = '⚠️ بررسی کامل تأیید نشد';
       resVerdict.className = 'verdict warn';
@@ -2545,7 +2714,7 @@ try {
     hideAnalysisOverlay();
     openSheet('sheet-result');
     if (fixCode) toast('✨ نسخهٔ بهبودیافتهٔ کد آماده است — پنل «مشکلات» را ببین', 4800);
-    addHistory(lastSummary(md, ai), incomplete || needsCorrection ? 'err' : 'ok');
+    addHistory(lastSummary(md, ai), (incomplete || (needsCorrection && hasConcreteIssues)) ? 'err' : 'ok');
     // اعلام وضعیت Live Activity فقط بعد از رندر کامل نتیجه انجام می‌شود؛ اگر رندر
     // استثنا بدهد، catch می‌تواند وضعیت «خطا» را اعلام کند — چون stopOnce تنها
     // یک‌بار پیام می‌فرستد و اعلام زودهنگام، خطا را پشت «تمام شد» پنهان می‌کرد
@@ -2617,7 +2786,7 @@ try {
     }
   }
 
-  function renderResult(md, mode, hasWarns, ai) {
+  function renderResult(md, mode, hasWarns, ai, hasConcreteIssues) {
     renderMentalLogicMap(ai);
     resBody.innerHTML = renderMarkdown(md);
     var kids = resBody.children;
@@ -2640,8 +2809,13 @@ try {
         resVerdict.textContent = secBadge.txt;
         resVerdict.className = secBadge.cls;
       } else if (ai && ai.valid === false) {
-        resVerdict.textContent = '⚠️ نیاز به اصلاح دارد';
-        resVerdict.className = 'verdict warn';
+        if (hasConcreteIssues === false) {
+          resVerdict.textContent = '⚠️ تحلیل نیازمند بررسی دقیق‌تر (بدون خطای مشخص)';
+          resVerdict.className = 'verdict warn';
+        } else {
+          resVerdict.textContent = '⚠️ نیاز به اصلاح دارد';
+          resVerdict.className = 'verdict warn';
+        }
       } else if (hasWarns) {
         resVerdict.textContent = '✓ کد سالم است (با هشدار)';
         resVerdict.className = 'verdict warn';
@@ -3351,19 +3525,33 @@ try {
   }
 
   /* ── شروع ── */
+  var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
   window.__onNativeCredentialStatus = function (ok, hasKey) {
-    if (!ok) { nativeCredentialPending = false; toast('ذخیرهٔ امن کلید انجام نشد؛ دوباره تلاش کن', 5000); return; }
+    if (!ok) {
+      nativeCredentialPending = false;
+      toast(isAndroidPlatform ? 'ذخیرهٔ امن کلید در اندروید انجام نشد؛ دوباره تلاش کن' : 'ذخیرهٔ امن کلید انجام نشد؛ دوباره تلاش کن', 5000);
+      $('credential-hint').textContent = isAndroidPlatform ?
+        'خطا در ذخیرهٔ امن اندروید؛ کلید ذخیره نشد.' :
+        'خطا در ذخیرهٔ Keychain؛ کلید ذخیره نشد.';
+      return;
+    }
     nativeCredentialReady = true; nativeCredentialPending = false;
     settings.key = hasKey ? '__native_keychain__' : '';
     cfgKey.value = '';
-    cfgKey.placeholder = hasKey ? 'کلید در Keychain ذخیره است؛ برای جایگزینی وارد کن' : 'کلید API';
-    $('credential-hint').textContent = 'کلید در Keychain آیفون نگهداری می‌شود و فقط از بخش بومی به سرویس انتخابی ارسال می‌شود.';
+    cfgKey.placeholder = hasKey ? (isAndroidPlatform ? 'کلید در حافظهٔ امن اندروید ذخیره است؛ برای جایگزینی وارد کن' : 'کلید در Keychain ذخیره است؛ برای جایگزینی وارد کن') : 'کلید API';
+    $('credential-hint').textContent = isAndroidPlatform ?
+      'کلید در حافظهٔ امن اندروید نگهداری می‌شود و فقط از بخش بومی به سرویس انتخابی ارسال می‌شود.' :
+      'کلید در Keychain آیفون نگهداری می‌شود و فقط از بخش بومی به سرویس انتخابی ارسال می‌شود.';
     saveSettings(); updateAiStatus();
   };
   window.__onNativeRecovery = function (recovered) { if (recovered) toast('صفحه بازیابی شد؛ پیش‌نویس ذخیره‌شده برمی‌گردد', 5000); };
   window.__onNativeDraftSaved = function (ok) { if (!ok) toast('نسخهٔ پشتیبان بومی ذخیره نشد؛ از کدت پشتیبان بگیر', 4500); };
-  if (window.webkit && window.webkit.messageHandlers.credentialBridge) {
-    window.webkit.messageHandlers.credentialBridge.postMessage(settings.key && settings.key !== '__native_keychain__' ? { action: 'save', key: settings.key } : { action: 'get' });
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.credentialBridge) {
+    if (settings.key && settings.key !== '__native_keychain__') {
+      window.webkit.messageHandlers.credentialBridge.postMessage({ action: 'save', key: settings.key });
+    } else {
+      window.webkit.messageHandlers.credentialBridge.postMessage({ action: 'get' });
+    }
   }
   workspace = WorkspaceFeatures.create({
     ta: ta, toast: toast, openSheet: openSheet, closeSheets: closeSheets,

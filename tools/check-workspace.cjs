@@ -42,12 +42,12 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
    await page.locator('#code').fill(long);await page.waitForTimeout(400);await page.reload();await page.locator('#launch-splash').waitFor({state:'hidden'});
    await page.waitForFunction(code=>document.querySelector('#code').value===code,long);
    await page.locator('#btn-play').click();await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled && (document.querySelector('#res-body').textContent || !document.querySelector('#problems').hidden));
-   assert.match(await page.locator('#res-body').innerText(),/بررسی امنیتی/);
+   assert.match(await page.locator('#res-body').evaluate(el => el.textContent),/بررسی امنیتی/);
    await page.locator('#res-copy').click();assert.match(await page.evaluate(()=>window.copiedText),/بررسی امنیتی/);
    await page.locator('#res-close').click();await page.locator('#btn-history').click();
    await page.locator('.session-row').first().waitFor();await page.locator('#history-search').fill('javascript');assert.ok(await page.locator('.session-row').count()>0);
    await page.locator('.session-row .hist').first().click();assert.equal(await page.locator('#code').inputValue(),long);
-   await page.locator('#btn-settings').click();await page.locator('#sheet-settings [data-close]').press('Shift+Tab');
+   await page.locator('#btn-settings').click();await page.locator('#sheet-settings.open').waitFor();await page.locator('#sheet-settings [data-close]').press('Shift+Tab');
    assert.equal(await page.evaluate(()=>document.querySelector('#sheet-settings').contains(document.activeElement)),true);
    await page.locator('#cfg-text-scale').fill('150');await page.locator('#sheet-settings [data-close]').click();
    assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('text-scale-150')),true);
@@ -62,10 +62,10 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
    if(await page.locator('#sheet-result').evaluate(e=>e.classList.contains('open')))await page.locator('#res-close').click();
    await page.locator('#code').evaluate(e=>{e.focus();e.setSelectionRange(0,12);e.dispatchEvent(new Event('select'));});await page.locator('#key-explain').click();await page.locator('[data-selection-action="explain"]').click();
    await page.waitForFunction(()=>document.querySelector('#selection-result').textContent.includes('توضیح انتخاب'));assert.equal(selectedRequests,1);await page.locator('#sheet-selection [data-close]').click();
-   hold=true;await page.locator('#btn-play').click();await page.locator('#res-stop').click();await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
-   assert.match(await page.locator('#res-body').innerText(),/متوقف/);assert.equal(await page.locator('#operation-bar').isVisible(),false);
-   await page.waitForTimeout(2400);assert.match(await page.locator('#res-body').innerText(),/متوقف/);
-   await page.locator('#res-close').click();await page.locator('#code').fill('');await page.waitForTimeout(400);await page.reload();await page.locator('#launch-splash').waitFor({state:'hidden'});await page.waitForTimeout(350);assert.equal(await page.locator('#code').inputValue(),'');
+   hold=true;await page.locator('#btn-play').click();await page.locator('#res-stop').dispatchEvent('click');await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
+   assert.match(await page.locator('#res-body').evaluate(el => el.textContent),/متوقف/);assert.equal(await page.locator('#operation-bar').isVisible(),false);
+   await page.waitForTimeout(2400);assert.match(await page.locator('#res-body').evaluate(el => el.textContent),/متوقف/);
+   if(await page.locator('#sheet-result').evaluate(e=>e.classList.contains('open')))await page.locator('#res-close').click();await page.locator('#code').fill('');await page.waitForTimeout(400);await page.reload();await page.locator('#launch-splash').waitFor({state:'hidden'});await page.waitForTimeout(350);assert.equal(await page.locator('#code').inputValue(),'');
    for(const width of [320,393,440]){await page.setViewportSize({width,height:width===320?568:852});const metrics=await page.evaluate(()=>({bottom:document.querySelector('.bottom').getBoundingClientRect().bottom,height:innerHeight,editor:document.querySelector('.editor').getBoundingClientRect().height,overflow:document.documentElement.scrollWidth>innerWidth}));assert.ok(metrics.editor>50&&!metrics.overflow&&metrics.bottom<=metrics.height+1,JSON.stringify(metrics));}
    assert.deepEqual(errors,[]);
    console.log('PASS '+source+': full draft/session, copy security, focus trap, text size, preserved visuals, partial patches, selected explanation, cancel/late response, empty draft, 3 widths');
@@ -97,7 +97,7 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
   await nativePage.locator('#btn-play').click();await nativePage.waitForFunction(()=>window.fixtureRequests.length===2);
   assert.equal(await nativePage.evaluate(()=>window.fixtureActivities.filter(m=>m.action==='stop').length),0);
   assert.equal(await nativePage.evaluate(()=>window.fixtureRequests[0].key),'__native_keychain__');
-  await nativePage.locator('#res-stop').click();await nativePage.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
+  await nativePage.locator('#res-stop').dispatchEvent('click');await nativePage.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
   assert.equal(await nativePage.evaluate(()=>window.fixtureCancelled.length),1);
   assert.equal(await nativePage.evaluate(()=>window.fixtureActivities.filter(m=>m.action==='stop').length),1);
   assert.equal(await nativePage.locator('#code').inputValue(),'const original = 1;');

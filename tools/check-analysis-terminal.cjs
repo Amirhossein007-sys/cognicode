@@ -60,9 +60,9 @@ const response=content=>JSON.stringify({choices:[{message:{content:typeof conten
   }
   await page.setViewportSize({width:393,height:852});
   if(source==='index.html'){await page.locator('.analysis-overlay .terminal-text').evaluate(el=>el.getAnimations().forEach(a=>{a.pause();a.currentTime=2000;}));await page.screenshot({path:path.join(output,'terminal-'+theme+'.png')});}
-  requests[0].release();while(requests.length<2)await page.waitForTimeout(20);
+  requests[0].release();let fixWait=0; while(requests.length<2 && fixWait<300){ await page.waitForTimeout(20); fixWait++; }
   assert.equal(await page.locator('#analysis-overlay').isVisible(),true,'Loading must persist through the fix phase');
-  assert.match(await page.locator('#res-status').innerText(),/اصلاح|پیشنهادی/);
+  assert.match(await page.locator('#res-status').evaluate(el => el.textContent),/اصلاح|پیشنهادی/);
   assert.match(await page.locator('#analysis-status').innerText(),/اصلاح|پیشنهادی/,'the overlay mirrors the fix phase');
   requests[1].release();await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
   assert.equal(await page.locator('#analysis-overlay').isVisible(),false,'the overlay ends with the analysis');

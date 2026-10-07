@@ -15,8 +15,8 @@ $taskOutput = Join-Path $taskRoot 'artifacts'
 New-Item -ItemType Directory -Force -Path $taskOutput | Out-Null
 $taskStaging = Join-Path $taskOutput ($taskName + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))
 New-Item -ItemType Directory -Path $taskStaging | Out-Null
-$taskCandidates = @('index.html','styles.css','app.js','syntax.js','checker.js','sonar.js','orbital-clock.js','launch.js','sw.js','manifest.webmanifest','apple-touch-icon.png','native/project.yml','release.json','release-manifest.json','RELEASE-1.1.0.md')
-foreach ($taskDirectory in @('fonts','native/CogniCode','native/CogniCodeWidgets','native/Web','tools','.github')) {
+$taskCandidates = @('index.html','styles.css','workspace.css','workspace-store.js','workspace-features.js','change-set.js','project-zip.js','app.js','syntax.js','checker.js','malwatch.js','sonar.js','orbital-clock.js','launch.js','sw.js','manifest.webmanifest','apple-touch-icon.png','native/project.yml','release.json','release-manifest.json','RELEASE-1.1.0.md')
+foreach ($taskDirectory in @('fonts','icons','native/CogniCode','native/CogniCodeWidgets','native/Web','tools','.github')) {
     Get-ChildItem -LiteralPath (Join-Path $taskRoot $taskDirectory) -Recurse -File | ForEach-Object {
         $taskCandidates += [IO.Path]::GetRelativePath($taskRoot, $_.FullName)
     }

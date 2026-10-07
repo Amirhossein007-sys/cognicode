@@ -100,9 +100,12 @@ window.WorkspaceFeatures = {
     $('cfg-text-scale').addEventListener('input', e => textScale(e.target.value));
     function summary(value) {
       const target = $('review-summary'); target.replaceChildren();
-      const errors = value.errors || [], hard = errors.filter(e => e.severity !== 'warning').length;
-      const security = errors.filter(e => e.source === 'malwatch').length;
+      const errors = value.errors || [];
+      const hard = errors.filter(e => e.severity !== 'warning' && e.source !== 'malwatch').length;
       const warnings = errors.filter(e => e.severity === 'warning' && e.source !== 'malwatch').length;
+      const verifiedAiSecurity = (value.aiSecurity?.evidence || []).filter(v => v.verified).length;
+      const malwatchCount = errors.filter(e => e.source === 'malwatch').length;
+      const security = malwatchCount + verifiedAiSecurity;
       const title = document.createElement('strong'); title.textContent = label(hard)+' ایراد · '+label(warnings)+' هشدار · '+label(security)+' یافتهٔ امنیتی';
       const info = document.createElement('small'); info.textContent = value.incomplete ? 'بررسی کامل تأیید نشد؛ نتیجهٔ محلی در دسترس است' : value.mode === 'ai' ? 'بررسی هوش مصنوعی · '+value.model : 'بررسی محلی؛ تضمین صحت عملکرد یا نبود بدافزار نیست';
       target.append(title, info);
@@ -142,7 +145,7 @@ window.WorkspaceFeatures = {
     $('btn-magic-fix').addEventListener('click', e=>{if(!proposal || proposal.base!==ta.value || api.busy()){e.stopImmediatePropagation();api.toast('کد تغییر کرده یا بررسی دیگری در حال اجراست؛ دوباره تحلیل کن');}else addHistory('نسخهٔ پیش از اعمال اصلاحات','err',api.report(),proposal.base,proposal.proposed);},true);
     function addHistory(sum,type,report,before,after) {
       if(!api.historyEnabled())return;
-      const h={id:id(),t:Date.now(),lang:api.langKey(),name:api.fileName()||Syntax.LANGS[api.langKey()].file,code:ta.value,sum:String(sum||'').slice(0,140),type:type||'ok',report:report||'',review:review?{...review,proposed:null}:null,beforeCode:before===undefined?review?.code:before,afterCode:after===undefined?review?.proposed:after,verdict:$('res-verdict').textContent};
+      const h={id:id(),t:Date.now(),lang:api.langKey(),langMode:api.langMode()||'auto',name:api.fileName()||Syntax.LANGS[api.langKey()].file,code:ta.value,sum:String(sum||'').slice(0,140),type:type||'ok',report:report||'',review:review?{...review,proposed:null}:null,beforeCode:before===undefined?review?.code:before,afterCode:after===undefined?review?.proposed:after,verdict:$('res-verdict').textContent};
       history.unshift(h); const overflow=history.splice(40);
       enqueue(async()=>{if(!api.historyEnabled())return;await store.put(h);for(const old of overflow)await store.remove(old.id);}).catch(()=>{});
     }
@@ -154,12 +157,12 @@ window.WorkspaceFeatures = {
       for(const h of matches){
         const row=document.createElement('div');row.className='session-row glass-workspace';
         const main=document.createElement('button');main.className='hist';main.textContent=h.name+' · '+new Intl.DateTimeFormat('fa-IR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(h.t)+' — '+h.sum;
-        main.onclick=()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto',h.name);api.closeSheets();api.toast(h.legacyPartial?'این نشست قدیمی ناقص است؛ فایل اصلی را دوباره وارد کن':'کد کامل نشست بازیابی شد',4500);};
+        main.onclick=()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,h.langMode||'auto',h.name);api.closeSheets();api.toast(h.legacyPartial?'این نشست قدیمی ناقص است؛ فایل اصلی را دوباره وارد کن':'کد کامل نشست بازیابی شد',4500);};
         row.append(main);const actions=document.createElement('div');actions.className='session-actions';
         function action(text,run){const button=document.createElement('button');button.className='session-action';button.textContent=text;button.onclick=run;actions.append(button);}
-        if(h.report) action('گزارش کامل',()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,'auto',h.name);api.showReport(h);summary(h.review||{errors:[],mode:'local'});});
-        if(typeof h.beforeCode==='string')action('نسخهٔ قبل',()=>{if(api.busy())return;api.loadCode(h.beforeCode,'auto',h.name);api.closeSheets();api.toast('نسخهٔ قبل بازیابی شد');});
-        if(typeof h.afterCode==='string')action('نسخهٔ پیشنهادی',()=>{if(api.busy())return;api.loadCode(h.afterCode,'auto',h.name);api.closeSheets();api.toast('نسخهٔ پیشنهادی بازیابی شد؛ دوباره بررسی کن');});
+        if(h.report) action('گزارش کامل',()=>{if(api.busy()){api.toast('ابتدا بررسی جاری را متوقف کن');return;}api.loadCode(h.code,h.langMode||'auto',h.name);api.showReport(h);summary(h.review||{errors:[],mode:'local'});});
+        if(typeof h.beforeCode==='string')action('نسخهٔ قبل',()=>{if(api.busy())return;api.loadCode(h.beforeCode,h.langMode||'auto',h.name);api.closeSheets();api.toast('نسخهٔ قبل بازیابی شد');});
+        if(typeof h.afterCode==='string')action('نسخهٔ پیشنهادی',()=>{if(api.busy())return;api.loadCode(h.afterCode,h.langMode||'auto',h.name);api.closeSheets();api.toast('نسخهٔ پیشنهادی بازیابی شد؛ دوباره بررسی کن');});
         action('حذف',()=>{enqueue(()=>store.remove(h.id)).then(()=>{history=history.filter(s=>s.id!==h.id);renderHistory();api.toast('نشست حذف شد');}).catch(()=>{});});
         row.append(actions);if(h.legacyPartial){const warning=document.createElement('p');warning.className='session-warning';warning.textContent='نشست قدیمی ممکن است فقط ۶۰۰۰ نویسهٔ اول را داشته باشد.';row.append(warning);}list.append(row);
       }
@@ -187,11 +190,13 @@ window.WorkspaceFeatures = {
       if(!selection||selection.base!==ta.value){api.toast('کد تغییر کرده؛ دوباره انتخاب کن');return;}
       if(!api.settings().key){api.toast('برای توضیح انتخابی، ابتدا API را تنظیم کن');api.openSheet('sheet-settings');return;}
       if(selection.text.length>48000){api.toast('بخش کوتاه‌تری انتخاب کن');return;}
-      const snapshot={...selection},op=api.beginOperation('در حال بررسی قسمت انتخاب‌شده…');
-      document.querySelectorAll('[data-selection-action]').forEach(b=>b.disabled=true);
-      $('selection-stop').hidden=false;
-      $('selection-result').textContent='در حال بررسی…';
+      const snapshot={...selection};
+      let op=null;
       try{
+        op=api.beginOperation('در حال بررسی قسمت انتخاب‌شده…');
+        document.querySelectorAll('[data-selection-action]').forEach(b=>b.disabled=true);
+        $('selection-stop').hidden=false;
+        $('selection-result').textContent='در حال بررسی…';
         const purpose={explain:'Explain what the selected code does, step by step.',improve:'Suggest improvements with reasons. Do not replace or apply code.',review:'Review for bugs and boundary conditions; quote evidence and line numbers.'}[button.dataset.selectionAction];
         /* بودجهٔ خروجی ۲۰۰۰ توکن: برای یک انتخاب چندخطی کافی است و سقف
            پیش‌پرداختِ کوتای سرویس‌های واسط (pre-consume) را نیمه به بالا
@@ -202,7 +207,7 @@ window.WorkspaceFeatures = {
         const text=String(response.message?.content||'');if(!text.trim())throw new Error('مدل توضیحی برنگرداند');
         $('selection-result').innerHTML=api.renderMarkdown(text)+(response.finishReason==='length'?'<p>پاسخ مدل ناقص بود؛ بخش کوتاه‌تری انتخاب کن.</p>':'');
       }catch(e){$('selection-result').textContent=e.name==='AbortError'?'بررسی انتخاب متوقف شد؛ کد تغییر نکرد.':'بررسی انجام نشد: '+api.aiErrorText(e);}
-      finally{api.finishOperation(op);$('selection-stop').hidden=true;document.querySelectorAll('[data-selection-action]').forEach(b=>b.disabled=false);}
+      finally{if(op)api.finishOperation(op);$('selection-stop').hidden=true;document.querySelectorAll('[data-selection-action]').forEach(b=>b.disabled=false);}
     }));
     return {initialize,onEdit,syncQuickStart,saveDraft,setReview,startReview(){review=null;proposal=null;$('review-summary').hidden=true;},renderHistory,addHistory,clearHistory};
   }

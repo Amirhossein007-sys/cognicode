@@ -16,15 +16,15 @@ window.Checker = (function () {
      آن به‌عنوان کد شمرده نشود. regex: برای شناسایی /.../ در js/ts/go. */
   var CLIKE = { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true };
   var CONF = {
-    swift:      { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true, triple: '"""' },
+    swift:      { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true, triple: ['"""'], nestedBlock: true },
     javascript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     typescript: { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
-    java:       CLIKE,
+    java:       { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""'] },
     c:          CLIKE,
     cpp:        CLIKE,
     csharp:     CLIKE,
-    kotlin:     CLIKE,
-    dart:       CLIKE,
+    kotlin:     { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""'] },
+    dart:       { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     go:         { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     rust:       { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true },
     php:        CLIKE,
@@ -37,7 +37,7 @@ window.Checker = (function () {
     html:       null,
     text:       null,
     objectivec: CLIKE,
-    scala:      CLIKE,
+    scala:      { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""'] },
     /* گرووی: کوتیشن‌های تکی/دوتایی تک‌خطی‌اند؛ فقط حالت سه‌گانه چندخطی است */
     groovy:     { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     solidity:   CLIKE,
@@ -125,9 +125,27 @@ window.Checker = (function () {
       errors.push({ line: ln, column: cl, severity: 'error', message: msg, hint: hint || '' });
     }
 
+    if (langKey === 'json' && code.trim()) {
+      try {
+        JSON.parse(code);
+      } catch (e) {
+        var posMatch = e.message.match(/position\s+(\d+)/i);
+        var errLine = 1, errCol = 1;
+        if (posMatch) {
+          var targetPos = Math.min(parseInt(posMatch[1], 10), code.length);
+          for (var p = 0; p < targetPos; p++) {
+            if (code[p] === '\n') { errLine++; errCol = 1; }
+            else { errCol++; }
+          }
+        }
+        err(errLine, errCol, 'خطای ساختار JSON: ' + e.message, 'ساختار نامعتبر JSON را اصلاح کن');
+      }
+    }
+
     var stack = [];
     var state = 'code';        // code | lcom | bcom | str | tstr
     var quote = '', blockEnd = '', tripleMark = '';
+    var bcomDepth = 0;
     var sLine = 1, sCol = 1;
     var line = 1, col = 1;
     var i = 0, n = code.length;
@@ -153,12 +171,12 @@ window.Checker = (function () {
           state = 'lcom'; i += conf.line.length; col += conf.line.length; continue;
         }
         if (conf.block && code.startsWith(conf.block[0], i)) {
-          state = 'bcom'; blockEnd = conf.block[1]; sLine = line; sCol = col;
+          state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; sLine = line; sCol = col;
           i += conf.block[0].length; col += conf.block[0].length; continue;
         }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
-          if (reEnd > 0) { col += (reEnd - i); i = reEnd; continue; }
+          if (reEnd > i) { col += (reEnd - i); i = reEnd; continue; }
         }
         if (langKey === 'rust' && isRustCharLiteral(code, i)) {
           var endQr = code.indexOf("'", i + (code[i + 1] === '\\' ? 2 : 1));
@@ -166,6 +184,7 @@ window.Checker = (function () {
         }
         if (conf.quotes.indexOf(ch) >= 0) {
           if (conf.aposAfterAtom && prevAtomEnd(code, i)) { i++; col++; continue; } // ترنسپوز، نه رشته
+          if (ch === "'" && conf.escape && i > 0 && /[A-Za-z0-9_$]/.test(code[i - 1])) { i++; col++; continue; }
           sLine = line; sCol = col;
           var isTriple = false;
           if (conf.triple) {
@@ -198,8 +217,22 @@ window.Checker = (function () {
       if (state === 'lcom') { i++; col++; continue; }
 
       if (state === 'bcom') {
-        if (code.startsWith(blockEnd, i)) { state = 'code'; i += blockEnd.length; col += blockEnd.length; }
-        else { i++; col++; }
+        if (conf.nestedBlock && code.startsWith(conf.block[0], i)) {
+          bcomDepth++;
+          i += conf.block[0].length; col += conf.block[0].length;
+          continue;
+        }
+        if (code.startsWith(blockEnd, i)) {
+          if (conf.nestedBlock) {
+            bcomDepth--;
+            if (bcomDepth <= 0) { state = 'code'; bcomDepth = 0; }
+          } else {
+            state = 'code';
+          }
+          i += blockEnd.length; col += blockEnd.length;
+        } else {
+          i++; col++;
+        }
         continue;
       }
 
@@ -222,7 +255,7 @@ window.Checker = (function () {
       }
     }
 
-    if (state === 'bcom') errAlways(sLine, sCol, 'کامنت بلوکی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'با «' + blockEnd + '» ببندش');
+    if (state === 'bcom' || bcomDepth > 0) errAlways(sLine, sCol, 'کامنت بلوکی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'با «' + blockEnd + '» ببندش');
     if (state === 'tstr') errAlways(sLine, sCol, 'رشتهٔ چندخطی که در خط ' + fa(sLine) + ' باز شده بسته نشده', 'علامت پایانی ' + tripleMark + ' را اضافه کن');
     if (state === 'str') errAlways(sLine, sCol, 'رشته‌ای که در خط ' + fa(sLine) + ' با «' + quote + '» باز شده بسته نشده', 'کوتیشن پایانی را اضافه کن');
     for (var k = 0; k < stack.length && k < 6; k++) {
@@ -242,6 +275,7 @@ window.Checker = (function () {
     if (!conf) return code.split('\n');
     var out = [], buf = '';
     var state = 'code', quote = '', blockEnd = '', tripleMark = '';
+    var bcomDepth = 0;
     var i = 0, n = code.length;
     while (i < n) {
       var ch = code[i];
@@ -253,10 +287,10 @@ window.Checker = (function () {
       }
       if (state === 'code') {
         if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
-        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
+        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
-          if (reEnd > 0) { buf += code.slice(i, reEnd); i = reEnd; continue; }
+          if (reEnd > i) { buf += code.slice(i, reEnd); i = reEnd; continue; }
         }
         if (conf.quotes.indexOf(ch) >= 0) {
           if (conf.aposAfterAtom && prevAtomEnd(code, i)) { buf += ch; i++; continue; }
@@ -278,7 +312,22 @@ window.Checker = (function () {
       }
       if (state === 'lcom') { i++; continue; }
       if (state === 'bcom') {
-        if (code.startsWith(blockEnd, i)) { state = 'code'; i += blockEnd.length; } else i++;
+        if (conf.nestedBlock && code.startsWith(conf.block[0], i)) {
+          bcomDepth++;
+          i += conf.block[0].length;
+          continue;
+        }
+        if (code.startsWith(blockEnd, i)) {
+          if (conf.nestedBlock) {
+            bcomDepth--;
+            if (bcomDepth <= 0) { state = 'code'; bcomDepth = 0; }
+          } else {
+            state = 'code';
+          }
+          i += blockEnd.length;
+        } else {
+          i++;
+        }
         continue;
       }
       if (state === 'str') {
@@ -532,21 +581,42 @@ window.Checker = (function () {
     return words.length >= 5 && /[.!?,]$/.test(t);
   }
 
-  function extractFenced(text) {
+  function extractFenced(text, langHint) {
+    var conf = resolveFenceLang(langHint);
+    if (!conf) {
+      var det = Syntax.detect(text);
+      if (det !== 'text') conf = det;
+    }
+    var states = null;
+    if (conf) {
+      try { states = lineStartStates(text, conf); } catch (e) { states = null; }
+    }
     var lines = text.split('\n'), blocks = [], buf = null, fenceLang = null, dropped = 0;
+    var hadCodeBeforeFence = false;
     for (var i = 0; i < lines.length; i++) {
-      var m = lines[i].match(FENCE_RX);
+      var ln = lines[i];
+      var insideLiteral = !!(states && states[i] && states[i] !== 'code' && states[i] !== 'lcom');
+      var m = !insideLiteral ? ln.match(FENCE_RX) : null;
       if (m) {
-        if (buf === null) { buf = []; fenceLang = m[1] || null; }
-        else { blocks.push({ lang: fenceLang, code: buf.join('\n') }); buf = null; }
-        dropped++; // خود خط فنس متن نیست
+        if (buf === null) {
+          if (hadCodeBeforeFence) return null;
+          buf = []; fenceLang = m[1] || null;
+        } else {
+          blocks.push({ lang: fenceLang, code: buf.join('\n') });
+          buf = null;
+        }
+        dropped++; // خود خط فنس متن است
         continue;
       }
-      if (buf !== null) buf.push(lines[i]);
-      else if (lines[i].trim()) dropped++; // متن بیرونِ فنس
+      if (buf !== null) {
+        buf.push(lines[i]);
+      } else if (lines[i].trim()) {
+        if (!isProseLine(lines[i], conf)) hadCodeBeforeFence = true;
+        dropped++; // متن بیرونِ فنس
+      }
     }
     if (buf !== null) blocks.push({ lang: fenceLang, code: buf.join('\n') }); // فنس بسته‌نشده
-    if (!blocks.length) return null;
+    if (!blocks.length || hadCodeBeforeFence) return null;
     return {
       code: blocks.map(function (b) { return b.code; }).join('\n\n'),
       dropped: dropped,
@@ -574,6 +644,7 @@ window.Checker = (function () {
     if (!conf || !code) return null;
     var out = ['code'];
     var state = 'code', quote = '', blockEnd = '', tripleMark = '';
+    var bcomDepth = 0;
     var i = 0, n = code.length;
     while (i < n) {
       var ch = code[i];
@@ -584,10 +655,10 @@ window.Checker = (function () {
       }
       if (state === 'code') {
         if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
-        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
+        if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
-          if (reEnd > 0) { i = reEnd; continue; }
+          if (reEnd > i) { i = reEnd; continue; }
         }
         if (conf.quotes.indexOf(ch) >= 0) {
           if (conf.aposAfterAtom && prevAtomEnd(code, i)) { i++; continue; }
@@ -606,7 +677,25 @@ window.Checker = (function () {
         i++; continue;
       }
       if (state === 'lcom') { i++; continue; }
-      if (state === 'bcom') { if (code.startsWith(blockEnd, i)) { state = 'code'; i += blockEnd.length; } else i++; continue; }
+      if (state === 'bcom') {
+        if (conf.nestedBlock && code.startsWith(conf.block[0], i)) {
+          bcomDepth++;
+          i += conf.block[0].length;
+          continue;
+        }
+        if (code.startsWith(blockEnd, i)) {
+          if (conf.nestedBlock) {
+            bcomDepth--;
+            if (bcomDepth <= 0) { state = 'code'; bcomDepth = 0; }
+          } else {
+            state = 'code';
+          }
+          i += blockEnd.length;
+        } else {
+          i++;
+        }
+        continue;
+      }
       if (state === 'str') {
         if (conf.escape && ch === '\\') { i += 2; continue; }
         if (ch === quote) state = 'code';
@@ -640,9 +729,12 @@ window.Checker = (function () {
     if (!text.trim()) return { code: '', dropped: 0, langHint: 'text' };
 
     /* ۱) بلاک مارک‌داون: هرچه داخل فنس است کد است و بقیه متن */
-    var fence = extractFenced(text);
+    var fence = extractFenced(text, langHint);
     if (fence) {
-      var fenceCode = fence.code.replace(/^\n+/, '').replace(/\s+$/, '');
+      var fenceCode = fence.code;
+      if (fence.dropped > 0) {
+        fenceCode = fenceCode.replace(/^\n+/, '').replace(/\s+$/, '');
+      }
       var resolved = resolveFenceLang(fence.lang);
       var fenceLang = resolved ? resolved : (Syntax.detect(fenceCode) !== 'text' ? Syntax.detect(fenceCode) : null);
       return { code: fenceCode, dropped: fence.dropped, langHint: fenceLang || 'text' };
@@ -668,15 +760,15 @@ window.Checker = (function () {
     var kept = [], dropped = 0, i;
     for (i = 0; i < lines.length; i++) {
       var ln = lines[i];
-      if (!ln.trim()) { kept.push(''); continue; }
+      if (!ln.trim()) { kept.push(ln); continue; }
       var insideLiteral = !!(states && states[i] && states[i] !== 'code' && states[i] !== 'lcom');
       if (!insideLiteral && !skipProseFilter && isProseLine(ln, conf)) { dropped++; continue; }
       kept.push(ln);
     }
-    var code = kept.join('\n')
-      .replace(/\n{4,}/g, '\n\n\n') /* فاصله‌های خیلی باز از متن پیست مانده‌اند */
-      .replace(/^\n+/, '')
-      .replace(/\s+$/, '');
+    var code = kept.join('\n');
+    if (dropped > 0) {
+      code = code.replace(/^\n+/, '').replace(/\s+$/, '');
+    }
     if (!code) return { code: '', dropped: dropped, langHint: conf || 'text' };
     return { code: code, dropped: dropped, langHint: conf || 'text' };
   }
