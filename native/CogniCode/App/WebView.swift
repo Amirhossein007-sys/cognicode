@@ -127,6 +127,17 @@ final class NativeKeyboardManager: NSObject {
 }
 
 // MARK: - هیأت امنیتی URLSession (جلوگیری از Downgrade و سرقت توکن در Redirect)
+private func isBlockedHostAddress(_ host: String) -> Bool {
+    var v4 = in_addr()
+    var v6 = in6_addr()
+    if host.withCString({ inet_pton(AF_INET, $0, &v4) == 1 || inet_pton(AF_INET6, $0, &v6) == 1 }) {
+        return true
+    }
+    let lower = host.lowercased()
+    return lower == "localhost" || lower.hasSuffix(".localhost")
+        || lower.hasSuffix(".local") || lower.hasSuffix(".internal")
+}
+
 final class SecureSessionDelegate: NSObject, URLSessionTaskDelegate {
     private var taskRedirectCounts: [Int: Int] = [:]
     private let lock = NSLock()
@@ -144,7 +155,7 @@ final class SecureSessionDelegate: NSObject, URLSessionTaskDelegate {
               comps.user == nil, comps.password == nil,
               comps.port == nil || comps.port == 443,
               let host = comps.host, !host.isEmpty,
-              !WebViewContainer.Coordinator.isBlockedHost(host) else {
+              !isBlockedHostAddress(host) else {
             completionHandler(nil)
             return
         }
@@ -273,15 +284,8 @@ struct WebViewContainer: UIViewRepresentable {
 
         /// IP-literal و نام‌های محلی مسدود می‌شوند تا پل نیتیو نتواند به سرویس‌های
         /// داخلیِ دستگاه/شبکه درخواست بزند (endpoint فقط باید یک سرویس https عمومی باشد).
-        static func isBlockedHost(_ host: String) -> Bool {
-            var v4 = in_addr()
-            var v6 = in6_addr()
-            if host.withCString({ inet_pton(AF_INET, $0, &v4) == 1 || inet_pton(AF_INET6, $0, &v6) == 1 }) {
-                return true
-            }
-            let lower = host.lowercased()
-            return lower == "localhost" || lower.hasSuffix(".localhost")
-                || lower.hasSuffix(".local") || lower.hasSuffix(".internal")
+        nonisolated static func isBlockedHost(_ host: String) -> Bool {
+            isBlockedHostAddress(host)
         }
 
         func applySystemTheme(dark: Bool) {
@@ -426,7 +430,7 @@ struct WebViewContainer: UIViewRepresentable {
                   comps.user == nil, comps.password == nil,
                   comps.port == nil || comps.port == 443,
                   let host = comps.host, !host.isEmpty,
-                  !isBlockedHost(host),
+                  !isBlockedHostAddress(host),
                   body.contains("\"messages\"") else {
                 let payload: [Any] = [id, false, 400, "درخواست به دلیل محدودیت‌های امنیتی شبکه رد شد"]
                 if let json = try? JSONSerialization.data(withJSONObject: payload),
