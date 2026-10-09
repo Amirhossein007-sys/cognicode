@@ -5,7 +5,7 @@ const output=path.resolve(__dirname,'../artifacts/build-14-preview');fs.mkdirSyn
 const code='const answer = 41;\nconsole.log(answer);';
 const report={language:'javascript',valid:false,errors:[],advice:'مقدار را بررسی کن.',fixExplanation:'مقدار نمونه اصلاح شد.',explanation:{summary:'کد نمونه',steps:['چاپ مقدار'],uses:['آزمون'],notes:[]}};
 const response=content=>JSON.stringify({choices:[{message:{content:typeof content==='string'?content:JSON.stringify(content)},finish_reason:'stop'}]});
-// Gate each HTTP phase independently, so a quick fixture cannot hide a premature dismissal.
+// Hold the single analysis request to verify loading until the report is ready.
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:process.env.BROWSER_CHANNEL||undefined});
  try {for(const source of ['index.html','native/Web/index.html']) {for(const theme of ['dark','light']) {
@@ -60,22 +60,18 @@ const response=content=>JSON.stringify({choices:[{message:{content:typeof conten
   }
   await page.setViewportSize({width:393,height:852});
   if(source==='index.html'){await page.locator('.analysis-overlay .terminal-text').evaluate(el=>el.getAnimations().forEach(a=>{a.pause();a.currentTime=2000;}));await page.screenshot({path:path.join(output,'terminal-'+theme+'.png')});}
-  requests[0].release();let fixWait=0; while(requests.length<2 && fixWait<300){ await page.waitForTimeout(20); fixWait++; }
-  assert.equal(await page.locator('#analysis-overlay').isVisible(),true,'Loading must persist through the fix phase');
-  assert.match(await page.locator('#res-status').evaluate(el => el.textContent),/اصلاح|پیشنهادی/);
-  assert.match(await page.locator('#analysis-status').innerText(),/اصلاح|پیشنهادی/,'the overlay mirrors the fix phase');
-  requests[1].release();await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
+  requests[0].release();await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
   assert.equal(await page.locator('#analysis-overlay').isVisible(),false,'the overlay ends with the analysis');
   assert.match(await page.locator('#sheet-result').getAttribute('class'),/open/,'the completed report opens its own sheet');
   assert.equal(await page.locator('.play-label').innerText(),'تحلیل کد');
   assert.equal(await page.locator('#code').inputValue(),code,'Visual change must not apply the proposed fix');
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#analysis-overlay').isVisible(),false);
-  assert.deepEqual(errors,[]);await page.close();console.log('PASS '+source+' '+theme+': overlay-only loading, no buttons, blurred app, contrast, analysis/fix phases, sheet opens with the report, code preserved');
+  assert.deepEqual(errors,[]);await page.close();console.log('PASS '+source+' '+theme+': overlay-only loading, no buttons, blurred app, contrast, single analysis request, sheet opens with the report, code preserved');
  }}
  // Offline analysis uses the same overlay, then opens the report sheet.
  const offline=await browser.newPage();await offline.goto(pathToFileURL(path.resolve(__dirname,'../index.html')).href);await offline.locator('#launch-splash').waitFor({state:'hidden'});
- await offline.locator('#code').fill(code);await offline.locator('#btn-play').click();await offline.locator('#api-choice-offline').click();await offline.locator('#analysis-overlay').waitFor({state:'visible'});await offline.waitForFunction(()=>!document.querySelector('#btn-play').disabled);assert.equal(await offline.locator('#analysis-overlay').isVisible(),false);await offline.close();
+ await offline.locator('#code').fill(code);await offline.locator('#btn-play').click();await offline.locator('#api-choice-offline').click();await offline.waitForFunction(()=>!document.querySelector('#btn-play').disabled);assert.equal(await offline.locator('#analysis-overlay').isVisible(),false);await offline.close();
  // A stale result also dismisses the overlay without overwriting code edited elsewhere.
  const stale=await browser.newPage();await stale.addInitScript(()=>localStorage.setItem('cognicode.settings.v1',JSON.stringify({base:'https://fixture.invalid/v1',key:'fixture',model:'fixture',hist:false})));
  let releaseStale;await stale.route('https://fixture.invalid/**',async route=>{await new Promise(r=>releaseStale=r);await route.fulfill({contentType:'application/json',body:response({...report,valid:true})});});

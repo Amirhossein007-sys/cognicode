@@ -23,7 +23,7 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
     if(sys.includes('Reply in Persian Markdown')){selectedRequests++;await route.fulfill({body:wrapper('## توضیح انتخاب\n\nاین بخش مقدار را نمایش می‌دهد.'),contentType:'application/json'});return;}
     const isFix=!sys.includes('explanation') && /correct|fix|repair|اصلاح/i.test(sys);
     let answer=clean;
-    if(invalid)answer=isFix?'const a = 2;\nconst keep = 3;\nconst b = 4;':{...clean,valid:false,errors:[{line:1,column:1,severity:'error',message:'آزمون تغییر',hint:'اصلاح مقدار'}],fixExplanation:'مقادیر نمونه اصلاح می‌شوند'};
+    if(invalid)answer=isFix?{edits:[{before:'const a = 1;',after:'const a = 2;'},{before:'const b = 1;',after:'const b = 4;'}]}:{...clean,valid:false,errors:[{line:1,column:1,severity:'error',message:'آزمون تغییر',hint:'اصلاح مقدار',quote:'const a = 1;',reason:'Fixture contract requires these two constants to have updated values.',confidence:'high'}],fixExplanation:'مقادیر نمونه اصلاح می‌شوند'};
     await route.fulfill({body:wrapper(answer),contentType:'application/json'});
    });
    await page.goto(pathToFileURL(path.join(root,source)).href);
@@ -54,7 +54,7 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
    await page.locator('#key-focus').click();assert.equal(await page.locator('#tehran-clock').isVisible(),true);assert.equal(await page.locator('.brain-marquee').isVisible(),true);assert.equal(await page.locator('#particles-js').isVisible(),true);
    await page.locator('#key-focus').click();
    await page.locator('#code').fill('const a = 1;\nconst keep = 3;\nconst b = 1;');
-   invalid=true;await page.locator('#btn-play').click();await page.waitForFunction(()=>document.querySelector('#btn-play').disabled===false);await page.locator('#btn-diff-toggle').click();
+   invalid=true;await page.locator('#btn-play').click();await page.waitForFunction(()=>document.querySelector('#btn-play').disabled===false);await page.locator('#btn-smart-fix').click();await page.waitForFunction(()=>!document.querySelector('#btn-smart-fix').disabled);await page.locator('#btn-diff-toggle').click();
    assert.equal(await page.locator('[data-patch]').count(),2);
    await page.locator('[data-patch]').nth(1).uncheck();invalid=false;await page.locator('#apply-selected').click();
    assert.equal(await page.locator('#code').inputValue(),'const a = 2;\nconst keep = 3;\nconst b = 1;');
@@ -62,7 +62,7 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
    if(await page.locator('#sheet-result').evaluate(e=>e.classList.contains('open')))await page.locator('#res-close').click();
    await page.locator('#code').evaluate(e=>{e.focus();e.setSelectionRange(0,12);e.dispatchEvent(new Event('select'));});await page.locator('#key-explain').click();await page.locator('[data-selection-action="explain"]').click();
    await page.waitForFunction(()=>document.querySelector('#selection-result').textContent.includes('توضیح انتخاب'));assert.equal(selectedRequests,1);await page.locator('#sheet-selection [data-close]').click();
-   hold=true;await page.locator('#btn-play').click();await page.locator('#res-stop').dispatchEvent('click');await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
+   hold=true;await page.locator('#code').fill('const uncached = 5;');await page.locator('#btn-play').click();await page.locator('#res-stop').dispatchEvent('click');await page.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
    assert.match(await page.locator('#res-body').evaluate(el => el.textContent),/متوقف/);assert.equal(await page.locator('#operation-bar').isVisible(),false);
    await page.waitForTimeout(2400);assert.match(await page.locator('#res-body').evaluate(el => el.textContent),/متوقف/);
    if(await page.locator('#sheet-result').evaluate(e=>e.classList.contains('open')))await page.locator('#res-close').click();await page.locator('#code').fill('');await page.waitForTimeout(400);await page.reload();await page.locator('#launch-splash').waitFor({state:'hidden'});await page.waitForTimeout(350);assert.equal(await page.locator('#code').inputValue(),'');
@@ -85,7 +85,7 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
     themeBridge:{postMessage(){}},
     aiBridge:{postMessage:message=>{
      window.fixtureRequests.push(message);
-     if(window.fixtureRequests.length===1)setTimeout(()=>window.__nativeAI(message.id,true,200,reply({valid:false,language:'javascript',errors:[{line:1,column:1,message:'آزمون',severity:'error'}],explanation:{summary:'نمونه',steps:[],uses:[],notes:[]}})),50);
+     if(window.fixtureRequests.length===1)setTimeout(()=>window.__nativeAI(message.id,true,200,reply({valid:false,language:'javascript',errors:[{line:1,column:1,message:'آزمون',severity:'error',quote:'const original = 1;',reason:'Fixture contract requires original to have a different value.',confidence:'high'}],explanation:{summary:'نمونه',steps:[],uses:[],notes:[]}})),50);
     }}
    }};
   });
@@ -94,16 +94,16 @@ const wrapper=content=>JSON.stringify({choices:[{message:{content:typeof content
   assert.equal(await nativePage.evaluate(()=>JSON.parse(localStorage.getItem('cognicode.settings.v1')).key),undefined);
   await nativePage.locator('#btn-history').click();await nativePage.locator('.session-warning').waitFor();assert.match(await nativePage.locator('.session-warning').innerText(),/۶۰۰۰/);await nativePage.locator('#sheet-history [data-close]').click();
   await nativePage.locator('#code').fill('const original = 1;');await nativePage.waitForTimeout(350);assert.ok(await nativePage.evaluate(()=>window.fixtureDrafts.some(d=>d.code==='const original = 1;')));
-  await nativePage.locator('#btn-play').click();await nativePage.waitForFunction(()=>window.fixtureRequests.length===2);
-  assert.equal(await nativePage.evaluate(()=>window.fixtureActivities.filter(m=>m.action==='stop').length),0);
-  assert.equal(await nativePage.evaluate(()=>window.fixtureRequests[0].key),'__native_keychain__');
-  await nativePage.locator('#res-stop').dispatchEvent('click');await nativePage.waitForFunction(()=>!document.querySelector('#btn-play').disabled);
-  assert.equal(await nativePage.evaluate(()=>window.fixtureCancelled.length),1);
+  await nativePage.locator('#btn-play').click();await nativePage.waitForFunction(()=>!document.querySelector('#btn-play').disabled);await nativePage.locator('#btn-smart-fix').click();await nativePage.waitForFunction(()=>window.fixtureRequests.length===2);
   assert.equal(await nativePage.evaluate(()=>window.fixtureActivities.filter(m=>m.action==='stop').length),1);
+  assert.equal(await nativePage.evaluate(()=>window.fixtureRequests[0].key),'__native_keychain__');
+  await nativePage.locator('#res-stop').dispatchEvent('click');await nativePage.waitForFunction(()=>!document.querySelector('#btn-smart-fix').disabled);
+  assert.equal(await nativePage.evaluate(()=>window.fixtureCancelled.length),1);
+  assert.equal(await nativePage.evaluate(()=>window.fixtureActivities.filter(m=>m.action==='stop').length),2);
   assert.equal(await nativePage.locator('#code').inputValue(),'const original = 1;');
   await nativePage.evaluate(()=>{const m=window.fixtureRequests[1];window.__nativeAI(m.id,true,200,JSON.stringify({choices:[{message:{content:'const original = 9;'},finish_reason:'stop'}]}));});
   assert.equal(await nativePage.locator('#code').inputValue(),'const original = 1;');
-  console.log('PASS native bridge fixture: key migration without JS export, old-history warning, native draft mirror, activity across two requests, native cancel and ignored late reply');
+  console.log('PASS native bridge fixture: key migration without JS export, old-history warning, native draft mirror, independent analysis and fix activities, native cancel and ignored late reply');
   await nativeContext.close();
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -8,14 +8,14 @@ $web = Join-Path $root 'native/Web'
 
 if (-not (Test-Path $web)) { New-Item -ItemType Directory -Path $web | Out-Null }
 
-$files = @('index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
+$files = @('index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'review-engine.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
 foreach ($f in $files) {
     $src = Join-Path $root $f
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Required web resource is missing: $f" }
     Copy-Item -LiteralPath $src -Destination (Join-Path $web $f) -Force
 }
 
-foreach ($dir in @('fonts', 'icons')) {
+foreach ($dir in @('fonts', 'icons', 'vendor')) {
     $dst = Join-Path $web $dir
     if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Path $dst | Out-Null }
     Copy-Item (Join-Path (Join-Path $root $dir) '*') $dst -Force
@@ -41,7 +41,7 @@ if (Test-Path $androidWeb) {
         }
         Copy-Item -LiteralPath (Join-Path $root $f) -Destination (Join-Path $androidWeb $f) -Force
     }
-    foreach ($dir in @('fonts', 'icons')) {
+    foreach ($dir in @('fonts', 'icons', 'vendor')) {
         $dst = Join-Path $androidWeb $dir
         if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Path $dst | Out-Null }
         # Remove any stale files in destination

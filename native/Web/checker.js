@@ -27,7 +27,7 @@ window.Checker = (function () {
     dart:       { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     go:         { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     rust:       { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true },
-    php:        { line: ['//', '#'], block: ['/*', '*/'], quotes: ['"', "'"], multiline: ['"', "'"], escape: true },
+    php:        { line: ['//', '#'], block: ['/*', '*/'], quotes: ['"', "'", '`'], multiline: ['"', "'", '`'], escape: true },
     ruby:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
     python:     { line: '#', block: null, quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     bash:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
@@ -60,6 +60,8 @@ window.Checker = (function () {
 
   function matchLineComment(conf, str, pos) {
     if (!conf || !conf.line) return 0;
+    // PHP 8 attributes start with #[; this is not a # comment.
+    if (conf === CONF.php && str.startsWith('#[', pos)) return 0;
     if (Array.isArray(conf.line)) {
       for (var k = 0; k < conf.line.length; k++) {
         var p = conf.line[k];
@@ -122,10 +124,46 @@ window.Checker = (function () {
   }
 
   /* ── بررسی ساختاری: براکت، رشته، کامنت ── */
+  var phpCache = null;
+  function phpSource(code) {
+    if (phpCache && phpCache.input === code) return phpCache;
+    var out = code.split(''), errors = [], tagged = /<\?(?:php\b|=)/i.test(code);
+    var inside = !tagged, state = 'code', quote = '', i = 0;
+    function mask(a, b) { for (var p = a; p < b; p++) if (out[p] !== '\n' && out[p] !== '\r') out[p] = ' '; }
+    while (i < code.length) {
+      if (!inside) {
+        var tag = code.slice(i, i + 6).match(/^<\?(?:php\b|=)/i);
+        if (tag) { mask(i, i + tag[0].length); i += tag[0].length; inside = true; }
+        else { mask(i, i + 1); i++; }
+        continue;
+      }
+      if (state === 'string') { if (code[i] === '\\') i += 2; else { if (code[i] === quote) state = 'code'; i++; } continue; }
+      if (state === 'block') { if (code.startsWith('*/', i)) { state = 'code'; i += 2; } else i++; continue; }
+      if (state === 'line') { if (code[i] === '\n') state = 'code'; else if (code.startsWith('?>', i)) { state = 'code'; inside = false; } i++; continue; }
+      if (code.startsWith('?>', i) && tagged) { mask(i, i + 2); inside = false; i += 2; continue; }
+      if (code.startsWith('/*', i)) { state = 'block'; i += 2; continue; }
+      if (code.startsWith('//', i) || (code[i] === '#' && code[i + 1] !== '[')) { state = 'line'; i++; continue; }
+      if (code[i] === '"' || code[i] === "'" || code[i] === '`') { quote = code[i]; state = 'string'; i++; continue; }
+      if (code.startsWith('<<<', i)) {
+        var nl = code.indexOf('\n', i), head = (nl < 0 ? code.slice(i) : code.slice(i, nl)).match(/^<<<[ \t]*(?:'([A-Za-z_][A-Za-z0-9_]*)'|"([A-Za-z_][A-Za-z0-9_]*)"|([A-Za-z_][A-Za-z0-9_]*))[ \t]*\r?$/);
+        if (head) {
+          var name = head[1] || head[2] || head[3], closeRx = new RegExp('^[ \\t]*' + name + '(?![A-Za-z0-9_])', 'gm');
+          closeRx.lastIndex = nl < 0 ? code.length : nl + 1;
+          var close = closeRx.exec(code), end = close ? closeRx.lastIndex : code.length;
+          if (!close) errors.push({ line: code.slice(0, i).split('\n').length, column: 1, severity: 'error', message: 'رشتهٔ heredoc/nowdoc بسته نشده', hint: 'شناسهٔ پایانی ' + name + ' را اضافه کن' });
+          mask(i, end); i = end; continue;
+        }
+      }
+      i++;
+    }
+    phpCache = { input: code, code: out.join(''), errors: errors };
+    return phpCache;
+  }
   function staticCheck(code, langKey) {
     var conf = CONF[langKey];
     var errors = [];
     if (!conf || !code) return errors;
+    if (langKey === 'php') { var php = phpSource(code); code = php.code; errors = php.errors.slice(); }
 
     function err(ln, cl, msg, hint) {
       if (errors.length < 25) errors.push({ line: ln, column: cl, severity: 'error', message: msg, hint: hint || '' });
@@ -287,6 +325,7 @@ window.Checker = (function () {
   function commentFreeLines(code, conf) {
     if (!code) return [];
     if (!conf) return code.split('\n');
+    if (conf === CONF.php) code = phpSource(code).code;
     var out = [], buf = '';
     var state = 'code', quote = '', blockEnd = '', tripleMark = '';
     var bcomDepth = 0;
@@ -385,10 +424,14 @@ window.Checker = (function () {
        هشدار کاذب نسازند؛ فقط قاعدهٔ TODO روی خطوط خام می‌ماند. */
     var lines = rawLines;
     try { lines = commentFreeLines(code, CONF[langKey]); } catch (e) { lines = rawLines; }
+    var executable = codeOnlyLines(code, langKey);
     for (var i = 0; i < rawLines.length && out.length < 10; i++) {
       for (var j = 0; j < LINT.length; j++) {
-        var target = LINT[j].todo ? rawLines[i] : lines[i];
+        // Syntax-like rules cannot match quoted documentation or HTML strings.
+        var target = LINT[j].todo ? rawLines[i] : (j === 2 || j === 3 ? lines[i] : executable[i]);
         if (target && LINT[j].rx.test(target)) {
+          // A URL is not necessarily a connection (namespace/schema/example text).
+          if (j === 2 && !/\b(?:fetch|curl|wp_remote_(?:get|post|request)|file_get_contents|requests\.(?:get|post)|https?\.request)\s*\(?/.test(executable[i] || '')) continue;
           if (j === 2 && /(?:xmlns|Plugin URI|Author URI|@link|@see)/i.test(rawLines[i])) continue;
           var key = (i + 1) + LINT[j].msg;
           if (seen[key]) continue;
@@ -407,6 +450,7 @@ window.Checker = (function () {
     if (!code) return [];
     var lines = code.split('\n');
     if (!conf) return lines;
+    if (langKey === 'php') code = phpSource(code).code;
     var out = [];
     for (var j = 0; j < lines.length; j++) out.push('');
     var state = 'code', quote = '', blockEnd = '', tripleMark = '';
@@ -472,90 +516,14 @@ window.Checker = (function () {
 
   function looksLikeCodeCheck(code, langKey) {
     var errors = [];
-    if (langKey === 'html' || !CONF[langKey]) return errors; // HTML متن داخل تگ دارد؛ بررسی نمی‌شود
-
-    /* جیسون با مقادیر صرفاً رشته‌ای، در codeOnlyLines تهی می‌شود و نباید هشدار کاذب بگیرد */
-    if (langKey === 'json') {
-      try {
-        JSON.parse(code);
-        return errors;
-      } catch (e) {
-        if (/^\s*[\{\[]/.test(code)) return errors;
-      }
-    }
-
-    var lines = codeOnlyLines(code, langKey);
-    var body = lines.join('\n');
-
-    /* ۱) بررسی کلی: بدنه کد باید نشانه‌های واقعی کدنویسی داشته باشد */
-    var kw = Syntax.keywordCount(body, langKey);
-    var ops = (body.match(/[=+\-*/%<>!&|^~.:;,?()[\]{}@#$]/g) || []).length;
-    var idents = (body.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).length;
-    var numbers = (body.match(/\d/g) || []).length;
-    var callLike = /[\w$.)\]]\s*\(/.test(body);
-    var meaningful = kw >= 1 || (ops >= 2 && idents >= 1) || (ops >= 1 && numbers >= 1) || (callLike && idents >= 1);
-
-    if (body.replace(/\s/g, '') === '') {
-      errors.push({
-        line: 1, column: 1, severity: 'warning',
-        message: 'کد قابل بررسی پیدا نشد (فقط کامنت یا خط خالی است)',
-        hint: 'چند خط کد واقعی بنویس تا بررسی شود'
-      });
-      return errors;
-    }
-
-    if (!meaningful) {
-      errors.push({
-        line: 1, column: 1, severity: 'error',
-        message: 'این متن شبیه کد ' + (Syntax.LANGS[langKey] ? Syntax.LANGS[langKey].label : '') + ' نیست',
-        hint: 'به نظر می‌رسد متن عادی تایپ شده؛ کد واقعی به همین زبان وارد کن تا بررسی شود'
-      });
-      return errors;
-    }
-
-    /* ۲) خط‌به‌خط: فقط اگر بخش اعظم فایل متن عادی بدون ساختار کد باشد */
-    var nonEmpty = [];
-    var proseLines = [];
-    for (var i = 0; i < lines.length; i++) {
-      var ln = lines[i];
-      if (!ln.trim()) continue;
-      nonEmpty.push(i + 1);
-      var count = 0, m;
-      var g = new RegExp(NON_ASCII_LETTERS.source, 'g');
-      while ((m = g.exec(ln)) !== null) { count++; if (count >= 2) break; }
-      if (count >= 2 && !STRUCTURE_RX.test(ln)) proseLines.push(i + 1);
-    }
-    var isPredominantlyProse = nonEmpty.length > 0 && (proseLines.length / nonEmpty.length > 0.6) && kw === 0;
-    if (isPredominantlyProse && proseLines.length) {
-      var shown = Math.min(proseLines.length, 5);
-      for (var p = 0; p < shown; p++) {
-        errors.push({
-          line: proseLines[p], column: 1, severity: 'error',
-          message: 'خط ' + fa(proseLines[p]) + ' کد نیست — متن عادی نوشته شده',
-          hint: 'این خط باید کد واقعی باشد یا اگر توضیح است، اول آن علامت کامنت زبان بگذار'
-        });
-      }
-      if (proseLines.length > shown) {
-        errors.push({
-          line: proseLines[shown], column: 1, severity: 'error',
-          message: 'و ' + fa(proseLines.length - shown) + ' خط دیگر هم متن عادی است',
-          hint: 'کل متن را به کد واقعی تبدیل کن'
-        });
-      }
+    // This is an input hint, never a syntax validator. Unicode identifiers, HTML,
+    // heredocs and standalone expressions are valid language constructs.
+    if (code && code.trim() && !STRUCTURE_RX.test(code) && /\s/.test(code.trim()) && NON_ASCII_LETTERS.test(code)) {
+      return [{ line: 1, column: 1, severity: 'warning', message: 'نوع ورودی مشخص نیست؛ زبان یا فایل اصلی را انتخاب کن', hint: 'این حدس خطای قطعی کد نیست' }];
     }
     return errors;
   }
 
-
-  /* ═══════════ استخراج «فقط کد» از متن خام چسبانده‌شده ═══════════
-     متن کپی‌شده از شبکه‌های اجتماعی/وبلاگ/پیام‌رسان معمولاً با متن عادی قاطی
-     است (کپشن، هشتگ، جملهٔ فارسی، «مشاهده بیشتر»، شمارهٔ خط ادیتور). این بخش
-     هرچه کد نیست را تشخیص می‌دهد و کنار می‌گذارد تا موتور تحلیل گول متن نخورد:
-       ۱) اگر بلاک مارک‌داون ``` وجود دارد، فقط محتوای فنس‌ها کد است.
-       ۲) شماره‌گذاری خط ادیتور (۱۲: / ۱۲) / ۱۲|) اگر همه‌گیر باشد برمی‌دارد.
-       ۳) خط‌به‌خط: جمله‌های غیرکد حذف می‌شوند؛ ولی خطی که ادامهٔ رشته یا
-          کامنت چندخطی است (متن فارسی داخل """ پایتون یا ` جاوااسکریپت)
-          هرگز حذف نمی‌شود. */
   var FENCE_RX = /^[ \t]*(?:```|~~~)[ \t]*([A-Za-z0-9+#._-]*)[ \t]*$/;
   var GUTTER_RX = /^[ \t]*\d{1,4}[.)|\]:](?![ \t]*\d)[ \t]?/;
   /* نشانه‌های ساختار کد؛ نقطه/کاما عمداً نیستند چون در جملهٔ عادی هم می‌آیند */
@@ -780,7 +748,7 @@ window.Checker = (function () {
       var det = Syntax.detect(text);
       if (det !== 'text') conf = det;
     }
-    var skipProseFilter = conf === 'html'; // html و text: متنِ داخل فایل جزء ساختار است
+    var skipProseFilter = conf === 'html' || conf === 'php'; // PHP may include HTML, heredoc/nowdoc and literal text.
     var lines = text.split('\n');
     var states = null;
     if (!skipProseFilter && conf) {

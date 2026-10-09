@@ -25,7 +25,7 @@ const assert = require('node:assert/strict');
       await page.evaluate(() => window.WorkspaceStore ? window.WorkspaceStore.ready.then(() => true) : true);
       await page.waitForTimeout(600);
       if (scenario === 'native-error') {
-        await page.evaluate(() => { Checker.staticCheck = () => [{ line: 1, column: 1, severity: 'error', message: 'Test error' }]; });
+        await page.evaluate(() => { ReviewEngine.local = () => ({warnings:[],partial:false,security:{verdict:'clean',score:0,findings:[]},errors: [{ line: 1, column: 1, severity: 'error', message: 'Test error' }]}); });
       }
       if (scenario === 'native-exception') {
         await page.evaluate(() => { Checker.localExplain = () => { throw new Error('Test analysis failure'); }; });
@@ -34,7 +34,7 @@ const assert = require('node:assert/strict');
       await page.locator('#btn-play').click();
       assert.equal(await page.evaluate(() => window.activityMessages.length), 0, 'No activity until analysis actually begins');
       await page.locator('#api-choice-offline').click();
-      await page.waitForFunction(() => document.querySelector('#btn-play').disabled);
+      await page.waitForFunction(() => window.activityMessages.length > 0 || !document.querySelector('#analysis-activity').hidden);
       if (native) {
         assert.equal(await page.locator('#analysis-activity').isVisible(), false, 'No simulated island in native');
         assert.equal(await page.evaluate(() => window.activityMessages[0].action), 'start');

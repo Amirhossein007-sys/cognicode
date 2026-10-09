@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v30-smart-fix';
+var CACHE = 'cognicode-v31-verified-edits';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -16,6 +16,9 @@ var PRECACHE = [
   './syntax.js',
   './checker.js',
   './malwatch.js',
+  './review-engine.js',
+  './vendor/acorn.js',
+  './vendor/php-parser.js',
   './sonar.js',
   './orbital-clock.js',
   './launch.js',

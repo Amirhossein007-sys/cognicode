@@ -114,7 +114,7 @@ window.WorkspaceFeatures = {
       const compact=$('problems-summary'); compact.replaceChildren();
       const compactTitle=title.cloneNode(true), compactInfo=info.cloneNode(true);compact.append(compactTitle,compactInfo);
     }
-    function setReview(value) { review=value; summary(value); if (value.proposed) proposal={base:value.code, proposed:value.proposed, patches:ChangeSet.build(value.code,value.proposed), reason:value.explanation}; }
+    function setReview(value) { review=value; summary(value); proposal=value.proposed ? {base:value.code, proposed:value.proposed, patches:ChangeSet.build(value.code,value.proposed), reason:value.explanation} : null; }
     function renderPatches() {
       if (!proposal || ta.value !== proposal.base) return;
       $('patch-list')?.remove(); $('apply-selected')?.remove();
