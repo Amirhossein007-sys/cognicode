@@ -3313,12 +3313,13 @@ try {
     cfgTestLine.textContent = 'در حال تست اتصال…';
     cfgTest.classList.add('busy');
     updateAiStatus('testing');
+    var connectionTestStartedAt = Date.now();
     try {
       await chat([{ role: 'user', content: 'سلام' }], 5);
       aiConnected = true;
       updateAiStatus();
       cfgTestLine.className = 'test-line ok';
-      cfgTestLine.textContent = '✓ اتصال برقرار است (' + ((Date.now() - t0) / 1000).toFixed(1) + ' ثانیه) — مدل پاسخ داد';
+      cfgTestLine.textContent = '✓ اتصال برقرار است (' + ((Date.now() - connectionTestStartedAt) / 1000).toFixed(1) + ' ثانیه) — مدل پاسخ داد';
       toast('اتصال به هوش مصنوعی با موفقیت برقرار شد ✓');
       haptic('success');
     } catch (e) {

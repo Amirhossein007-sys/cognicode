@@ -1,9 +1,9 @@
 {
   "version": "1.1.0",
-  "build": "17",
-  "revision": "2026.10.09.1",
+  "build": "18",
+  "revision": "2026.10.10.1",
   "webResources": {
-    "index.html": "96d136e70f733b877101de6fc31e5134a104079a372321bff4e18116caa897c4",
+    "index.html": "35fb6d1c4b7c471c34857e2c92428f41fe9e4ae5cbea2a63a146b5cc0ca0c5ae",
     "styles.css": "1c05fec56ab3cd32e1523e384a8edc536c6b0e02f2919fb2a0af5cff6cb2a3a4",
     "manifest.webmanifest": "789e3ff5cbdce7a029a028fa65d9fb74a1ffe965c925279a0618ea1ad6b08b2f",
     "apple-touch-icon.png": "e1442b772f91073bc00098d6ce64a4f94c3a8ffd2512eb04d919fe84cea050e0",
@@ -25,7 +25,7 @@
     "workspace-store.js": "b468f82ca9bbe07f9570f8d1166893cbe59f9d3564d9c073b0214e3662b15284",
     "change-set.js": "2df23b935f90620adf133b4c2f5297a616e372ff54219e31ed8ea53c7d4aaa5f",
     "workspace-features.js": "62aecb6ac515efbbbde36940aabc7afcd3aa09a08d1093ac106cb188ee890888",
-    "app.js": "67013e263a8b49d5519ced624bc50b2d664354baf09c4d28a51707dbcfdbbdcd",
+    "app.js": "2dadfa9f158c112e182aae17d34e2bfae36003e3bf23302c59dd1e77d885b781",
     "fonts/YekanBakh-Regular.ttf": "6c9b44758600ea587e9146e6de2bd74b63baa9e9aa7bc9ba63f611bc3580cb40",
     "fonts/YekanBakh-Bold.ttf": "cbd6e74612c9e82daee644f629f426ce34da24f8315cdbbe81948c2bd9a701a5",
     "icons/maskable-512.png": "bb741443c2a57948a8757269ad72839be3d3d6ef1d632e34834e1badd63c3b55"
