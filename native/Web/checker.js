@@ -27,7 +27,7 @@ window.Checker = (function () {
     dart:       { line: '//', block: ['/*', '*/'], quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     go:         { line: '//', block: ['/*', '*/'], quotes: ['"', "'", '`'], escape: true, multiline: ['`'], regex: true },
     rust:       { line: '//', block: ['/*', '*/'], quotes: ['"'], escape: true },
-    php:        CLIKE,
+    php:        { line: ['//', '#'], block: ['/*', '*/'], quotes: ['"', "'"], multiline: ['"', "'"], escape: true },
     ruby:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
     python:     { line: '#', block: null, quotes: ['"', "'"], escape: true, triple: ['"""', "'''"] },
     bash:       { line: '#', block: null, quotes: ['"', "'"], escape: true },
@@ -57,6 +57,18 @@ window.Checker = (function () {
 
   var PAIRS = { ')': '(', ']': '[', '}': '{' };
   var CLOSER = { '(': ')', '[': ']', '{': '}' };
+
+  function matchLineComment(conf, str, pos) {
+    if (!conf || !conf.line) return 0;
+    if (Array.isArray(conf.line)) {
+      for (var k = 0; k < conf.line.length; k++) {
+        var p = conf.line[k];
+        if (str.startsWith(p, pos)) return p.length;
+      }
+      return 0;
+    }
+    return str.startsWith(conf.line, pos) ? conf.line.length : 0;
+  }
 
   /* ── هلپرهای رجکس-لیترال (js/ts/go) و ترنسپوز متلب ──
      تشخیص تقسیم یا شروع رجکس با «کاراکثر معنادار قبلی»: بعد از شناسه/عدد/براکت
@@ -167,8 +179,9 @@ window.Checker = (function () {
       }
 
       if (state === 'code') {
-        if (conf.line && code.startsWith(conf.line, i)) {
-          state = 'lcom'; i += conf.line.length; col += conf.line.length; continue;
+        var lcomLen = matchLineComment(conf, code, i);
+        if (lcomLen > 0) {
+          state = 'lcom'; i += lcomLen; col += lcomLen; continue;
         }
         if (conf.block && code.startsWith(conf.block[0], i)) {
           state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; sLine = line; sCol = col;
@@ -228,6 +241,7 @@ window.Checker = (function () {
             if (bcomDepth <= 0) { state = 'code'; bcomDepth = 0; }
           } else {
             state = 'code';
+            bcomDepth = 0;
           }
           i += blockEnd.length; col += blockEnd.length;
         } else {
@@ -286,7 +300,8 @@ window.Checker = (function () {
         out.push(buf); buf = ''; i++; continue;
       }
       if (state === 'code') {
-        if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
+        var lcomLen = matchLineComment(conf, code, i);
+        if (lcomLen > 0) { state = 'lcom'; i += lcomLen; continue; }
         if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
@@ -323,6 +338,7 @@ window.Checker = (function () {
             if (bcomDepth <= 0) { state = 'code'; bcomDepth = 0; }
           } else {
             state = 'code';
+            bcomDepth = 0;
           }
           i += blockEnd.length;
         } else {
@@ -354,7 +370,7 @@ window.Checker = (function () {
   var LINT = [
     { rx: /while\s*\(\s*(?:true|1)\s*\)|while\s+True\b/, msg: 'حلقهٔ بی‌نهایت بالقوه', hint: 'شرط خروج باید داخل بدنهٔ حلقه برقرار شود' },
     { rx: /\beval\s*\(|\bexec\s*\(/, msg: 'استفاده از eval/exec ریسک امنیتی دارد', hint: 'ورودی کاربر را هرگز مستقیم به eval نده' },
-    { rx: /http:\/\/(?!localhost|127\.0\.0\.1)/, msg: 'اتصال ناامن HTTP به‌جای HTTPS', hint: '' },
+    { rx: /http:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0|www\.w3\.org|w3\.org|schemas\.|xmlns\.|schema\.org|example\.com)/, msg: 'اتصال ناامن HTTP به‌جای HTTPS', hint: 'برای ارتباطات شبکه از پروتکل امن HTTPS استفاده کن' },
     { rx: /(?:password|passwd|secret|api[_-]?key|apikey|token)\s*[:=]\s*["'][^"']{4,}["']/i, msg: 'احتمال قرارگرفتن کلید یا رمز به‌صورت مستقیم در کد', hint: 'مقادیر حساس را از متغیر محیطی یا فایل تنظیمات بخوان' },
     { rx: /catch\s*\([^)]*\)\s*\{\s*\}|except\s*:\s*(?:pass\s*)?(?:#.*)?$/, msg: 'خطاها بی‌صدا نادیده گرفته می‌شوند (catch/except خالی)', hint: 'لااقل خطا را ثبت (log) کن' },
     /* todo:true → فقط این قاعده روی خطوط خام اجرا می‌شود چون TODO ذاتاً داخل کامنت زندگی می‌کند */
@@ -373,6 +389,7 @@ window.Checker = (function () {
       for (var j = 0; j < LINT.length; j++) {
         var target = LINT[j].todo ? rawLines[i] : lines[i];
         if (target && LINT[j].rx.test(target)) {
+          if (j === 2 && /(?:xmlns|Plugin URI|Author URI|@link|@see)/i.test(rawLines[i])) continue;
           var key = (i + 1) + LINT[j].msg;
           if (seen[key]) continue;
           seen[key] = true;
@@ -401,7 +418,8 @@ window.Checker = (function () {
         line++; i++; continue;
       }
       if (state === 'code') {
-        if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
+        var lcomLen = matchLineComment(conf, code, i);
+        if (lcomLen > 0) { state = 'lcom'; i += lcomLen; continue; }
         if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);
@@ -469,17 +487,46 @@ window.Checker = (function () {
     var lines = codeOnlyLines(code, langKey);
     var body = lines.join('\n');
 
-    /* ۱) خط‌به‌خط: جمله‌های غیرانگلیسیِ بدون هیچ ساختار کد = متن، نه کد */
+    /* ۱) بررسی کلی: بدنه کد باید نشانه‌های واقعی کدنویسی داشته باشد */
+    var kw = Syntax.keywordCount(body, langKey);
+    var ops = (body.match(/[=+\-*/%<>!&|^~.:;,?()[\]{}@#$]/g) || []).length;
+    var idents = (body.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).length;
+    var numbers = (body.match(/\d/g) || []).length;
+    var callLike = /[\w$.)\]]\s*\(/.test(body);
+    var meaningful = kw >= 1 || (ops >= 2 && idents >= 1) || (ops >= 1 && numbers >= 1) || (callLike && idents >= 1);
+
+    if (body.replace(/\s/g, '') === '') {
+      errors.push({
+        line: 1, column: 1, severity: 'warning',
+        message: 'کد قابل بررسی پیدا نشد (فقط کامنت یا خط خالی است)',
+        hint: 'چند خط کد واقعی بنویس تا بررسی شود'
+      });
+      return errors;
+    }
+
+    if (!meaningful) {
+      errors.push({
+        line: 1, column: 1, severity: 'error',
+        message: 'این متن شبیه کد ' + (Syntax.LANGS[langKey] ? Syntax.LANGS[langKey].label : '') + ' نیست',
+        hint: 'به نظر می‌رسد متن عادی تایپ شده؛ کد واقعی به همین زبان وارد کن تا بررسی شود'
+      });
+      return errors;
+    }
+
+    /* ۲) خط‌به‌خط: فقط اگر بخش اعظم فایل متن عادی بدون ساختار کد باشد */
+    var nonEmpty = [];
     var proseLines = [];
     for (var i = 0; i < lines.length; i++) {
       var ln = lines[i];
       if (!ln.trim()) continue;
+      nonEmpty.push(i + 1);
       var count = 0, m;
       var g = new RegExp(NON_ASCII_LETTERS.source, 'g');
       while ((m = g.exec(ln)) !== null) { count++; if (count >= 2) break; }
       if (count >= 2 && !STRUCTURE_RX.test(ln)) proseLines.push(i + 1);
     }
-    if (proseLines.length) {
+    var isPredominantlyProse = nonEmpty.length > 0 && (proseLines.length / nonEmpty.length > 0.6) && kw === 0;
+    if (isPredominantlyProse && proseLines.length) {
       var shown = Math.min(proseLines.length, 5);
       for (var p = 0; p < shown; p++) {
         errors.push({
@@ -495,29 +542,6 @@ window.Checker = (function () {
           hint: 'کل متن را به کد واقعی تبدیل کن'
         });
       }
-      return errors;
-    }
-
-    /* ۲) بررسی کلی: بدنه کد باید نشانه‌های واقعی کدنویسی داشته باشد */
-    var kw = Syntax.keywordCount(body, langKey);
-    var ops = (body.match(/[=+\-*/%<>!&|^~.:;,?()[\]{}@#$]/g) || []).length;
-    var idents = (body.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).length;
-    var numbers = (body.match(/\d/g) || []).length;
-    var callLike = /[\w$.)\]]\s*\(/.test(body);
-    var meaningful = kw >= 1 || (ops >= 2 && idents >= 1) || (ops >= 1 && numbers >= 1) || (callLike && idents >= 1);
-
-    if (body.replace(/\s/g, '') === '') {
-      errors.push({
-        line: 1, column: 1, severity: 'warning',
-        message: 'کد قابل بررسی پیدا نشد (فقط کامنت یا خط خالی است)',
-        hint: 'چند خط کد واقعی بنویس تا بررسی شود'
-      });
-    } else if (!meaningful) {
-      errors.push({
-        line: 1, column: 1, severity: 'error',
-        message: 'این متن شبیه کد ' + (Syntax.LANGS[langKey] ? Syntax.LANGS[langKey].label : '') + ' نیست',
-        hint: 'به نظر می‌رسد متن عادی تایپ شده؛ کد واقعی به همین زبان وارد کن تا بررسی شود'
-      });
     }
     return errors;
   }
@@ -541,7 +565,12 @@ window.Checker = (function () {
     var t = String(line).replace(/^\s+/, '');
     if (!t) return false;
     if (conf) {
-      if (conf.line && t.indexOf(conf.line) === 0) return true;
+      if (conf.line) {
+        var lines = Array.isArray(conf.line) ? conf.line : [conf.line];
+        for (var k = 0; k < lines.length; k++) {
+          if (t.indexOf(lines[k]) === 0) return true;
+        }
+      }
       if (conf.block && t.indexOf(conf.block[0]) === 0) return true;
       return false;
     }
@@ -654,7 +683,8 @@ window.Checker = (function () {
         out.push(state); i++; continue;
       }
       if (state === 'code') {
-        if (conf.line && code.startsWith(conf.line, i)) { state = 'lcom'; i += conf.line.length; continue; }
+        var lcomLen = matchLineComment(conf, code, i);
+        if (lcomLen > 0) { state = 'lcom'; i += lcomLen; continue; }
         if (conf.block && code.startsWith(conf.block[0], i)) { state = 'bcom'; bcomDepth = 1; blockEnd = conf.block[1]; i += conf.block[0].length; continue; }
         if (conf.regex && ch === '/' && regexLiteralStart(code, i)) {
           var reEnd = regexLiteralEnd(code, i);

@@ -260,8 +260,8 @@ struct WebViewContainer: UIViewRepresentable {
             self.webView = wv
 
             let sessionConfig = URLSessionConfiguration.ephemeral
-            sessionConfig.timeoutIntervalForRequest = 90
-            sessionConfig.timeoutIntervalForResource = 90
+            sessionConfig.timeoutIntervalForRequest = 120
+            sessionConfig.timeoutIntervalForResource = 120
             self.secureSession = URLSession(configuration: sessionConfig, delegate: SecureSessionDelegate(), delegateQueue: nil)
 
             super.init()
@@ -452,7 +452,7 @@ struct WebViewContainer: UIViewRepresentable {
             if !key.isEmpty {
                 request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
             }
-            request.timeoutInterval = 90
+            request.timeoutInterval = 120
             let task = secureSession.dataTask(with: request) { [weak self] data, response, error in
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let text: String

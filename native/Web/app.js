@@ -495,7 +495,11 @@ try {
     if (workspace) workspace.onEdit();
     if (reviewedBrainCode !== null && code !== reviewedBrainCode) setBrainState('idle');
     stLines.textContent = fa(countLines(code)) + ' خط';
-    clearErrors();
+    if (!code.trim()) {
+      clearErrors(false);
+    } else {
+      applyErrorPositions();
+    }
     updateCaretLine();
     clearTimeout(hlTimer);
     // detect() روی هر کلید سنگین است (۳۴ رجکس روی کل متن) — داخل همان دیبانس
@@ -1477,11 +1481,11 @@ try {
     });
   }
 
-  function clearErrors() {
+  function clearErrors(keepPanel) {
     currentErrors = [];
     applyErrorPositions();
     stErr.hidden = true;
-    hideProblems();
+    if (!keepPanel) hideProblems();
   }
 
   /* ── مقایسه سطری هوشمند کد (Split Diff Engine) ── */
@@ -1597,9 +1601,7 @@ try {
      می‌کند؛ با لمس هر مشکل، پنل موقتاً جمع می‌شود (فقط نوار عنوان می‌ماند) تا
      ادیتور جا باز کند و خطِ ایراد با فلش دیده شود. لمس دوبارهٔ نوار عنوان، فهرست
      را برمی‌گرداند و بستن با شِورون مثل قبل کامل می‌بندد. */
-  var peekHintShown = false;
   function jumpToProblem(er) {
-    if (problems && !problems.hidden) problems.classList.add('peek');
     var lines = ta.value.split('\n');
     var li = Math.min(Math.max(er.line || 1, 1), lines.length) - 1;
     var idx = 0;
@@ -1607,10 +1609,6 @@ try {
     idx += Math.min(Math.max((er.column || 1), 1) - 1, (lines[li] || '').length);
     try { ta.setSelectionRange(idx, idx); } catch (eC) {}
     requestAnimationFrame(function () { jumpToLine(er.line); });
-    if (!peekHintShown) {
-      peekHintShown = true;
-      toast('برای دیدن فهرست مشکلات، نوار «مشکلات» پایین ادیتور را لمس کن', 4600);
-    }
   }
 
   function hideProblems() {
@@ -1620,12 +1618,12 @@ try {
     if (diffViewerWrap) diffViewerWrap.hidden = true;
   }
   $('problems-close').addEventListener('click', function (e) { e.stopPropagation(); haptic('light'); hideProblems(); });
-  /* لمس نوار عنوان در حالت جمع‌شده = بازگشت فهرست مشکلات */
+  /* لمس نوار عنوان = باز/بسته کردن وضعیت جمع‌شده (Peek) */
   var problemsHead = problems.querySelector('header');
   if (problemsHead) problemsHead.addEventListener('click', function (e) {
-    if (e.target.closest('.p-close') || !problems.classList.contains('peek')) return;
+    if (e.target.closest('.p-close')) return;
     haptic('light');
-    problems.classList.remove('peek');
+    problems.classList.toggle('peek');
   });
 
   if (btnDiffToggle && diffViewerWrap) {
@@ -1691,6 +1689,14 @@ try {
       var clip = clipForAI(code);
       if (clip.truncated) { toast('فایل برای اصلاح کامل بزرگ است؛ بخش کمتر از ۴۸۰۰۰ نویسه را جداگانه اصلاح کن', 5200); return; }
       var fixable = currentErrors.filter(function (x) { return x.severity !== 'warning' && x.source !== 'malwatch'; });
+      if (currentErrors.length === 0) {
+        toast('✨ کد شما کاملاً سالم و بدون خطا است و نیازی به اصلاح ندارد', 4500);
+        return;
+      }
+      if (fixable.length === 0) {
+        toast('✨ خطای ساختاری یا عملکردی در کد وجود ندارد؛ موارد موجود صرفاً هشدار هستند', 4500);
+        return;
+      }
       smartFixRunning = true;
       btnSmartFix.disabled = true;
       if (smartFixLabel) smartFixLabel.textContent = 'در حال اصلاح…';
@@ -2093,9 +2099,9 @@ try {
           delete nativePending[id];
           if (op) op.nativeIds.delete(id);
           if (window.webkit.messageHandlers.aiCancelBridge) window.webkit.messageHandlers.aiCancelBridge.postMessage({ id: id });
-          reject(new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۹۰ ثانیه‌ای)'));
+          reject(new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۱۲۰ ثانیه‌ای)'));
         }
-      }, 90000);
+      }, 120000);
       nativePending[id] = { resolve: resolve, reject: reject, timer: timer, operation: op };
       if (op) op.nativeIds.add(id);
       window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson });
@@ -2163,7 +2169,7 @@ try {
       var res;
       var controller = new AbortController();
       if (op) op.controllers.add(controller);
-      var requestTimeout = setTimeout(function () { controller.abort(); }, 90000);
+      var requestTimeout = setTimeout(function () { controller.abort(); }, 120000);
       try {
         res = await fetch(url, {
           method: 'POST',
@@ -2177,7 +2183,7 @@ try {
         checkOperation(op);
         // دلیل واقعی شکست حفظ شود: تایم‌اوت با خطای شبکهٔ عمومی یکسان نیست
         throw (e && e.name === 'AbortError')
-          ? new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۹۰ ثانیه‌ای)')
+          ? new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۱۲۰ ثانیه‌ای)')
           : netErr();
       }
       finally { clearTimeout(requestTimeout); if (op) op.controllers.delete(controller); }
@@ -2263,14 +2269,14 @@ try {
     }).join('\n');
     var prompt = 'زبان کد: ' + Syntax.LANGS[langKey].label + '\n';
     if (errLines) prompt += '\nایرادهایی که باید برطرف شوند:\n' + errLines + '\n';
-    if (optimize) prompt += '\nعلاوه بر رفع ایرادها، بهبود بی‌خطر و بدون تغییر رفتار هم مجاز است: خوانایی، نام‌گذاری واضح و حذف کد تکراری — به شرط آنکه ورودی، خروجی و رفتار کد دقیقاً همان بماند.\n';
+    if (optimize) prompt += '\nفقط ایرادهای مشخص‌شده را برطرف کن و بخش‌های سالم کد را تغییر نده تا اصالت و رفتار کد حفظ شود و سرعت پردازش حداکثر باشد.\n';
     prompt += '\nکد:\n' + clip.text;
     // بودجهٔ خروجی از حجم خود کد تخمین زده می‌شود (کد تقریباً ۳ کاراکتر بر توکن)
     var budget = Math.min(16000, Math.max(1500, Math.ceil(clip.text.length / 3) + 600));
     var r = await chat([
       { role: 'system', content: FIX_SYSTEM_PROMPT },
       { role: 'user', content: prompt }
-    ], budget);
+    ], budget, 0.1);
     if (r.finishReason === 'length') {
       var e1 = new Error('fix-truncated'); e1.fixTruncated = true; throw e1;
     }
@@ -2599,8 +2605,8 @@ try {
        کد درست» بود. */
     var fixable = all.filter(function (x) { return x.severity !== 'warning' && x.source !== 'malwatch'; });
     var fixCode = null;
-    // F29: If valid === false, or fixable.length > 0, request AI fix
-    var shouldFix = useAI && ai && !ai.raw && !ai.incomplete && (fixable.length > 0 || (ai.valid === false && (fixExp || adv || (ai.errors && ai.errors.length))));
+    // F29: If valid === false, or fixable.length > 0, request AI fix (for large files, defer to explicit smart fix button to keep analysis fast)
+    var shouldFix = useAI && ai && !ai.raw && !ai.incomplete && code.length <= 15000 && (fixable.length > 0 || (ai.valid === false && (fixExp || adv || (ai.errors && ai.errors.length))));
     if (shouldFix) {
       setLoadingText('در حال اصلاح کد با هوش مصنوعی…');
       setOperationStage('در حال ساخت اصلاح پیشنهادی…');
