@@ -142,8 +142,11 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   z-index: 1;
   display: flex;
   flex-direction: column;
-  max-width: 560px;
+  width: 100%;
+  max-width: min(100%, 640px);
   margin-inline: auto;
+  padding-left: max(var(--sal, 0px), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--sar, 0px), env(safe-area-inset-right, 0px));
   overflow: hidden;
 }
 @supports (height: 100dvh) {
@@ -154,7 +157,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px 8px;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  padding-top: calc(max(var(--sat, 0px), env(safe-area-inset-top, 0px)) + 8px);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -526,7 +529,7 @@ html[data-theme="light"] .zoom-hud {
 /* ═══ نوار پایین (کارت مستقل Play + وضعیت) ═══ */
 .bottom {
   margin: 6px 12px 0;
-  margin-bottom: max(8px, env(safe-area-inset-bottom));
+  margin-bottom: max(8px, max(var(--sab, 0px), env(safe-area-inset-bottom, 0px)));
   background: var(--bar-bg);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -671,7 +674,7 @@ html[data-theme="light"] .zoom-hud {
 .p-tools-note { font-size: 11px; color: var(--txt3); line-height: 1.6; }
 .btn-magic-fix:disabled { opacity: 0.55; filter: saturate(0.5); }
 /* حالت «نگاه سریع»: پنل جمع می‌شود تا ادیتور جا باز کند؛ لمس نوار عنوان برمی‌گرداند */
-.problems.peek { max-height: none; }
+.problems.peek { display: none; }
 .problems.peek .problems-scroll, .problems.peek .p-tools { display: none; }
 .problems.peek > header { cursor: pointer; }
 .problems-scroll {
@@ -688,6 +691,12 @@ html[data-theme="light"] .zoom-hud {
   overflow: visible;
   padding-bottom: 4px;
 }
+.p-item.resolved { border-color: rgba(48,209,88,.3); }
+.p-item.resolved .sev, .p-item.resolved .p-state { color: var(--green, #30d158); }
+.p-item.pending .p-state { color: var(--txt3); }
+.p-state { display: block; font-weight: 700; font-size: 12px; }
+#key-problems { flex-shrink: 0; }
+#key-problems[aria-expanded="true"] { border-color: #38bdf8; color: #38bdf8; }
 .advice {
   margin: 10px 12px 4px; padding: 11px 13px;
   border-radius: 13px;
@@ -1924,3 +1933,92 @@ html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; bo
 @media (prefers-reduced-motion: reduce) {
   .brain-marquee-track { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   بهینه‌سازی اختصاصی سرعت، روانی و ریسپانسیو اندروید (Android One / LineageOS)
+   ══════════════════════════════════════════════════════════════════ */
+html.android {
+  --radius: 18px;
+}
+html.android body {
+  touch-action: pan-x pan-y;
+}
+html.android #app {
+  width: 100%;
+  max-width: 100%;
+}
+@media (min-width: 600px) {
+  html.android #app {
+    max-width: 680px;
+    margin-inline: auto;
+  }
+}
+
+/* شتاب‌دهی سخت‌افزاری و حذف گلوگاه‌های بلور سنگین در کرومیوم اندروید */
+html.android .icon-btn,
+html.android .editor,
+html.android .zoom-hud,
+html.android .keys,
+html.android .bottom,
+html.android .sheet,
+html.android .analysis-overlay,
+html.android .pipboy-clock .pipboy-chassis {
+  -webkit-backdrop-filter: blur(5px) !important;
+  backdrop-filter: blur(5px) !important;
+}
+html.android .editor {
+  background: rgba(15, 23, 42, 0.94) !important;
+  transform: translateZ(0);
+  contain: content;
+}
+html.android .topbar,
+html.android .keys,
+html.android .bottom {
+  transform: translateZ(0);
+}
+html.android .play {
+  will-change: transform;
+}
+
+/* تشخیص و هماهنگی خودکار با اندازه صفحه انواع گوشی‌های اندروید */
+html.screen-compact .topbar {
+  padding-inline: 8px;
+}
+html.screen-compact .brand-txt b {
+  font-size: 14px;
+}
+html.screen-compact .brand-txt span {
+  font-size: 9.5px;
+}
+html.screen-compact .icon-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+html.screen-compact .pipboy-clock {
+  max-width: 100%;
+}
+html.screen-compact .pipboy-clock .pip-time {
+  font-size: 22px;
+  line-height: 28px;
+}
+html.screen-compact .pipboy-clock .pip-date {
+  font-size: 11px;
+}
+html.screen-compact .editor-shell {
+  padding: 0 8px;
+}
+html.screen-compact .keys {
+  margin: 3px 8px 0;
+  padding: 4px;
+}
+html.screen-compact .bottom {
+  margin: 4px 8px 0;
+  margin-bottom: max(6px, max(var(--sab, 0px), env(safe-area-inset-bottom, 0px)));
+}
+html.screen-compact .play {
+  height: 44px;
+  font-size: 15px;
+}
+
+/* Keep the results toolbar at the same safe-area position as the keyboard opens. */

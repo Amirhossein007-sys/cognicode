@@ -4,9 +4,11 @@ window.ReviewEngine = (function () {
   var cached = null, phpParser = null;
   var extensions = { php: 'php', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', htm: 'html', html: 'html', css: 'css', json: 'json', swift: 'swift', sh: 'bash', sql: 'sql' };
   function sections(code, language) {
-    if (code.indexOf('/* ═══ درخت فایل‌های پروژه ═══ */') < 0) return [{ code: code, language: language, start: 0, line: 1, complete: true, path: '' }];
+    var single = [{ code: code, language: language, start: 0, line: 1, complete: true, path: '' }];
+    if (!/^\/\* ═══ درخت فایل‌های پروژه ═══ \*\/$/m.test(code)) return single;
     var rx = /^\/\* ─── فایل: (.+) \((\d+) سطر\) ─── \*\/\n/gm, found = [], m;
     while ((m = rx.exec(code))) found.push({ path: m[1], expected: +m[2], header: m.index, start: rx.lastIndex });
+    if (!found.length) return single;
     return found.map(function (file, i) {
       var end = i + 1 < found.length ? found[i + 1].header : code.length;
       var text = code.slice(file.start, end).replace(/\n+$/, '');
@@ -32,17 +34,28 @@ window.ReviewEngine = (function () {
       if (mal.verdict === 'malicious' || (mal.verdict === 'suspicious' && verdict === 'clean')) verdict = mal.verdict;
     });
     var result = { errors: errors, warnings: warnings, security: { findings: findings, evidence: evidence, score: Math.min(100, score), verdict: verdict },
+      syntaxComplete: files.every(function (f) { return f.complete && (f.language === 'javascript' && !!window.acorn || f.language === 'typescript' && !!window.BabelParser || f.language === 'php' && !!window.PhpParser || f.language === 'json'); }),
       partial: files.some(function (f) { return !f.complete; }) || code.indexOf('پوشش جزئی') >= 0, files: files };
     cached = { code: code, language: language, result: result };
     return result;
   }
   function syntaxErrors(file) {
     var failure = null;
-    if (file.language === 'javascript' && window.acorn && !/<(?:[A-Za-z][\w.-]*|>)/.test(Checker.codeOnlyLines(file.code, 'javascript').join('\n'))) {
+    if (file.language === 'javascript' && window.acorn) {
       try { window.acorn.parse(file.code, { ecmaVersion: 'latest', sourceType: 'module', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, locations: true }); return []; }
       catch (moduleError) {
         try { window.acorn.parse(file.code, { ecmaVersion: 'latest', sourceType: 'script', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, locations: true }); return []; }
         catch (_) { failure = moduleError; }
+      }
+    }
+    // Parse JSX as grammar, never guess it from '<name' (which also matches a<b).
+    if ((file.language === 'typescript' || (file.language === 'javascript' && failure)) && window.BabelParser) {
+      var plugins = file.language === 'typescript' ? ['typescript', 'decorators-legacy'] : [];
+      var options = { sourceType: 'unambiguous', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, attachComment: false, plugins: plugins };
+      try { window.BabelParser.parse(file.code, options); return []; }
+      catch (plainError) {
+        try { window.BabelParser.parse(file.code, Object.assign({}, options, { plugins: plugins.concat(['jsx']) })); return []; }
+        catch (jsxError) { failure = /(?:=\s*|return\s*|\(\s*)<[A-Za-z>]/.test(file.code) ? jsxError : plainError; }
       }
     } else if (file.language === 'php' && window.PhpParser) {
       if (!phpParser) phpParser = new window.PhpParser({ parser: { suppressErrors: false, version: '8.4' } });
@@ -51,6 +64,14 @@ window.ReviewEngine = (function () {
         else phpParser.parseEval(file.code);
         return [];
       } catch (phpError) { failure = phpError; }
+    } else if (file.language === 'json') {
+      try { JSON.parse(file.code); return []; }
+      catch (jsonError) {
+        var position = /position (\d+)/.exec(jsonError.message), line = /line (\d+) column (\d+)/.exec(jsonError.message);
+        var prefix = file.code.slice(0, position ? +position[1] : file.code.length).split('\n');
+        jsonError.loc = { line: line ? +line[1] : prefix.length, column: line ? +line[2] - 1 : prefix[prefix.length - 1].length };
+        failure = jsonError;
+      }
     }
     if (failure) {
       // Parser failures have a concrete grammar location, unlike prose/style guesses.
@@ -101,5 +122,45 @@ window.ReviewEngine = (function () {
     local(result, language).errors.forEach(function (e) { var key = signature(e); if (e.source === 'parser' || !counts[key]) throw new Error('اصلاح پیشنهادی هنوز خطای نحو دارد؛ کد تغییر نکرد'); counts[key]--; });
     return result;
   }
-  return { local: local, sections: sections, confirmIssues: confirmIssues, dedupe: dedupe, applyEdits: applyEdits };
+  function aiChunks(code, language, limit) {
+    limit = limit || 16000;
+    var chunks = [];
+    sections(code, language).forEach(function (file) {
+      var lines = file.code.split('\n'), start = 0;
+      while (start < lines.length) {
+        var end = start, size = 0;
+        while (end < lines.length && (end === start || size + lines[end].length + 1 <= limit)) size += lines[end++].length + 1;
+        chunks.push({ text: lines.slice(start, end).join('\n'), line: file.line + start, language: file.language,
+          path: file.path, complete: file.complete && start === 0 && end === lines.length });
+        start = end;
+      }
+    });
+    return chunks;
+  }
+  // Keep an issue ledger across edits. A changed AI quote is awaiting review, not proof of a fix.
+  function reconcile(ledger, before, code, fresh, language) {
+    var oldLines = before.split('\n'), lines = code.split('\n'), prefix = 0, suffix = 0;
+    while (prefix < Math.min(oldLines.length, lines.length) && oldLines[prefix] === lines[prefix]) prefix++;
+    while (suffix < Math.min(oldLines.length, lines.length) - prefix && oldLines[oldLines.length - 1 - suffix] === lines[lines.length - 1 - suffix]) suffix++;
+    var remaining = fresh.slice(), result = [], files = sections(code, language);
+    function key(e) { return [e.source, e.file || '', e.message.replace(/\d+/g, '#')].join(':'); }
+    ledger.forEach(function (previous) {
+      var er = Object.assign({}, previous), oldLine = previous.line - 1;
+      er.line = Math.max(1, Math.min(lines.length, oldLine < prefix ? oldLine + 1 : oldLine >= oldLines.length - suffix ? oldLine + lines.length - oldLines.length + 1 : prefix + 1));
+      var match = remaining.findIndex(function (x) { return key(x) === key(er) && Math.abs(x.line - er.line) <= 3; });
+      if (match >= 0) { er = Object.assign({}, remaining.splice(match, 1)[0], { state: 'open' }); }
+      else if (er.source === 'ai') {
+        var quoteLine = er.quote ? lines.findIndex(function (line) { return line.indexOf(er.quote) >= 0; }) : -1;
+        er.state = quoteLine >= 0 ? 'open' : 'pending';
+        if (quoteLine >= 0) er.line = quoteLine + 1;
+      } else {
+        var file = files.find(function (f) { return f.path === (er.file || ''); });
+        var parserBlocked = fresh.some(function (x) { return x.source === 'parser' && (x.file || '') === (er.file || ''); });
+        er.state = !file || !file.complete || (er.source === 'parser' && (parserBlocked || !/^(javascript|typescript|php|json)$/.test(file.language))) ? 'pending' : 'resolved';
+      }
+      result.push(er);
+    });
+    return result.concat(remaining.map(function (er) { return Object.assign({}, er, { state: 'open' }); }));
+  }
+  return { local: local, sections: sections, confirmIssues: confirmIssues, dedupe: dedupe, applyEdits: applyEdits, aiChunks: aiChunks, reconcile: reconcile };
 })();

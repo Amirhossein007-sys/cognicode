@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v32-api-connection';
+var CACHE = 'cognicode-v33-live-review';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -17,8 +17,11 @@ var PRECACHE = [
   './checker.js',
   './malwatch.js',
   './review-engine.js',
+  './review-service.js',
+  './review-worker.js',
   './vendor/acorn.js',
   './vendor/php-parser.js',
+  './vendor/babel-parser.js',
   './sonar.js',
   './orbital-clock.js',
   './launch.js',
@@ -36,7 +39,7 @@ var PRECACHE = [
 
 /* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
    هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
-var FRESH_NAMES = ['index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
+var FRESH_NAMES = ['index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'babel-parser.js', 'syntax.js', 'checker.js', 'malwatch.js', 'sonar.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
 
 function isFresh(url) {
   var name = url.pathname.split('/').pop();

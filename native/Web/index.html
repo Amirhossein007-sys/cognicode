@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+18">
+<meta name="cognicode-release" content="1.1.0+19">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -176,6 +176,7 @@
     <input type="file" id="gallery-input" accept="image/*" hidden>
 
     <div class="keys-scroll" id="keys-scroll">
+      <button class="key" id="key-problems" type="button" hidden aria-controls="problems" aria-expanded="false">☷ <span>نتایج <b id="review-tab-count">۰</b></span></button>
       <button class="key" id="key-focus" type="button" aria-label="حالت تمرکز" aria-pressed="false" title="کاهش حرکت پس‌زمینه و جمع‌وجور کردن ساعت">◎ <span>تمرکز</span></button>
       <button class="key" id="key-explain" type="button" aria-label="توضیح قسمت انتخاب‌شده" title="توضیح یا بررسی بخش انتخاب‌شده؛ بدون انتخاب، خط فعلی">✦ <span>توضیح کد</span></button>
       <!-- ابزارهای کلیپ‌بورد و فایل -->
@@ -484,7 +485,7 @@
       <p class="hint-line">پیش‌نویس جاری جدا از تاریخچه ذخیره می‌شود؛ پاک‌کردن ادیتور، پیش‌نویس خالی را جایگزین می‌کند. واگرد همچنان در جلسهٔ باز در دسترس است.</p>
       <div class="about">
         <b>کوگنی کد (CogniCode)</b>
-        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۱۸ · ۱۸ مهر ۱۴۰۵</p>
+        <p id="app-build" dir="rtl">نسخه ۱.۱.۰ · ساخت ۱۹ · ۱۸ مهر ۱۴۰۵</p>
         <p>تحلیل‌گر هوشمند کد، طراحی‌شده برای آیفون به سبک VS Code با پشتیبانی از ۳۴ زبان برنامه‌نویسی. این برنامه کد را اجرا نمی‌کند؛ فقط صحت آن را بررسی و رفتارش را توضیح می‌دهد.</p>
       </div>
     </div>
@@ -597,7 +598,9 @@
 <script src="malwatch.js"></script>
 <script src="vendor/acorn.js"></script>
 <script src="vendor/php-parser.js"></script>
+<script src="vendor/babel-parser.js"></script>
 <script src="review-engine.js"></script>
+<script src="review-service.js"></script>
 <script src="sonar.js"></script>
 <script src="orbital-clock.js"></script>
 <script src="workspace-store.js"></script>

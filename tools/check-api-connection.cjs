@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 (async()=>{
  for(const [name,engine] of [['Chromium',chromium],['WebKit',webkit]]){
   const browser=await engine.launch({headless:true,channel:engine===chromium?process.env.BROWSER_CHANNEL||undefined:undefined});
-  try{for(const native of [false,true]){
+  try{for(const mode of ['web','ios',...(require('node:fs').existsSync(path.resolve(root,'../cognicode-apk/app/src/main/assets/web/index.html'))?['android']:[])]){
    const page=await browser.newPage({viewport:{width:393,height:852},reducedMotion:'reduce'}),errors=[],calls=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.addInitScript(()=>{localStorage.clear();localStorage.setItem('cognicode.launch-seen.v1','1');});
@@ -16,11 +16,11 @@ const root=path.resolve(__dirname,'..');
     calls.push(body);await new Promise(resolve=>setTimeout(resolve,150));
     return {status,body:status===200?JSON.stringify({choices:[{message:{content:'سلام'},finish_reason:'stop'}]}):JSON.stringify({error:{message:'Invalid API key',code:'invalid_api_key'}})};
    };
-   if(native){
+   if(mode!=='web'){
     await page.exposeFunction('connectionFixture',respond);
-    await page.addInitScript(()=>{window.webkit={messageHandlers:{aiBridge:{postMessage:async message=>{const reply=await window.connectionFixture(JSON.parse(message.body));window.__nativeAI(message.id,reply.status===200,reply.status,reply.body);}}}};});
+    await page.addInitScript(android=>{const send=async message=>{const reply=await window.connectionFixture(JSON.parse(message.body));window.__nativeAI(message.id,reply.status===200,reply.status,reply.body);};if(android)window.AndroidBridge={aiBridge:s=>send(JSON.parse(s)),hapticBridge(){},credentialBridge(){},draftBridge(){}};else window.webkit={messageHandlers:{aiBridge:{postMessage:send}}};},mode==='android');
    }else await page.route('https://connection.invalid/**',async route=>{const reply=await respond(route.request().postDataJSON());await route.fulfill({status:reply.status,contentType:'application/json',body:reply.body});});
-   await page.goto(pathToFileURL(path.join(root,native?'native/Web/index.html':'index.html')).href);
+   await page.goto(pathToFileURL(mode==='android'?path.resolve(root,'../cognicode-apk/app/src/main/assets/web/index.html'):path.join(root,mode==='ios'?'native/Web/index.html':'index.html')).href);
    await page.locator('#launch-splash').waitFor({state:'hidden'});
    await page.locator('#btn-settings').click();
    await page.locator('#cfg-base').fill('https://connection.invalid/v1');
@@ -40,7 +40,7 @@ const root=path.resolve(__dirname,'..');
     }else{assert.equal(await page.locator('#cfg-test-line').evaluate(el=>el.classList.contains('fail')),true);assert.ok(text.startsWith('✕'),text);}
     assert.deepEqual(errors,[]);
    }
-   await page.close();console.log(`PASS ${name} ${native?'iOS bridge':'web'}: entered settings, success duration, auth failure, successful retry, busy state cleared`);
+   await page.close();console.log(`PASS ${name} ${mode}: entered settings, success duration, auth failure, successful retry, busy state cleared`);
   }}finally{await browser.close();}
  }
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -16,7 +16,10 @@ const assert = require('node:assert/strict');
       [393, 852, 'pwa-test'],
     ]) {
       const page = await browser.newPage({ viewport: { width, height } });
+      await page.addInitScript(() => { localStorage.clear(); localStorage.setItem('cognicode.launch-seen.v1', '1'); });
       await page.goto(pathToFileURL(path.resolve(__dirname, '../native/Web/index.html')).href);
+      await page.locator('#launch-splash').waitFor({ state: 'hidden' });
+      await page.evaluate(() => WorkspaceStore.ready);
       await page.evaluate(c => document.documentElement.classList.add(...c.split(' ')), classes);
       await page.evaluate(() => document.fonts.ready);
       // Let startup device detection finish before measuring keyboard changes.

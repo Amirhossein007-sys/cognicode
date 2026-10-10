@@ -9,6 +9,7 @@ const release = JSON.parse(read('release.json'));
 const index = read('index.html').toString();
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const resources = new Set(['index.html', 'styles.css', 'manifest.webmanifest', 'apple-touch-icon.png']);
+resources.add('review-worker.js');
 for (const match of index.matchAll(/(?:src|href)="([^"#]+)"/g)) {
   const name = match[1];
   if (!/^(?:https?:|data:|mailto:)/.test(name)) resources.add(name);

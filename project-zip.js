@@ -542,10 +542,11 @@
     out.push('');
 
     // Total character budget for dossier
-    var charBudget = 42000;
+    // Preserve complete files for the full-source parser; AI splits them separately.
+    var charBudget = 1000000;
     var numFiles = project.files.length;
     // Per-file cap when multiple files exist, ensuring all files get a slice of the budget
-    var maxPerFile = numFiles > 1 ? Math.max(4000, Math.floor((charBudget - 4000) / Math.min(numFiles, 10))) : charBudget;
+    var maxPerFile = charBudget;
     var usedChars = out.join('\n').length;
     var hasTruncation = false;
 
