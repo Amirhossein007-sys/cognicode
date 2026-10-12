@@ -253,7 +253,7 @@ struct WebViewContainer: UIViewRepresentable {
             wv.scrollView.keyboardDismissMode = .onDrag
 
             if #available(iOS 15.0, *) {
-                wv.underPageBackgroundColor = UIColor(red: 15.0/255.0, green: 23.0/255.0, blue: 42.0/255.0, alpha: 1)
+            wv.underPageBackgroundColor = UIColor(named: "LaunchBG") ?? .systemBackground
             }
 
             wv.allowsBackForwardNavigationGestures = false
@@ -297,8 +297,8 @@ struct WebViewContainer: UIViewRepresentable {
                     }
                 }
                 let bgColor = dark
-                    ? UIColor(red: 2.0/255.0, green: 6.0/255.0, blue: 4.0/255.0, alpha: 1)
-                    : UIColor(red: 243.0/255.0, green: 248.0/255.0, blue: 244.0/255.0, alpha: 1)
+                    ? UIColor(red: 8.0/255.0, green: 14.0/255.0, blue: 27.0/255.0, alpha: 1)
+                    : UIColor(red: 246.0/255.0, green: 248.0/255.0, blue: 252.0/255.0, alpha: 1)
                 self.webView.backgroundColor = bgColor
                 if #available(iOS 15.0, *) {
                     self.webView.underPageBackgroundColor = bgColor

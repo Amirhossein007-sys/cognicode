@@ -2141,7 +2141,7 @@ try {
       setTimeout(function () { root.classList.remove('theme-anim'); }, 200);
     }
     root.dataset.theme = dark ? 'dark' : 'light';
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#020604' : '#f3f8f4');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#080e1b' : '#f6f8fc');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
     // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
     // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
@@ -2152,7 +2152,7 @@ try {
     if (nativeAvailable() && window.webkit.messageHandlers.themeBridge) {
       window.webkit.messageHandlers.themeBridge.postMessage({ dark: dark });
     }
-    if (window.MatrixRain) window.MatrixRain.refresh();
+    if (window.DataRain) window.DataRain.refresh();
   }
   (function initTheme() {
     var saved = null;

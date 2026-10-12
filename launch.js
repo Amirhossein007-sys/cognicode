@@ -7,7 +7,7 @@
   try { savedTheme = localStorage.getItem('cognicode.theme'); } catch (_) {}
   var dark = savedTheme ? savedTheme !== 'light' : !matchMedia('(prefers-color-scheme: light)').matches;
   root.dataset.theme = dark ? 'dark' : 'light';
-  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#020604' : '#f3f8f4');
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#080e1b' : '#f6f8fc');
   var android = !!(window.AndroidBridge || /android/i.test(navigator.userAgent));
   var remaining = android ? 250 : 3000, started = false, finished = false, since = null, timer;
   function finish() {

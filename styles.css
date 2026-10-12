@@ -1841,7 +1841,7 @@ html[data-theme="light"] .bottom {
 .ld-8e8e93 { background:#8e8e93; color:#8e8e93; }
 
 /* Use the app's shared Matrix background, with no second canvas or network. */
-html.launch-pending body > :not(#launch-splash):not(#matrix-background) { visibility: hidden; }
+html.launch-pending body > :not(#launch-splash):not(#data-rain-background) { visibility: hidden; }
 .launch-splash {
   position: fixed; inset: 0; z-index: 3000;
   display: grid; place-items: center;
@@ -1950,7 +1950,7 @@ html.android .keys,
 html.android .bottom,
 html.android .sheet,
 html.android .analysis-overlay,
-html.android .radio-chassis {
+html.android .dial-face {
   -webkit-backdrop-filter: blur(5px) !important;
   backdrop-filter: blur(5px) !important;
 }

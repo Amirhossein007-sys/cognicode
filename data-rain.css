@@ -1,0 +1,31 @@
+/* Supplied DataRain flow, behind controls and stable reading surfaces. */
+:root { --bg: #080e1b; }
+html[data-theme="light"] { --bg: #f6f8fc; }
+html[data-theme="light"] body { background: var(--bg); }
+.dr-root {
+  --dr-calm: #22e6ff; --dr-mid: #8a5cff; --dr-hot: #ff3d9a; --dr-core: #eafcff;
+  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  contain: strict; background: #080e1b;
+}
+.dr-root canvas, .dr-vignette, .dr-grain { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
+.dr-main { opacity: .62; }
+.dr-bloom { opacity: .35; filter: blur(10px); }
+.dr-vignette { background: radial-gradient(ellipse at 50% 40%, #080e1b80 0, #080e1bb3 100%); }
+.dr-grain { opacity: .045; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' d='M0 0h128v128H0z'/%3E%3C/svg%3E"); }
+html[data-theme="light"] .dr-root { background: #f6f8fc; --dr-calm: #0e7490; --dr-mid: #6d28d9; --dr-hot: #be185d; --dr-core: #1e293b; }
+html[data-theme="light"] .dr-main { opacity: .48; }
+html[data-theme="light"] .dr-bloom { opacity: .18; }
+html[data-theme="light"] .dr-vignette { background: radial-gradient(ellipse at 50% 40%, #f6f8fc66 0, #f6f8fcb3 100%); }
+html.launch-pending .dr-main { opacity: .9; }
+html.launch-pending[data-theme="light"] .dr-main { opacity: .65; }
+.launch-splash { color: var(--txt1); color-scheme: dark light; }
+html[data-theme="light"] .launch-content p { color: #1e293b; text-shadow: none; }
+.topbar { background: transparent; }
+html.focus-mode .dr-main { opacity: .18; }
+html.focus-mode .dr-bloom, html.android .dr-bloom { display: none; }
+/* Keep the full-screen blur off phone-sized displays; trails retain their colour. */
+@media(max-width:680px) { .dr-bloom { display: none; } }
+@media(prefers-contrast:more), (prefers-reduced-transparency:reduce) {
+  .dr-main { opacity: .15 !important; }
+  .dr-bloom { display: none; }
+}

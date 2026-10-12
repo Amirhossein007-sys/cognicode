@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+22">
+<meta name="cognicode-release" content="1.1.0+23">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -11,7 +11,7 @@
      هر استایل پویا باید با کلاس (مثل .ld-*) اعمال شود، نه style درون‌خطی -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; font-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'self' https:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#080e1b">
 <meta name="color-scheme" content="dark light">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -27,8 +27,8 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="workspace.css">
-<link rel="stylesheet" href="radio-clock.css">
-<link rel="stylesheet" href="matrix-rain.css">
+<link rel="stylesheet" href="dial-clock.css">
+<link rel="stylesheet" href="data-rain.css">
 </head>
 <body>
 <div id="launch-splash" class="launch-splash" role="status" aria-label="در حال باز شدن کوگنی کد">
@@ -38,7 +38,7 @@
   </div>
 </div>
 <div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/analysis-brain.svg" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
-<div id="matrix-background" class="matrix-background" data-slot="matrix-rain" aria-hidden="true"><canvas aria-hidden="true"></canvas></div>
+<div id="data-rain-background" class="dr-root" data-slot="data-rain" aria-hidden="true"><canvas class="dr-bloom" aria-hidden="true"></canvas><canvas class="dr-main" aria-hidden="true"></canvas><div class="dr-vignette"></div><div class="dr-grain"></div></div>
 
 <div id="app" inert aria-hidden="true">
 
@@ -51,16 +51,15 @@
         <span>CogniCode · هوش مصنوعی کد برای آیفون</span>
       </div>
     </div>
-    <!-- Vintage radio flip clock; its calendar sits outside the radio body. -->
-    <div class="radio-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
-      <div class="radio-chassis" dir="ltr" aria-hidden="true">
-        <div class="radio-cards"></div>
-        <div class="radio-seconds"><div class="radio-seconds-wheel"></div><i class="radio-needle"></i></div>
-        <div class="radio-side"><b class="radio-brand">Cogni</b><span class="radio-mode">24H</span><span class="radio-zone">UTC<br>+03:30</span></div>
-        <span class="radio-knob"></span>
-      </div>
-      <time class="radio-time sr-only" dir="ltr" aria-label="ساعت تهران">--:--:--</time>
-      <time class="radio-date" dir="rtl" aria-label="تاریخ شمسی تهران">…</time>
+    <!-- Rotating minute/second dials; the Persian date stays outside the face. -->
+    <div class="dial-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
+      <div class="dial-face" dir="ltr" aria-hidden="true"><div class="dial-art">
+        <div class="dial-seconds"></div><div class="dial-minutes"></div>
+        <b class="dial-brand">Cogni</b><span class="dial-hour">--</span><span class="dial-minute">--</span>
+        <span class="dial-zone">UTC+03:30</span>
+      </div></div>
+      <time class="dial-time sr-only" dir="ltr" aria-label="ساعت تهران">--:--:--</time>
+      <time class="dial-date" dir="rtl" aria-label="تاریخ شمسی تهران">…</time>
     </div>
     <div class="top-actions">
       <button class="icon-btn theme-btn" id="btn-theme" aria-label="تغییر حالت روشن و تاریک">
@@ -593,7 +592,7 @@
 <script src="vendor/babel-parser.js"></script>
 <script src="review-engine.js"></script>
 <script src="review-service.js"></script>
-<script src="matrix-rain.js"></script>
+<script src="data-rain.js"></script>
 <script src="orbital-clock.js"></script>
 <script src="workspace-store.js"></script>
 <script src="change-set.js"></script>

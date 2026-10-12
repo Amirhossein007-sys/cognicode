@@ -23,19 +23,19 @@ const assert = require('node:assert/strict');
           return { text: document.querySelector('.launch-content p').textContent, theme: document.documentElement.dataset.theme,
             inert: document.getElementById('app').inert, hidden: getComputedStyle(document.getElementById('app')).visibility,
             width: innerWidth, left: r.left, right: r.right, bottom: r.bottom, height: innerHeight,
-            background: getComputedStyle(document.getElementById('matrix-background')).backgroundColor };
+            background: getComputedStyle(document.getElementById('data-rain-background')).backgroundColor };
         });
         assert.equal(state.text, 'با کوگنی، کُدت رو تحلیل کن');
         assert.equal(state.theme, 'light');
         assert.equal(state.inert, true);
         assert.equal(state.hidden, 'hidden');
         assert.ok(state.left >= 0 && state.right <= state.width && state.bottom < state.height);
-        assert.equal(state.background, 'rgb(243, 248, 244)');
+        assert.equal(state.background, 'rgb(246, 248, 252)');
         assert.equal(await page.locator('.launch-brain').evaluate(el => getComputedStyle(el).animationName), 'none');
         if (process.argv.includes('--capture') && source === 'index.html' && width === 393) {
           await page.screenshot({ path: path.resolve(__dirname, '../launch-light.png') });
           // Native launch images are generated in both themes at the proper
-          // display scale by render-matrix-launch.cjs.
+          // display scale by render-data-rain-launch.cjs.
         }
         if (source === 'native/Web/index.html' && width === 393) {
           await page.evaluate(() => {

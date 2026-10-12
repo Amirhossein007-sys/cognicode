@@ -35,8 +35,9 @@ for (const name of resources) {
   hashes[name] = digest(original);
 }
 assert.ok(resources.has('launch.js') && resources.has('orbital-clock.js'), 'Missing launch or clock entry point');
-assert.ok(resources.has('radio-clock.css'), 'Missing radio clock stylesheet');
-assert.ok(resources.has('matrix-rain.js') && resources.has('matrix-rain.css'), 'Missing Matrix background resources');
+assert.ok(resources.has('dial-clock.css'), 'Missing dial clock stylesheet');
+assert.ok(resources.has('data-rain.js') && resources.has('data-rain.css'), 'Missing DataRain background resources');
+assert.ok(!resources.has('matrix-rain.js') && !resources.has('matrix-rain.css') && !resources.has('radio-clock.css'), 'Legacy background/clock must not be shipped');
 assert.ok(!resources.has('sonar.js'), 'Old particle background must not be shipped');
 const storyboard = read('native/CogniCode/LaunchScreen.storyboard').toString();
 assert.ok(storyboard.includes('با کوگنی، کُدت رو تحلیل کن'), 'Missing native launch slogan');

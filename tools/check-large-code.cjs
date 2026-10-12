@@ -9,7 +9,7 @@ const finalError = sample.trimEnd().split('\n').slice(0,-1).join('\n') + '\ncons
 const sources = [['web',path.join(root,'index.html')],['ios',path.join(root,'native/Web/index.html')]];
 const android = path.join(root,'../cognicode-apk/app/src/main/assets/web/index.html');
 if(fs.existsSync(android))sources.push(['android',android]);
-const output=path.join(root,'artifacts/build-22-validation');fs.mkdirSync(output,{recursive:true});
+const output=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.join(root,'release.json'),'utf8')).build+'-validation');fs.mkdirSync(output,{recursive:true});
 (async()=>{
  const measurements=[];
  for(const [engineName,engine] of [['chromium',chromium],['webkit',webkit]]){

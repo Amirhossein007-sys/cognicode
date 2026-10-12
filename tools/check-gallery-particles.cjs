@@ -90,20 +90,21 @@ const IMAGE = path.resolve(__dirname, '../icons/icon-180.png');
       for (const theme of ['dark', 'light']) {
         await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
         await page.waitForTimeout(500);
-        assert.equal(await page.locator('#matrix-background canvas').evaluate(c => !!c.getContext('2d')), true);
+        assert.equal(await page.locator('#data-rain-background .dr-main').evaluate(c => !!c.getContext('2d')), true);
         await page.screenshot({ path: path.resolve(__dirname, `../particles-${theme}.png`) });
       }
       await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       await page.waitForTimeout(100);
-      const matrixHash = () => page.locator('#matrix-background canvas').evaluate(canvas => {
+      const dataRainHash = () => page.locator('#data-rain-background .dr-main').evaluate(canvas => {
         const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
         let hash = 2166136261;
         for (let i = 0; i < pixels.length; i++) hash = Math.imul(hash ^ pixels[i], 16777619);
         return hash >>> 0;
       });
-      const first = await matrixHash();
+      const first = await dataRainHash();
       await page.waitForTimeout(150);
-      assert.equal(await matrixHash(), first);
+      assert.equal(await dataRainHash(), first);
       assert.deepEqual(errors, []);
       console.log(`PASS ${native ? 'native bridge' : 'PWA'}: gallery without camera capture, strict-JSON OCR, PNG payload, no auto-analysis, undo, failures keep code, manual analysis, themes, reduced motion`);
       await page.close();

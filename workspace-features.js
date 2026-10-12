@@ -85,10 +85,10 @@ window.WorkspaceFeatures = {
       const focused = document.documentElement.classList.toggle('focus-mode');
       $('key-focus').setAttribute('aria-pressed', String(focused));
       try { localStorage.setItem('cognicode.focus.v1', String(focused)); } catch (_) {}
-      window.MatrixRain?.setFocus?.(focused);
+      window.DataRain?.setFocus?.(focused);
       api.toast(focused ? 'تمرکز روشن شد؛ حرکت پس‌زمینه کمتر و ساعت جمع‌وجور شد' : 'تمرکز خاموش شد؛ نمایش عادی برگشت', 3500);
     });
-    try { if (localStorage.getItem('cognicode.focus.v1') === 'true') { document.documentElement.classList.add('focus-mode'); $('key-focus').setAttribute('aria-pressed','true'); window.MatrixRain?.setFocus?.(true); } } catch (_) {}
+    try { if (localStorage.getItem('cognicode.focus.v1') === 'true') { document.documentElement.classList.add('focus-mode'); $('key-focus').setAttribute('aria-pressed','true'); window.DataRain?.setFocus?.(true); } } catch (_) {}
     function textScale(value) {
       const n = Math.max(100, Math.min(150, Math.round(Number(value) / 10) * 10)) || 100;
       for (let x=100; x<=150; x+=10) document.documentElement.classList.remove('text-scale-'+x);
