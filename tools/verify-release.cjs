@@ -10,6 +10,8 @@ const index = read('index.html').toString();
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const resources = new Set(['index.html', 'styles.css', 'manifest.webmanifest', 'apple-touch-icon.png']);
 resources.add('review-worker.js');
+resources.add('review-worker-bundle.js');
+assert.equal(read('review-worker-bundle.js').toString(), require('./build-review-worker.cjs').build(), 'Native review worker is stale');
 for (const match of index.matchAll(/(?:src|href)="([^"#]+)"/g)) {
   const name = match[1];
   if (!/^(?:https?:|data:|mailto:)/.test(name)) resources.add(name);
@@ -33,6 +35,9 @@ for (const name of resources) {
   hashes[name] = digest(original);
 }
 assert.ok(resources.has('launch.js') && resources.has('orbital-clock.js'), 'Missing launch or clock entry point');
+assert.ok(resources.has('radio-clock.css'), 'Missing radio clock stylesheet');
+assert.ok(resources.has('matrix-rain.js') && resources.has('matrix-rain.css'), 'Missing Matrix background resources');
+assert.ok(!resources.has('sonar.js'), 'Old particle background must not be shipped');
 const storyboard = read('native/CogniCode/LaunchScreen.storyboard').toString();
 assert.ok(storyboard.includes('با کوگنی، کُدت رو تحلیل کن'), 'Missing native launch slogan');
 for (const asset of ['LaunchBrain', 'LaunchBackground', 'LaunchSlogan']) {

@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
-window.Syntax = (function () {
+window.Syntax = (function createSyntax() {
 
   const esc = function (s) {
     return s.replace(/[&<>"']/g, function (c) {
@@ -704,7 +704,9 @@ window.Syntax = (function () {
 
   function highlight(code, langKey) {
     if (!code) return '';
-    if (code.length > 160000) return esc(code);
+    // Very large/long-line inputs remain fully editable in the viewport renderer.
+    // Normal 30,000-line source files are tokenized in a background worker.
+    if (code.length > 4 * 1024 * 1024) return esc(code);
     var spec = SPECS[langKey] || SPECS.text;
     var re = buildRegex(spec);
     if (!re) return esc(code);
@@ -717,7 +719,10 @@ window.Syntax = (function () {
       for (var i = 1; i < m.length; i++) {
         if (m[i] !== undefined) { cls = spec.toks[i - 1][0]; break; }
       }
-      out += '<span class="tk-' + cls + '">' + esc(m[0]) + '</span>';
+      // Close tokens at each line boundary so the viewport renderer can retain
+      // correct multi-line string/comment colours without mounting every span.
+      var tag = '<span class="tk-' + cls + '">';
+      out += tag + esc(m[0]).replace(/\n/g, '</span>\n' + tag) + '</span>';
       last = m.index + m[0].length;
     }
     out += esc(code.slice(last));
@@ -768,6 +773,23 @@ window.Syntax = (function () {
     detect: detect,
     keywordCount: keywordCount,
     LANGS: LANGS,
-    esc: esc
+    esc: esc,
+    createWorker: function () {
+      // The same lexer runs in a local Blob worker, including native file: URLs.
+      // No external fetch/import or eval is needed.
+      var source = 'var syntax = (' + createSyntax.toString() + ')();' +
+        'self.onmessage = function(event) { var job = event.data; try {' +
+        'var language = job.mode === "auto" ? syntax.detect(job.code) : job.mode;' +
+        'self.postMessage({id:job.id, language:language, html:syntax.highlight(job.code,language)});' +
+        '} catch(error) { self.postMessage({id:job.id,error:true}); } };';
+      var url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      try {
+        var worker = new Worker(url);
+        var revoke = function () { URL.revokeObjectURL(url); };
+        worker.addEventListener('message', revoke, { once: true });
+        worker.addEventListener('error', revoke, { once: true });
+        return worker;
+      } catch (error) { URL.revokeObjectURL(url); throw error; }
+    }
   };
 })();

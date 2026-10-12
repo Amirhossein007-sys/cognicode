@@ -239,7 +239,7 @@ struct WebViewContainer: UIViewRepresentable {
             // تغییر چیدمان (چرخش، کیبورد، ترنزیشن لانچ) دقیقاً کل کانتینر را پر کند
             wv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             wv.isOpaque = false
-            wv.backgroundColor = UIColor(red: 15.0/255.0, green: 23.0/255.0, blue: 42.0/255.0, alpha: 1)
+            wv.backgroundColor = UIColor(named: "LaunchBG")
 
             wv.scrollView.contentInsetAdjustmentBehavior = .never
             wv.scrollView.bounces = false
@@ -297,8 +297,8 @@ struct WebViewContainer: UIViewRepresentable {
                     }
                 }
                 let bgColor = dark
-                    ? UIColor(red: 15.0/255.0, green: 23.0/255.0, blue: 42.0/255.0, alpha: 1)
-                    : UIColor(red: 248.0/255.0, green: 250.0/255.0, blue: 252.0/255.0, alpha: 1)
+                    ? UIColor(red: 2.0/255.0, green: 6.0/255.0, blue: 4.0/255.0, alpha: 1)
+                    : UIColor(red: 243.0/255.0, green: 248.0/255.0, blue: 244.0/255.0, alpha: 1)
                 self.webView.backgroundColor = bgColor
                 if #available(iOS 15.0, *) {
                     self.webView.underPageBackgroundColor = bgColor

@@ -94,7 +94,6 @@
   --err-tx: #fca5a5; --warn-tx: #fde68a;
   --scrim: rgba(8, 12, 24, 0.65);
   --txt-strong: #ffffff;
-  --sonar-dot: #38bdf8;
   --tab-bg: rgba(255, 255, 255, 0.05);
 }
 
@@ -1217,8 +1216,6 @@ html.screen-compact .bottom {
 /* ═══════════════════════════════════════════════
    پس‌زمینه سونار (میدان نقطه‌ای تعاملی)
    ═══════════════════════════════════════════════ */
-.sonar { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.sonar canvas { display: block; width: 100%; height: 100%; color: var(--sonar-dot); }
 
 /* ═══════════════════════════════════════════════
    دکمه تغییر حالت روشن/تاریک
@@ -1303,7 +1300,6 @@ html[data-theme="light"] {
   --err-tx: #b91c1c; --warn-tx: #92400e;
   --scrim: rgba(15, 23, 42, 0.38);
   --txt-strong: #0f172a;
-  --sonar-dot: #0284c7;
   --tab-bg: rgba(255, 255, 255, 0.65);
 }
 html[data-theme="light"] body { background: #f8fafc; }
@@ -1738,10 +1734,6 @@ html[data-theme="light"] .mlm-node-title {
 /* GradientWave: muted palettes plus stable surfaces preserve text contrast. */
 :root { --editor-bg: rgba(15,23,42,.94); --c-com: #94a3b8; --ph: #94a3b8; --gutter-txt: #94a3b8; }
 html[data-theme="light"] { --editor-bg: rgba(255,255,255,.96); --txt3: #475569; --ph: #64748b; --gutter-txt: #64748b; }
-.sonar { overflow: hidden; background: linear-gradient(140deg,#0f172a,#164e63,#312e81); }
-html[data-theme="light"] .sonar { background: linear-gradient(140deg,#f8fafc,#bae6fd,#e0e7ff); }
-.sonar::after { content: ''; position: absolute; inset: 0; background: rgba(15,23,42,.55); }
-html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
 /* بلور سطوح در بخش «شیشه» پایین‌تر تعریف می‌شود (.editor/.keys/.bottom → 5px تیره،
    2px روشن) و حالت بدون‌بلور در media query کاهش‌شفافیت/افزایش‌کنتراست می‌آید. */
 .analysis-activity { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 6px); left: 50%; transform: translateX(-50%); z-index: 2000; direction: ltr; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 24px); padding: 8px 14px; border-radius: 28px; background: #0f172a; color: #f8fafc; box-shadow: 0 4px 20px #0005; pointer-events: none; font-size: 12px; }
@@ -1761,10 +1753,6 @@ html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
 .code-area textarea::placeholder { opacity: 1; }
 
 /* Particle background adapted from particles-bg; stable reading surfaces. */
-#particles-js { background: linear-gradient(to top right, #000814, #003566, #0077b6); }
-html[data-theme="light"] #particles-js { background: linear-gradient(to top right, #e3f2fd, #90caf9, #64b5f6); }
-#particles-js::after { background: rgba(15,23,42,.40); }
-html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45); }
 .topbar { background: var(--bar-bg); }
 #sheet-import .choice { min-height: 64px; }
 @media (prefers-contrast: more) {
@@ -1772,7 +1760,7 @@ html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45
   html[data-theme="light"] { --editor-bg: #fff; --bar-bg: #fff; --panel-bg: #fff; }
 }
 
-/* Translucent reading surfaces: retain particles through a restrained tint. */
+/* Translucent reading surfaces: retain the Matrix through a restrained tint. */
 :root {
   --editor-bg: rgba(10, 22, 40, .46);
   --bar-bg: rgba(10, 22, 40, .42);
@@ -1852,8 +1840,8 @@ html[data-theme="light"] .bottom {
 .ld-b0916a { background:#b0916a; color:#b0916a; }
 .ld-8e8e93 { background:#8e8e93; color:#8e8e93; }
 
-/* Use the app's existing particle background, with no second canvas or network. */
-html.launch-pending body > :not(#launch-splash):not(#particles-js) { visibility: hidden; }
+/* Use the app's shared Matrix background, with no second canvas or network. */
+html.launch-pending body > :not(#launch-splash):not(#matrix-background) { visibility: hidden; }
 .launch-splash {
   position: fixed; inset: 0; z-index: 3000;
   display: grid; place-items: center;
@@ -1962,19 +1950,20 @@ html.android .keys,
 html.android .bottom,
 html.android .sheet,
 html.android .analysis-overlay,
-html.android .pipboy-clock .pipboy-chassis {
+html.android .radio-chassis {
   -webkit-backdrop-filter: blur(5px) !important;
   backdrop-filter: blur(5px) !important;
 }
 html.android .editor {
-  background: rgba(15, 23, 42, 0.94) !important;
-  transform: translateZ(0);
+  background: var(--bg) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   contain: content;
 }
 html.android .topbar,
 html.android .keys,
 html.android .bottom {
-  transform: translateZ(0);
+  transform: none;
 }
 html.android .play {
   will-change: transform;

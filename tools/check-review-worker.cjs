@@ -13,8 +13,12 @@ const root=path.resolve(__dirname,'..');
     const code=Array.from({length:5000},(_,i)=>`const v${i} = (${i} + 1);`).join('\n'),start=performance.now();
     const good=await ReviewService.local(code,'javascript'),ms=performance.now()-start;
     const bad=await ReviewService.local(code.slice(0,-2)+';','javascript');
-    return {good:good.errors.length,bad:bad.errors.map(e=>e.line),ms};
-   });assert.equal(result.good,0);assert.deepEqual(result.bad,[5000]);console.log(`PASS ${name} real review worker: 5000-line full parse ${result.ms.toFixed(1)}ms; final-token mutation detected`);
+    const controller=new AbortController(),large=Array.from({length:30000},(_,i)=>`const cancel${i} = ${i};`).join('\n');
+    const cancelled=ReviewService.local(large,'javascript',{signal:controller.signal});setTimeout(()=>controller.abort(),50);
+    let abortName;try{await cancelled;}catch(error){abortName=error.name;}
+    const resumed=await ReviewService.local(code,'javascript');
+    return {good:good.errors.length,bad:bad.errors.map(e=>e.line),ms,abortName,resumed:resumed.errors.length};
+   });assert.equal(result.good,0);assert.deepEqual(result.bad,[5000]);assert.equal(result.abortName,'AbortError');assert.equal(result.resumed,0);console.log(`PASS ${name} real review worker: 5000-line full parse ${result.ms.toFixed(1)}ms; final-token mutation, active 30,000-line cancellation and restart`);
   }finally{await browser.close();}
  }}finally{await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

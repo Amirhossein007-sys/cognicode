@@ -1,11 +1,15 @@
-/* Preserve the branded first launch; subsequent launches finish when assets paint. */
+/* Paint the launch identity after assets are ready; Android enters promptly. */
 'use strict';
 (function () {
   var splash = document.getElementById('launch-splash');
   if (!splash) return;
-  var seen = false;
-  try { seen = localStorage.getItem('cognicode.launch-seen.v1') === '1'; } catch (_) {}
-  var remaining = seen ? 350 : 3000, started = false, finished = false, since = 0, timer;
+  var root = document.documentElement, savedTheme;
+  try { savedTheme = localStorage.getItem('cognicode.theme'); } catch (_) {}
+  var dark = savedTheme ? savedTheme !== 'light' : !matchMedia('(prefers-color-scheme: light)').matches;
+  root.dataset.theme = dark ? 'dark' : 'light';
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#020604' : '#f3f8f4');
+  var android = !!(window.AndroidBridge || /android/i.test(navigator.userAgent));
+  var remaining = android ? 250 : 3000, started = false, finished = false, since = null, timer;
   function finish() {
     if (finished) return;
     finished = true;
@@ -17,7 +21,7 @@
     var app = document.getElementById('app');
     app.removeAttribute('inert');
     app.removeAttribute('aria-hidden');
-    // Restore the user's app theme only after the always-dark launch presentation.
+    // Keep the same user theme and Matrix canvas when entering the editor.
     window.dispatchEvent(new Event('cognicode:launch-complete'));
   }
   function resume() {
@@ -28,9 +32,9 @@
   }
   function visibilityChanged() {
     clearTimeout(timer);
-    if (document.hidden && since) {
+    if (document.hidden && since !== null) {
       remaining = Math.max(0, remaining - (performance.now() - since));
-      since = 0;
+      since = null;
     } else if (!document.hidden) resume();
   }
   document.addEventListener('visibilitychange', visibilityChanged);
@@ -44,6 +48,6 @@
     });
   });
   if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.themeBridge) {
-    window.webkit.messageHandlers.themeBridge.postMessage({ dark: true });
+    window.webkit.messageHandlers.themeBridge.postMessage({ dark: dark });
   }
 })();

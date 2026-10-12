@@ -1,0 +1,78 @@
+/* Locally rendered vintage radio: flip cards, rolling seconds and an open calendar. */
+.radio-clock {
+  --radio-body: #292b38; --radio-edge: #484b5d; --radio-foot: #20222d;
+  --radio-panel: #36233c; --radio-number: #ffd66b; --radio-logo: #f4ead5;
+  --radio-control: #9ee6c5; --radio-control-ink: #14362b;
+  grid-area: clock; width: min(100%, 328px); min-width: 0; justify-self: center;
+}
+.radio-chassis {
+  position: relative; display: grid; grid-template-columns: minmax(0,1fr) 22px 43px;
+  gap: 8px; align-items: center; padding: 13px 15px; border-radius: 7px;
+  background: var(--radio-body); border: 1px solid var(--radio-edge);
+  box-shadow: 0 5px 15px #0002, inset 0 1px 0 #ffffff14;
+}
+.radio-chassis::after {
+  content: ""; position: absolute; left: 6%; right: 6%; top: 100%; height: 6px;
+  background: var(--radio-foot); border-radius: 0 0 3px 3px;
+  transform: perspective(100px) rotateX(12deg); transform-origin: top;
+}
+.radio-cards { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; min-width: 0; }
+.radio-digit {
+  position: relative; display: block; height: 58px; perspective: 250px;
+  font: 400 42px/58px Georgia, 'Times New Roman', serif;
+  color: var(--radio-number); font-variant-numeric: tabular-nums;
+}
+.radio-upper, .radio-lower, .radio-front, .radio-back {
+  position: absolute; left: 0; right: 0; height: 50%; overflow: hidden;
+  background: var(--radio-panel); backface-visibility: hidden;
+}
+.radio-upper, .radio-front { top: 0; border-radius: 3px 3px 0 0; border-bottom: 1px solid #ffffff30; }
+.radio-lower, .radio-back { top: 50%; border-radius: 0 0 3px 3px; border-top: 1px solid #0007; }
+.radio-value { position: absolute; inset-inline: 0; top: 0; height: 58px; text-align: center; }
+.radio-lower .radio-value, .radio-back .radio-value { top: -29px; }
+.radio-front, .radio-back { display: none; z-index: 2; }
+.radio-front { transform-origin: bottom; }
+.radio-back { transform-origin: top; }
+.is-flipping .radio-front { display: block; animation: radio-flip-front .6s ease-in forwards; }
+.is-flipping .radio-back { display: block; animation: radio-flip-back .6s ease-out forwards; }
+@keyframes radio-flip-front { 0% { transform: rotateX(0); } 50%,100% { transform: rotateX(-90deg); } }
+@keyframes radio-flip-back { 0%,50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+.radio-seconds {
+  height: 58px; position: relative; overflow: hidden; border-radius: 2px;
+  color: var(--radio-number); background: var(--radio-panel);
+  /* Curved-cylinder shading stays behind the readable numerals. */
+  box-shadow: inset 3px 0 4px #0003;
+}
+.radio-seconds-wheel { transition: transform .46s ease; }
+.radio-seconds-wheel.is-resetting { transition: none; }
+.radio-seconds-wheel span { display: block; height: 12px; font: 600 8px/12px Georgia,serif; text-align: center; padding-left: 3px; }
+.radio-seconds-wheel span::before { content: ""; position: absolute; left: 2px; width: 4px; height: 1px; margin-top: 6px; background: currentColor; }
+.radio-needle { position: absolute; left: 0; top: 26px; width: 6px; height: 6px; background: #ffac62; clip-path: polygon(0 0,100% 50%,0 100%); }
+.radio-side { height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.radio-brand { color: var(--radio-logo); font: 700 13px/16px Georgia,serif; text-transform: none; }
+.radio-mode { color: var(--radio-control-ink); background: var(--radio-control); font: 800 8px/13px system-ui,sans-serif; width: 30px; text-align: center; border-radius: 1px; }
+.radio-zone { color: var(--radio-logo); font: 600 8px/10px system-ui,sans-serif; text-align: center; }
+.radio-knob { position: absolute; top: 22%; bottom: 22%; right: -5px; width: 5px; border-radius: 0 2px 2px 0; background: repeating-linear-gradient(to bottom,var(--radio-logo) 0 2px,var(--radio-edge) 2px 4px); }
+.radio-clock .radio-date { display: block; margin-top: 12px; color: var(--txt2); font: 500 13px/20px var(--fa); text-align: center; white-space: nowrap; background: none; border: 0; padding: 0; box-shadow: none; }
+.radio-clock .radio-time { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+html[data-theme="light"] .radio-clock { --radio-body: #eeead1; --radio-edge: #d0c7a7; --radio-foot: #ded3a7; --radio-logo: #402b46; --radio-control: #b4e7d0; }
+/* Keep the clock readable instead of squeezing it into the old 184px column. */
+@media(min-width:520px) { .topbar { grid-template-areas: "brand actions" "clock clock"; grid-template-columns: minmax(0,1fr) auto; } }
+@media(max-width:359px) {
+  .radio-chassis { padding: 11px 12px; gap: 6px; }
+  .radio-digit { font-size: 36px; }
+  .radio-clock .radio-date { font-size: 12px; }
+}
+@media(max-height:500px) and (orientation:landscape) {
+  .topbar { grid-template-areas: "brand clock actions"; grid-template-columns: minmax(0,1fr) 260px minmax(0,1fr); row-gap: 0; }
+  .radio-chassis { padding: 7px 12px; gap: 6px; }
+  .radio-digit, .radio-value { height: 42px; line-height: 42px; font-size: 30px; }
+  .radio-lower .radio-value, .radio-back .radio-value { top: -21px; }
+  .radio-side, .radio-seconds { height: 42px; }
+  .radio-seconds-wheel { margin-top: -8px; }
+  .radio-needle { top: 18px; }
+  .radio-mode { display: none; }
+  .radio-clock .radio-date { font-size: 11px; line-height: 16px; margin-top: 9px; }
+}
+@media(prefers-reduced-motion:reduce) { .radio-clock *, .radio-clock *::after { animation: none !important; transition: none !important; } }
+html.focus-mode .radio-clock *, html.focus-mode .radio-clock *::after { animation: none; transition: none; }

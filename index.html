@@ -2,14 +2,14 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+19">
+<meta name="cognicode-release" content="1.1.0+22">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
 <!-- CSP: file: برای اجرای داخل WKWebView نیتیو لازم است؛ connect-src https: برای
      endpoint قابل‌تنظیم کاربر عمداً باز است. style-src بدون unsafe-inline است —
      هر استایل پویا باید با کلاس (مثل .ld-*) اعمال شود، نه style درون‌خطی -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; font-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'self' https:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; font-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'self' https:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f172a">
 <meta name="color-scheme" content="dark light">
@@ -27,6 +27,8 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="workspace.css">
+<link rel="stylesheet" href="radio-clock.css">
+<link rel="stylesheet" href="matrix-rain.css">
 </head>
 <body>
 <div id="launch-splash" class="launch-splash" role="status" aria-label="در حال باز شدن کوگنی کد">
@@ -36,7 +38,7 @@
   </div>
 </div>
 <div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/analysis-brain.svg" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
-<div id="particles-js" class="sonar" aria-hidden="true"><canvas></canvas></div>
+<div id="matrix-background" class="matrix-background" data-slot="matrix-rain" aria-hidden="true"><canvas aria-hidden="true"></canvas></div>
 
 <div id="app" inert aria-hidden="true">
 
@@ -49,26 +51,16 @@
         <span>CogniCode · هوش مصنوعی کد برای آیفون</span>
       </div>
     </div>
-    <!-- Compact clock adapted from the supplied Pipboy/CRT design. -->
-    <div class="pipboy-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
-      <div class="pipboy-chassis">
-        <span class="pip-screw tl" aria-hidden="true"></span><span class="pip-screw tr" aria-hidden="true"></span>
-        <span class="pip-screw bl" aria-hidden="true"></span><span class="pip-screw br" aria-hidden="true"></span>
-        <div class="pip-crt-screen">
-          <div class="pip-screen-glass" aria-hidden="true"></div><div class="pip-scanlines" aria-hidden="true"></div>
-          <div class="pip-clock-content">
-            <div class="pip-top-bar" dir="ltr" aria-hidden="true"><span>TEHRAN</span><span class="pip-line"></span><span>UTC+03:30</span></div>
-            <div class="pip-clock-main">
-              <span class="pip-clock-badge" aria-hidden="true">CLK</span>
-              <div class="pip-clock-display">
-                <div class="pip-terminal-block"><time class="pip-time" dir="ltr" aria-label="ساعت تهران"><span class="pip-hours">--</span><span class="pip-colon" aria-hidden="true">:</span><span class="pip-minutes">--</span></time></div>
-                <time class="pip-date" dir="ltr" aria-label="تاریخ شمسی تهران">----/--/--</time>
-              </div>
-              <span class="pip-hazard" aria-hidden="true"><span></span></span>
-            </div>
-          </div>
-        </div>
+    <!-- Vintage radio flip clock; its calendar sits outside the radio body. -->
+    <div class="radio-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
+      <div class="radio-chassis" dir="ltr" aria-hidden="true">
+        <div class="radio-cards"></div>
+        <div class="radio-seconds"><div class="radio-seconds-wheel"></div><i class="radio-needle"></i></div>
+        <div class="radio-side"><b class="radio-brand">Cogni</b><span class="radio-mode">24H</span><span class="radio-zone">UTC<br>+03:30</span></div>
+        <span class="radio-knob"></span>
       </div>
+      <time class="radio-time sr-only" dir="ltr" aria-label="ساعت تهران">--:--:--</time>
+      <time class="radio-date" dir="rtl" aria-label="تاریخ شمسی تهران">…</time>
     </div>
     <div class="top-actions">
       <button class="icon-btn theme-btn" id="btn-theme" aria-label="تغییر حالت روشن و تاریک">
@@ -499,7 +491,7 @@
   <div class="sheet-body">
     <p class="api-msg">کد فایل وارد و آمادهٔ بررسی می‌شود. تصویر برای استخراج و بازبینی دقیق به مدل پشتیبان تصویر ارسال می‌شود؛ پس از انتقال متن به ادیتور، بررسی با دکمهٔ تحلیل کد انجام می‌گیرد. متن ناخوانا جای کد فعلی را نمی‌گیرد.</p>
     <div class="api-choices">
-      <button class="choice" id="import-file"><b>فایل کد یا بستهٔ پروژه (ZIP)</b><span>انتخاب فایل متنی (.php, .js, .html, ...) یا پروژه و افزونه کامل (.zip)</span></button>
+      <button class="choice" id="import-file"><b>فایل کد یا بستهٔ پروژه (ZIP)</b><span>فایل متنی یا پروژهٔ ZIP — تا ۳۰٬۰۰۰ خط کد در هر بررسی</span></button>
       <button class="choice" id="import-gallery"><b>تصویر از گالری</b><span>عکس یا اسکرین‌شات کد — نیازمند اینترنت و مدل پشتیبان تصویر</span></button>
       <button class="choice" id="import-camera"><b>عکس با دوربین</b><span>خواندن کد از کتاب یا نمایشگر</span></button>
     </div>
@@ -601,7 +593,7 @@
 <script src="vendor/babel-parser.js"></script>
 <script src="review-engine.js"></script>
 <script src="review-service.js"></script>
-<script src="sonar.js"></script>
+<script src="matrix-rain.js"></script>
 <script src="orbital-clock.js"></script>
 <script src="workspace-store.js"></script>
 <script src="change-set.js"></script>

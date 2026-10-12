@@ -543,7 +543,8 @@
 
     // Total character budget for dossier
     // Preserve complete files for the full-source parser; AI splits them separately.
-    var charBudget = 1000000;
+    var charBudget = 25 * 1024 * 1024;
+    var lineBudget = 30000, usedLines = 0;
     var numFiles = project.files.length;
     // Per-file cap when multiple files exist, ensuring all files get a slice of the budget
     var maxPerFile = charBudget;
@@ -551,7 +552,7 @@
     var hasTruncation = false;
 
     project.files.forEach(function(f) {
-      if (usedChars >= charBudget) {
+      if (usedChars >= charBudget || usedLines >= lineBudget) {
         hasTruncation = true;
         return;
       }
@@ -565,10 +566,17 @@
 
       var allowedForThisFile = Math.min(remaining, maxPerFile);
       var contentSnippet = f.content;
-      if (contentSnippet.length > allowedForThisFile) {
-        hasTruncation = true;
-        contentSnippet = contentSnippet.slice(0, allowedForThisFile) + '\n// ... [ادامه کد فایل برای خلاصه حفظ شد] ...';
+      var cut = false, remainingLines = lineBudget - usedLines, lines = 0;
+      for (var i = 0; i < contentSnippet.length; i++) {
+        if (contentSnippet[i] === '\n' && ++lines === remainingLines && i < contentSnippet.length - 1) {
+          contentSnippet = contentSnippet.slice(0, i + 1); cut = true; break;
+        }
       }
+      if (contentSnippet.length > allowedForThisFile) {
+        contentSnippet = contentSnippet.slice(0, allowedForThisFile); cut = true;
+      }
+      usedLines += contentSnippet ? contentSnippet.split('\n').length - (contentSnippet.endsWith('\n') ? 1 : 0) : 0;
+      if (cut) { hasTruncation = true; contentSnippet += '\n// ... [ادامه کد فایل برای خلاصه حفظ شد] ...'; }
 
       out.push(header + contentSnippet + '\n');
       usedChars += header.length + contentSnippet.length;

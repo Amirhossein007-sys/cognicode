@@ -217,42 +217,9 @@ html[data-theme="light"] .analysis-overlay .load-status { color: #0f172a; text-s
 }
 
 /* Compact adaptation of the supplied Pipboy clock, with its date inside the CRT. */
-.topbar { grid-template-columns: minmax(0,1fr) 132px; grid-template-areas: "brand actions" "clock clock"; row-gap: 6px; column-gap: 8px; }
+.topbar { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "brand actions" "clock clock"; row-gap: 6px; column-gap: 8px; }
 .topbar .brand { grid-area: brand; }
 .topbar .top-actions { grid-area: actions; }
-.pipboy-clock { --pip-green: #1aff40; --pip-ink: #020a02; --pip-date: #85ff9a; --pip-glow: rgba(26,255,64,.24); --pip-screen: #020a02; --pip-border: #434d44; --pip-chassis-a: #2b302c; --pip-chassis-b: #141a15; grid-area: clock; width: 100%; max-width: 360px; min-width: 0; justify-self: center; font-family: "Courier New",Courier,monospace; }
-.pipboy-clock .pipboy-chassis { position: relative; padding: 7px 11px; border-radius: 13px; border: 1px solid var(--pip-border); background-image: radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(135deg,var(--pip-chassis-a),var(--pip-chassis-b),var(--pip-chassis-a)); background-size: 3px 3px,100% 100%; box-shadow: inset 0 0 10px #0005,0 4px 12px #0003,0 0 8px var(--pip-glow); }
-.pipboy-clock .pip-screw { position: absolute; width: 5px; height: 5px; background: linear-gradient(45deg,#89938a,#2c352d); border: 1px solid #101811; border-radius: 50%; }
-.pipboy-clock .pip-screw::after { content: ""; position: absolute; inset: 1px 0; height: 1px; background: #142215; transform: rotate(45deg); }
-.pipboy-clock .tl { top: 4px; left: 4px; }.pipboy-clock .tr { top: 4px; right: 4px; }.pipboy-clock .bl { bottom: 4px; left: 4px; }.pipboy-clock .br { bottom: 4px; right: 4px; }
-.pipboy-clock .pip-crt-screen { position: relative; overflow: hidden; border-radius: 8px; border: 3px solid var(--pip-ink); background: var(--pip-screen); box-shadow: inset 0 0 12px #0004; }
-.pipboy-clock .pip-screen-glass, .pipboy-clock .pip-scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.pipboy-clock .pip-screen-glass { background: radial-gradient(ellipse at 45% 30%,rgba(255,255,255,.09),transparent 65%); }
-.pipboy-clock .pip-screen-glass::after { content: ""; position: absolute; top: -12px; left: 0; width: 100%; height: 12px; background: linear-gradient(transparent,var(--pip-glow),transparent); animation: pip-clock-scan 7s linear infinite; }
-.pipboy-clock .pip-scanlines { background: linear-gradient(transparent 50%,rgba(0,0,0,.12) 50%); background-size: 100% 3px; }
-.pipboy-clock .pip-clock-content { position: relative; z-index: 2; padding: 4px 6px 5px; }
-.pipboy-clock .pip-top-bar { display: flex; align-items: center; gap: 6px; color: var(--pip-date); font-size: 9px; line-height: 12px; font-weight: 700; white-space: nowrap; }
-.pipboy-clock .pip-line { height: 1px; flex: 1; background: var(--pip-green); opacity: .6; }
-.pipboy-clock .pip-clock-main { display: grid; grid-template-columns: 24px minmax(0,1fr) 24px; align-items: center; gap: 6px; direction: ltr; margin-top: 4px; }
-.pipboy-clock .pip-clock-badge { color: var(--pip-date); font-size: 9px; font-weight: 700; border: 1px solid var(--pip-green); padding: 2px 1px; text-align: center; }
-.pipboy-clock .pip-clock-display { display: flex; flex-direction: column; align-items: center; min-width: 0; gap: 3px; }
-.pipboy-clock .pip-terminal-block { padding: 0 12px; border-radius: 5px; background: var(--pip-green); box-shadow: 0 0 9px var(--pip-glow); }
-.pipboy-clock .pip-time { display: block; color: var(--pip-ink); font: 800 26px/32px var(--fa); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pipboy-clock .pip-date { color: var(--pip-date); font: 700 13px/18px var(--fa); font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 0 3px var(--pip-glow); }
-.pipboy-clock .pip-colon { animation: pip-clock-blink 1s step-end infinite; }
-.pipboy-clock .pip-hazard { position: relative; width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(var(--pip-green) 0deg 60deg,transparent 60deg 120deg,var(--pip-green) 120deg 180deg,transparent 180deg 240deg,var(--pip-green) 240deg 300deg,transparent 300deg); animation: pip-clock-radar 8s linear infinite; }
-.pipboy-clock .pip-hazard span { position: absolute; inset: 6px; border-radius: 50%; background: var(--pip-screen); }
-.pipboy-clock .pip-hazard span::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--pip-green); }
-html[data-theme="light"] .pipboy-clock { --pip-green: #166534; --pip-ink: #f0fff4; --pip-date: #14532d; --pip-glow: rgba(22,101,52,.16); --pip-screen: #effcf2; --pip-border: #647568; --pip-chassis-a: #e0e8e1; --pip-chassis-b: #bdcbbf; }
-html[data-theme="light"] .pipboy-clock .pip-crt-screen { border-color: #7e9585; box-shadow: inset 0 0 12px #16653416; }
-html.focus-mode .pipboy-clock .pipboy-chassis { padding-block: 4px; box-shadow: none; }
-html.focus-mode .pipboy-clock .pip-hazard, html.focus-mode .pipboy-clock .pip-colon, html.focus-mode .pipboy-clock .pip-screen-glass::after { animation: none; }
-@media(min-width:520px) { .topbar { grid-template-areas: "brand clock actions"; grid-template-columns: minmax(0,1fr) 184px minmax(0,1fr); column-gap: 4px; }.pipboy-clock .pip-clock-main { grid-template-columns: 18px minmax(0,1fr) 18px; gap: 3px; }.pipboy-clock .pip-clock-badge { font-size: 8px; }.pipboy-clock .pip-hazard { width: 18px; height: 18px; }.pipboy-clock .pip-hazard span { inset: 5px; }.pipboy-clock .pip-terminal-block { padding-inline: 8px; } }
-@keyframes pip-clock-scan { to { transform: translateY(95px); } }
-@keyframes pip-clock-blink { 50% { opacity: .6; } }
-@keyframes pip-clock-radar { to { transform: rotate(360deg); } }
-@media(prefers-reduced-motion:reduce) { .pipboy-clock *, .pipboy-clock *::after { animation: none !important; } }
-
 /* ═══ استایل‌های شیت بازرسی پروژه و افزونه فشرده (ZIP) ═══ */
 .project-head-info { display: flex; flex-direction: column; gap: 4px; text-align: start; }
 .project-head-info h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--txt1); }

@@ -46,7 +46,7 @@
                             </stackView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
-                        <color key="backgroundColor" red="0.058823529411764705" green="0.090196078431372548" blue="0.16470588235294117" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" name="LaunchBG"/>
                         <constraints>
                             <constraint firstItem="launch-bg" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="bg-top"/>
                             <constraint firstItem="launch-bg" firstAttribute="bottom" secondItem="Ze5-6b-2t3" secondAttribute="bottom" id="bg-bottom"/>
@@ -64,6 +64,7 @@
         </scene>
     </scenes>
     <resources>
+        <namedColor name="LaunchBG"><color red="0.007843137254902" green="0.023529411764706" blue="0.015686274509804" alpha="1" colorSpace="custom" customColorSpace="sRGB"/></namedColor>
         <image name="LaunchBackground" width="393" height="852"/>
         <image name="LaunchSlogan" width="345" height="32"/>
         <image name="LaunchBrain" width="512" height="512"/>

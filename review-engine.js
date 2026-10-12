@@ -3,6 +3,20 @@
 window.ReviewEngine = (function () {
   var cached = null, phpParser = null;
   var extensions = { php: 'php', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', htm: 'html', html: 'html', css: 'css', json: 'json', swift: 'swift', sh: 'bash', sql: 'sql' };
+  var limits = { maxLines: 30000, maxChars: 25 * 1024 * 1024 };
+  function lineCount(code) {
+    if (!code) return 0;
+    var lines = 1;
+    for (var i = 0; i < code.length; i++) {
+      if (code[i] === '\n' || code[i] === '\r') { lines++; if (code[i] === '\r' && code[i + 1] === '\n') i++; }
+    }
+    return lines - (/[\r\n]$/.test(code) ? 1 : 0);
+  }
+  function inputProblem(code) {
+    if (code.length > limits.maxChars) return 'حجم متن کد بیشتر از ۲۵ مگابایت است؛ کد قبلی حفظ شد';
+    var total = sections(code, '').reduce(function (sum, file) { return sum + lineCount(file.code); }, 0);
+    return total > limits.maxLines ? 'حداکثر ۳۰٬۰۰۰ خط کد در هر بررسی پشتیبانی می‌شود؛ فایل را به بخش‌های کوچک‌تر تقسیم کن' : '';
+  }
   function sections(code, language) {
     var single = [{ code: code, language: language, start: 0, line: 1, complete: true, path: '' }];
     if (!/^\/\* ═══ درخت فایل‌های پروژه ═══ \*\/$/m.test(code)) return single;
@@ -22,6 +36,7 @@ window.ReviewEngine = (function () {
   }
   function local(code, language) {
     if (cached && cached.code === code && cached.language === language) return cached.result;
+    var problem = inputProblem(code); if (problem) throw new Error(problem);
     var files = sections(code, language), errors = [], warnings = [], findings = [], evidence = [], score = 0, verdict = 'clean';
     files.forEach(function (file) {
       function locate(issue) { return Object.assign({}, issue, { line: issue.line + file.line - 1, file: file.path, fileLine: issue.line }); }
@@ -35,13 +50,17 @@ window.ReviewEngine = (function () {
     });
     var result = { errors: errors, warnings: warnings, security: { findings: findings, evidence: evidence, score: Math.min(100, score), verdict: verdict },
       syntaxComplete: files.every(function (f) { return f.complete && (f.language === 'javascript' && !!window.acorn || f.language === 'typescript' && !!window.BabelParser || f.language === 'php' && !!window.PhpParser || f.language === 'json'); }),
-      partial: files.some(function (f) { return !f.complete; }) || code.indexOf('پوشش جزئی') >= 0, files: files };
+      partial: files.some(function (f) { return !f.complete; }) || code.indexOf('پوشش جزئی') >= 0, files: files,
+      coverage: { checkedLines: files.reduce(function (sum, f) { return sum + lineCount(f.code); }, 0), maxLines: limits.maxLines } };
     cached = { code: code, language: language, result: result };
     return result;
   }
   function syntaxErrors(file) {
     var failure = null;
-    if (file.language === 'javascript' && window.acorn) {
+    // Acorn's top-level binding arrays make many declarations quadratic. Babel's
+    // scope map avoids those scans without splitting the file's grammar.
+    var largeJavaScript = file.language === 'javascript' && file.code.length >= 160000 && !!window.BabelParser;
+    if (file.language === 'javascript' && window.acorn && !largeJavaScript) {
       try { window.acorn.parse(file.code, { ecmaVersion: 'latest', sourceType: 'module', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, locations: true }); return []; }
       catch (moduleError) {
         try { window.acorn.parse(file.code, { ecmaVersion: 'latest', sourceType: 'script', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, locations: true }); return []; }
@@ -49,7 +68,7 @@ window.ReviewEngine = (function () {
       }
     }
     // Parse JSX as grammar, never guess it from '<name' (which also matches a<b).
-    if ((file.language === 'typescript' || (file.language === 'javascript' && failure)) && window.BabelParser) {
+    if ((file.language === 'typescript' || (file.language === 'javascript' && (failure || largeJavaScript))) && window.BabelParser) {
       var plugins = file.language === 'typescript' ? ['typescript', 'decorators-legacy'] : [];
       var options = { sourceType: 'unambiguous', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, attachComment: false, plugins: plugins };
       try { window.BabelParser.parse(file.code, options); return []; }
@@ -162,5 +181,6 @@ window.ReviewEngine = (function () {
     });
     return result.concat(remaining.map(function (er) { return Object.assign({}, er, { state: 'open' }); }));
   }
-  return { local: local, sections: sections, confirmIssues: confirmIssues, dedupe: dedupe, applyEdits: applyEdits, aiChunks: aiChunks, reconcile: reconcile };
+  return { local: local, sections: sections, confirmIssues: confirmIssues, dedupe: dedupe, applyEdits: applyEdits, aiChunks: aiChunks, reconcile: reconcile,
+    limits: limits, lineCount: lineCount, inputProblem: inputProblem };
 })();

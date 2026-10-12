@@ -2,8 +2,19 @@
   "images": [
     {
       "idiom": "universal",
-      "filename": "slogan.png",
+      "filename": "slogan-light.png",
       "scale": "3x"
+    },
+    {
+      "idiom": "universal",
+      "filename": "slogan.png",
+      "scale": "3x",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
     }
   ],
   "info": {

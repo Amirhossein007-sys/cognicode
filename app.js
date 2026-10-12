@@ -482,17 +482,81 @@ try {
     }
     applyErrorPositions();
     updateCaretLine();
+    renderVisibleHighlight();
   }
 
   /* ── موتور ادیتور (رنگ‌آمیزی با دیبانس برای کارایی روی کدهای طولانی) ── */
   var hlTimer = null;
+  var highlightWorker, highlightBusy, highlightQueued, highlightTimeout, highlightSerial = 0, highlightUnavailable = false;
+  var viewportHighlight, highlightRange = '';
+  function renderVisibleHighlight() {
+    if (!viewportHighlight || viewportHighlight.code !== ta.value) return;
+    var start = Math.max(0, Math.floor(ta.scrollTop / lineHeight) - 8);
+    var end = Math.min(viewportHighlight.lines.length, start + Math.ceil(ta.clientHeight / lineHeight) + 24);
+    var range = start + ':' + end;
+    if (range === highlightRange) return;
+    highlightRange = range;
+    var plain = viewportHighlight.plain;
+    // Off-screen lines remain text, retaining exact scroll width/height and content.
+    // Only the visible lines and an overscan margin need token DOM elements.
+    var prefix = start ? Syntax.esc(plain.slice(0, start).join('\n')) + '\n' : '';
+    var suffix = end < plain.length ? '\n' + Syntax.esc(plain.slice(end).join('\n')) : '';
+    hlCode.innerHTML = prefix + viewportHighlight.lines.slice(start, end).join('\n') + suffix + '\n';
+  }
+  function applyHighlight(html, code) {
+    hlCode.dataset.highlightState = 'ready';
+    viewportHighlight = null; highlightRange = '';
+    if (code.length >= 20000) {
+      viewportHighlight = { code: code, lines: html.split('\n'), plain: code.split('\n') };
+      renderVisibleHighlight();
+    } else hlCode.innerHTML = html + '\n';
+  }
+  function highlightFallback() {
+    clearTimeout(highlightTimeout); highlightUnavailable = true;
+    if (highlightWorker) highlightWorker.terminate();
+    highlightWorker = null; highlightBusy = null; highlightQueued = null;
+    var code = ta.value, language = langMode === 'auto' ? Syntax.detect(code) : langMode;
+    if (language !== langKey) setLang(language);
+    applyHighlight(Syntax.highlight(code, langKey), code);
+  }
+  function queueHighlight(job) {
+    if (highlightBusy) { highlightQueued = job; return; }
+    try {
+      if (!highlightWorker) {
+        highlightWorker = Syntax.createWorker();
+        highlightWorker.onerror = function (event) { event.preventDefault(); highlightFallback(); };
+        highlightWorker.onmessage = function (event) {
+          var result = event.data, completed = highlightBusy;
+          if (!completed || completed.id !== result.id) return;
+          clearTimeout(highlightTimeout); highlightBusy = null;
+          if (result.error) { highlightFallback(); return; }
+          if (completed.code === ta.value && completed.mode === langMode) {
+            if (result.language !== langKey) setLang(result.language);
+            applyHighlight(result.html, completed.code);
+          }
+          var next = highlightQueued; highlightQueued = null;
+          if (next) queueHighlight(next);
+        };
+      }
+      highlightBusy = job;
+      highlightTimeout = setTimeout(highlightFallback, 15000);
+      highlightWorker.postMessage(job);
+    } catch (_) { highlightFallback(); }
+  }
   function renderHighlight() {
     var code = ta.value;
-    hlCode.innerHTML = Syntax.highlight(code, langKey) + '\n';
+    if (code.length >= 20000 && !highlightUnavailable && window.Worker) {
+      viewportHighlight = null; highlightRange = '';
+      hlCode.textContent = code + '\n';
+      hlCode.dataset.highlightState = 'pending';
+      queueHighlight({ id: ++highlightSerial, code: code, mode: langMode });
+    } else applyHighlight(Syntax.highlight(code, langKey), code);
     var lineCount = countLines(code);
-    var g = '';
-    for (var i = 1; i <= lineCount; i++) g += i + '\n';
-    gutter.textContent = g;
+    if (gutter.dataset.lines !== String(lineCount)) {
+      var g = '';
+      for (var i = 1; i <= lineCount; i++) g += i + '\n';
+      gutter.textContent = g; gutter.dataset.lines = String(lineCount);
+    }
   }
   function updateEditor() {
     var code = ta.value;
@@ -515,8 +579,10 @@ try {
     // detect() روی هر کلید سنگین است (۳۴ رجکس روی کل متن) — داخل همان دیبانس
     // ۸۰ms هایلایت اجرا می‌شود تا تایپ روان بماند
     hlTimer = setTimeout(function () {
-      var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
-      if (k !== langKey) setLang(k);
+      if (!(ta.value.length >= 20000 && !highlightUnavailable && window.Worker)) {
+        var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
+        if (k !== langKey) setLang(k);
+      }
       renderHighlight();
     }, 80);
     scheduleLiveReview();
@@ -555,6 +621,7 @@ try {
   }
 
   function syncScroll() {
+    renderVisibleHighlight();
     hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
     gutter.scrollTop = ta.scrollTop;
     // دو لایهٔ نشانگر اسکرول‌کننده نیستند: فرزندانشان position:absolute‌اند و هیچ
@@ -780,13 +847,8 @@ try {
   ta.addEventListener('click', updateCaretLine);
   /* چسباندن مستقیم (Ctrl+V / لانگ‌پرس):
      رفتار بومی مرورگر برای حفظ دقیق نویسه‌ها، فاصله‌ها، ایندنت‌ها و تاریخچهٔ Undo حفظ می‌شود */
-  ta.addEventListener('paste', function (e) {
-    setTimeout(function () {
-      updateCaretLine();
-      autoDetectAndRender();
-      persistDraftDebounced();
-    }, 0);
-  });
+  // The native paste emits input, which already highlights and saves the draft.
+  // Avoid a second full render and the obsolete paste-only helper calls.
   document.addEventListener('selectionchange', function () {
     if (document.activeElement === ta) updateCaretLine();
   });
@@ -1037,6 +1099,8 @@ try {
 
           item.addEventListener('click', function () {
             haptic('medium');
+            var problem = ReviewEngine.inputProblem(f.content);
+            if (problem) { toast(problem, 5500); return; }
             saveSnapshot();
             ta.value = f.content;
             lastSnapshotValue = f.content;
@@ -1178,6 +1242,8 @@ try {
         } catch (_) { toast('فایل متنی خوانا نیست؛ فایل کد با UTF-8 یا UTF-16 انتخاب کن'); return; }
 
         if (analyzing || scanningImage || ta.value !== fileOriginalCode) { toast('کد تغییر کرده؛ فایل را دوباره انتخاب کن'); return; }
+        var problem = ReviewEngine.inputProblem(content);
+        if (problem) { toast(problem, 5500); return; }
         saveSnapshot();
         ta.value = content;
         lastSnapshotValue = content;
@@ -1971,12 +2037,10 @@ try {
     'نسخه اصلاح‌شده را ننویس. summary کوتاه، steps حداکثر ۳ و uses/notes حداکثر ۲ مورد. تحلیل استاتیک تضمین صحت اجرا نیست. متن خارج JSON ممنوع.'
   ].join('\n');
 
-  /* سقف ورودی مدل. هیچ بخشی از فایل به‌صورت پنهانی حذف نمی‌شود: فایل بزرگ‌تر از سقف
-     اصلاً به مدل نمی‌رود و runAnalysis پیش از ارسال، محدودیت را صریح به کاربر می‌گوید.
-     پس `truncated` فقط یک مصرف‌کننده دارد — همان گارد — و پیام‌ها هیچ‌وقت متن بریده نمی‌بینند. */
+  /* Every source line is planned into AI chunks; this cap applies to one request. */
   var MAX_CODE_CHARS = 48000;
   function clipForAI(code) {
-    return { text: code, truncated: code.length > MAX_CODE_CHARS };
+    return { text: code };
   }
 
   function buildCodeMessage(clip) {
@@ -2077,7 +2141,7 @@ try {
       setTimeout(function () { root.classList.remove('theme-anim'); }, 200);
     }
     root.dataset.theme = dark ? 'dark' : 'light';
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#020604' : '#f3f8f4');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
     // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
     // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
@@ -2088,16 +2152,14 @@ try {
     if (nativeAvailable() && window.webkit.messageHandlers.themeBridge) {
       window.webkit.messageHandlers.themeBridge.postMessage({ dark: dark });
     }
-    if (window.Sonar) window.Sonar.refresh();
+    if (window.MatrixRain) window.MatrixRain.refresh();
   }
   (function initTheme() {
     var saved = null;
     try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
     var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
     var initialDark = saved ? saved === 'dark' : !prefersLight;
-    if (document.documentElement.classList.contains('launch-pending')) {
-      window.addEventListener('cognicode:launch-complete', function () { applyTheme(initialDark, false); }, { once: true });
-    } else applyTheme(initialDark, false);
+    applyTheme(initialDark, false);
   })();
   $('btn-theme').addEventListener('click', function () {
     haptic('selection');
@@ -2311,7 +2373,11 @@ try {
     }
     await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, consume));
     checkOperation(op);
+    var reviewedChunks = results.filter(function (report) { return !report.incomplete && !report.raw; }).length;
+    var coverage = { totalChunks: chunks.length, reviewedChunks: reviewedChunks,
+      totalLines: ReviewEngine.sections(code, language).reduce(function (sum, file) { return sum + ReviewEngine.lineCount(file.code); }, 0) };
     if (results.length === 1 && chunks[0].line === 1 && !chunks[0].path) {
+      results[0].coverage = coverage;
       if (!results[0].incomplete && !results[0].raw) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(results[0])) };
       return results[0];
     }
@@ -2324,8 +2390,11 @@ try {
         notes = notes.concat(report.explanation.notes || []); steps = steps.concat(report.explanation.steps || []);
       }
     });
-    var merged = { valid: errors.length === 0, errors: ReviewEngine.confirmIssues(errors, code, language), incomplete: incomplete,
-      explanation: { summary: summaries.slice(0, 2).join('\n'), steps: steps.slice(0, 5), uses: [], notes: notes.slice(0, 3).concat(['همهٔ بخش‌ها برای AI ارسال شدند؛ تحلیل بخش‌های جدا، صحت رفتار کل برنامه را تضمین نمی‌کند.']) } };
+    var merged = { valid: errors.length === 0, errors: ReviewEngine.confirmIssues(errors, code, language), incomplete: incomplete, coverage: coverage,
+      explanation: { summary: summaries.slice(0, 2).join('\n'), steps: steps.slice(0, 5), uses: [], notes: notes.slice(0, 3).concat([
+        'بررسی AI: ' + fa(reviewedChunks) + ' از ' + fa(chunks.length) + ' بخش کامل شد.' + (incomplete ? ' برخی بخش‌ها پاسخ کامل نداشتند؛ بررسی کامل تأیید نمی‌شود.' : ''),
+        'تحلیل بخش‌های جدا، صحت رفتار کل برنامه را تضمین نمی‌کند.'
+      ]) } };
     if (!incomplete) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
     return merged;
   }
@@ -2613,6 +2682,8 @@ try {
     if (analyzing || scanningImage || activeOperation) return;
     var code = ta.value;
     if (!code.trim()) { toast('اول چند خط کد بنویس ✍️'); return; }
+    var problem = ReviewEngine.inputProblem(code);
+    if (problem) { toast(problem, 5500); return; }
     var op = beginOperation('در حال بررسی ساختار کد…');
     op.kind = 'analysis';
     op.finished = new Promise(function (resolve) { op.resolveFinished = resolve; });
@@ -2646,7 +2717,10 @@ try {
     startLoading();
 
     var localErrs = [], warns = [], ai = null, aiErr = null;
-    var local = await ReviewService.local(code, langKey);
+    var reviewController = new AbortController(); op.controllers.add(reviewController);
+    var local;
+    try { local = await ReviewService.local(code, langKey, { signal: reviewController.signal }); }
+    finally { op.controllers.delete(reviewController); }
     checkOperation(op);
     if (ta.value !== code) throw abortError();
     localErrs = local.errors.slice();
@@ -2675,7 +2749,7 @@ try {
     syncReviewTab();
     var localHard = immediate.filter(function (er) { return er.severity !== 'warning'; }).length;
     var localStatus = localHard ? fa(localHard) + ' خطای قطعی' : local.partial ? 'پوشش جزئی فایل' : local.syntaxComplete ? 'نحو سالم' : 'بررسی ساختاری انجام شد';
-    $('problems-summary').textContent = 'بررسی آفلاین: ' + localStatus + (useAI ? '؛ بررسی AI در پس‌زمینه ادامه دارد' : '');
+    $('problems-summary').textContent = 'بررسی آفلاین: ' + localStatus + '؛ ' + fa(local.coverage.checkedLines) + ' خط بررسی شد' + (useAI ? '؛ بررسی AI در پس‌زمینه ادامه دارد' : '');
     setBrainState(localHard ? 'error' : local.partial || !local.syntaxComplete ? 'idle' : immediate.length ? 'warning' : 'healthy');
     stopLoading(); hideAnalysisOverlay();
     scanline.hidden = true;
@@ -2733,7 +2807,8 @@ try {
       proposed: fixCode,
       explanation: fixExp || adv || '',
       security: mal,
-      aiSecurity: ai && !ai.raw ? ai.security : null
+      aiSecurity: ai && !ai.raw ? ai.security : null,
+      coverage: { local: local.coverage, ai: ai && ai.coverage || null }
     });
 
     if (hard.length > 0) {

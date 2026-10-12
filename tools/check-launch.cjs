@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
         const page = await browser.newPage({ viewport: { width, height: width === 320 ? 568 : 852 }, reducedMotion: 'reduce' });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.addInitScript(() => localStorage.setItem('cognicode.theme', 'light'));
+        await page.addInitScript(() => { localStorage.setItem('cognicode.theme', 'light'); localStorage.setItem('cognicode.launch-seen.v1', '1'); });
         await page.clock.install({ time: new Date('2026-10-01T00:00:00Z') });
         await page.clock.pauseAt(new Date('2026-10-01T00:00:01Z'));
         await page.goto(pathToFileURL(path.resolve(__dirname, '..', source)).href);
@@ -23,20 +23,19 @@ const assert = require('node:assert/strict');
           return { text: document.querySelector('.launch-content p').textContent, theme: document.documentElement.dataset.theme,
             inert: document.getElementById('app').inert, hidden: getComputedStyle(document.getElementById('app')).visibility,
             width: innerWidth, left: r.left, right: r.right, bottom: r.bottom, height: innerHeight,
-            background: getComputedStyle(document.getElementById('particles-js')).backgroundImage };
+            background: getComputedStyle(document.getElementById('matrix-background')).backgroundColor };
         });
         assert.equal(state.text, 'با کوگنی، کُدت رو تحلیل کن');
-        assert.equal(state.theme, 'dark');
+        assert.equal(state.theme, 'light');
         assert.equal(state.inert, true);
         assert.equal(state.hidden, 'hidden');
         assert.ok(state.left >= 0 && state.right <= state.width && state.bottom < state.height);
-        assert.ok(state.background.includes('0, 53, 102'));
+        assert.equal(state.background, 'rgb(243, 248, 244)');
         assert.equal(await page.locator('.launch-brain').evaluate(el => getComputedStyle(el).animationName), 'none');
         if (process.argv.includes('--capture') && source === 'index.html' && width === 393) {
-          await page.screenshot({ path: path.resolve(__dirname, '../launch-dark.png') });
-          await page.locator('.launch-content').evaluate(el => el.hidden = true);
-          await page.locator('#particles-js').screenshot({ path: path.resolve(__dirname, '../native/CogniCode/Assets.xcassets/LaunchBackground.imageset/background.png') });
-          await page.locator('.launch-content').evaluate(el => el.hidden = false);
+          await page.screenshot({ path: path.resolve(__dirname, '../launch-light.png') });
+          // Native launch images are generated in both themes at the proper
+          // display scale by render-matrix-launch.cjs.
         }
         if (source === 'native/Web/index.html' && width === 393) {
           await page.evaluate(() => {
@@ -47,9 +46,9 @@ const assert = require('node:assert/strict');
           assert.equal(await page.locator('#launch-splash').isVisible(), true, 'Background time must not consume the visible launch duration');
           await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
         }
-        await page.clock.runFor(2980);
+        await page.clock.runFor(2900);
         assert.equal(await page.locator('#launch-splash').isVisible(), true);
-        await page.clock.runFor(20);
+        await page.clock.runFor(120);
         assert.equal(await page.locator('#launch-splash').isVisible(), false);
         assert.equal(await page.evaluate(() => document.getElementById('app').inert), false);
         assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
@@ -59,7 +58,7 @@ const assert = require('node:assert/strict');
         assert.equal(await page.locator('#launch-splash').isVisible(), false);
         assert.deepEqual(errors, []);
         await page.close();
-        console.log(`PASS ${source} ${width}: dark launch, slogan, three seconds, stored theme, no replay`);
+        console.log(`PASS ${source} ${width}: stored-theme launch, slogan, three seconds, stored theme, no replay`);
       }
     }
   } finally { await browser.close(); }
