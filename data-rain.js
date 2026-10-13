@@ -4,6 +4,7 @@
 (function () {
 const ANDROID = !!window.AndroidBridge || /android/i.test(navigator.userAgent);
 const MOBILE = ANDROID || !!window.webkit?.messageHandlers || /iPhone|iPad|iPod/.test(navigator.userAgent) || matchMedia('(max-width:680px), (pointer:coarse)').matches;
+if (MOBILE) { window.MobileRain.start(); return; }
 const MAX = MOBILE ? 600 : 1800;
 const L = MOBILE ? 13 : 19;
 const STEP = 1 / (MOBILE ? 30 : 60);

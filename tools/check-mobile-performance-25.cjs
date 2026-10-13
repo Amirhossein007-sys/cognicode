@@ -1,8 +1,8 @@
 const {chromium,webkit}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const {pathToFileURL}=require('node:url');const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/build-25-validation');fs.mkdirSync(out,{recursive:true});
+const {pathToFileURL}=require('node:url');const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.join(root,'release.json'),'utf8')).build+'-validation');fs.mkdirSync(out,{recursive:true});
 const sample=Array.from({length:30000},(_,i)=>`const row${i} = {value: ${i}, text: "${i===18000?'long '.repeat(80):'Cogni'}"};`).join('\n');
 (async()=>{const measurements=[];
-for(const [engine,platform,file]of [[webkit,'ios',path.join(root,'native/Web/index.html')],[chromium,'android',path.join(process.env.COGNI_ANDROID_ROOT||path.join(root,'artifacts/build-25-android'),'app/src/main/assets/web/index.html')]]){
+for(const [engine,platform,file]of [[webkit,'ios',path.join(root,'native/Web/index.html')],[chromium,'android',path.join(process.env.COGNI_ANDROID_ROOT||path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.join(root,'release.json'),'utf8')).build+'-android'),'app/src/main/assets/web/index.html')]]){
 const browser=await engine.launch({headless:true});try{
 const page=await browser.newPage({viewport:{width:393,height:852},userAgent:platform==='ios'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148':'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(platform=>{if(platform==='android')window.AndroidBridge={};window.__frames=0;const clear=CanvasRenderingContext2D.prototype.clearRect;CanvasRenderingContext2D.prototype.clearRect=function(...args){if(this.canvas.classList.contains('dr-main'))window.__frames++;return clear.apply(this,args);};},platform);

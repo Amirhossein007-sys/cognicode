@@ -1,0 +1,17 @@
+const {chromium,webkit}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');const {pathToFileURL}=require('node:url');
+const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/build-26-validation');fs.mkdirSync(out,{recursive:true});
+(async()=>{for(const [engine,platform,file]of [[webkit,'ios',path.join(root,'native/Web/index.html')],[chromium,'android',path.join(root,'artifacts/build-26-android/app/src/main/assets/web/index.html')]]){
+ const browser=await engine.launch({headless:true});try{
+ const page=await browser.newPage({viewport:{width:393,height:852},deviceScaleFactor:3,userAgent:platform==='ios'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)':'Mozilla/5.0 (Linux; Android 15)'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>{window.__rainDraws=0;const draw=CanvasRenderingContext2D.prototype.stroke;CanvasRenderingContext2D.prototype.stroke=function(){if(this.canvas.classList.contains('dr-main'))window.__rainDraws++;return draw.call(this);};});
+ await page.goto(pathToFileURL(file).href);await page.locator('#launch-splash').waitFor({state:'hidden'});await page.waitForTimeout(4700);
+ const transform=()=>page.locator('.dr-main').first().evaluate(el=>getComputedStyle(el).transform),initial=await transform(),draws=await page.evaluate(()=>window.__rainDraws);await page.waitForTimeout(400);assert.notEqual(await transform(),initial,'Continuous motion without touch after 4 seconds');assert.equal(await page.evaluate(()=>window.__rainDraws),draws,'No recurring Canvas draw');
+ const geometry=await page.locator('.dr-main').first().evaluate(el=>({width:el.width,height:el.height}));assert.ok(geometry.width<=295&&geometry.height<=639);assert.equal(await page.locator('.dr-mobile-copy').count(),1);
+ for(const energy of [{lowPower:true,thermal:0},{lowPower:false,thermal:1},{lowPower:false,thermal:3}]){await page.evaluate(energy=>window.dispatchEvent(new CustomEvent('cognicode:energy-change',{detail:energy})),energy);const before=await transform();await page.waitForTimeout(160);assert.equal(await transform(),before);}
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:energy-change',{detail:{lowPower:false,thermal:0}})));const resumed=await transform();await page.waitForTimeout(200);assert.notEqual(await transform(),resumed);
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:native-active',{detail:false})));const paused=await transform();await page.waitForTimeout(200);assert.equal(await transform(),paused);await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:native-active',{detail:true})));
+ await page.emulateMedia({reducedMotion:'reduce'});const reduced=await transform();await page.waitForTimeout(200);assert.equal(await transform(),reduced);await page.emulateMedia({reducedMotion:'no-preference'});
+ for(const theme of ['light','dark']){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);await page.waitForTimeout(120);await page.screenshot({path:path.join(out,platform+'-rain-'+theme+'.png')});}
+ assert.deepEqual(errors,[]);console.log('PASS '+platform+': continuous compositor motion, zero repeated Canvas draws, bounded raster, energy/native/reduced-motion pause and resume');
+ }finally{await browser.close();}
+}})().catch(error=>{console.error(String(error.stack||error).slice(0,2000));process.exitCode=1;});

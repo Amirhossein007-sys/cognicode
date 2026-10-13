@@ -429,6 +429,9 @@ struct WebViewContainer: UIViewRepresentable {
                   let obj = message.body as? [String: Any],
                   let id = obj["id"] as? String else { return }
 
+            let method = ((obj["method"] as? String) ?? "POST").uppercased()
+            let isModelList = method == "GET" && (obj["purpose"] as? String) == "models"
+
             guard let urlString = obj["url"] as? String,
                   let body = obj["body"] as? String,
                   let url = URL(string: urlString),
@@ -438,7 +441,8 @@ struct WebViewContainer: UIViewRepresentable {
                   comps.port == nil || comps.port == 443,
                   let host = comps.host, !host.isEmpty,
                   !isBlockedHostAddress(host),
-                  body.contains("\"messages\"") else {
+                  (method == "POST" && body.contains("\"messages\"")) ||
+                    (isModelList && (url.path.hasSuffix("/models") || (comps.queryItems ?? []).contains(where: { URL(string: $0.value ?? "")?.path.hasSuffix("/models") == true }))) else {
                 let payload: [Any] = [id, false, 400, "درخواست به دلیل محدودیت‌های امنیتی شبکه رد شد"]
                 if let json = try? JSONSerialization.data(withJSONObject: payload),
                    let jsArgs = String(data: json, encoding: .utf8) {
@@ -453,8 +457,8 @@ struct WebViewContainer: UIViewRepresentable {
             let key = providedKey == "__native_keychain__" ? (NativeCredential.read() ?? "") : providedKey
 
             var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.httpBody = body.data(using: .utf8)
+            request.httpMethod = method
+            request.httpBody = method == "POST" ? body.data(using: .utf8) : nil
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             if !key.isEmpty {
                 request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")

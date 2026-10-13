@@ -7,3 +7,6 @@ reviews[1]={...models[1],error:'HTTP 503'};report=api.merge(reviews);assert.equa
 reviews[1]={...models[1],report:{valid:true,incomplete:true,errors:[],explanation:{notes:['Response was cut off']}}};report=api.merge(reviews);assert.equal(report.coverage.completedReviewers,4);assert.match(report.reviewers[1].error,/cut off/);
 reviews[0].report.security={verdict:'malicious',confidence:'high',evidence:[{line:1,quote:'real source',verified:true}]};report=api.merge(reviews);assert.equal(report.security.verdict,'malicious');
 console.log('PASS exactly five reviewers, honest partial coverage, per-model failures and verified security preservation');
+const chosen=api.list({selectedModels:[{model:'custom-model',name:'My model'}]});assert.equal(chosen.length,1);assert.equal(chosen[0].model,'custom-model');
+const one=api.merge([{...chosen[0],report:{valid:true,errors:[],explanation:{}}}]);assert.equal(one.incomplete,false);assert.equal(one.coverage.totalReviewers,1);assert.equal(one.valid,true);assert.equal(api.merge([]).valid,false);assert.equal(api.merge([]).incomplete,true);
+assert.equal(api.list({selectedModels:[]}).length,0);console.log('PASS chosen models, variable coverage and no empty-review success');

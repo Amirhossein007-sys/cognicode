@@ -32,7 +32,7 @@ try {
   var LS_HIST = 'cognicode.history.v1';
   var LS_MIG = 'cognicode.migration.v2';
   var DEFAULT_BASE = 'https://api.gapgpt.app/v1';
-  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-6.1-sol', reviewModels: Object.assign({}, AIReviewers.defaults), hist: true, proxy: '' };
+  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-6.1-sol', reviewModels: Object.assign({}, AIReviewers.defaults), selectedModels: [], modelCatalog: [], hist: true, proxy: '' };
   var history = [];
   // مهاجرت نقطه‌ای تنظیمات قدیمی — فقط یک‌بار در عمر نصب اجرا می‌شود تا انتخاب
   // بعدی خود کاربر (مثلاً OpenAI) در اجراهای بعدی بازنویسی نشود
@@ -52,7 +52,7 @@ try {
   } catch (e) { history = []; }
   function saveSettings() {
     var saved = Object.assign({}, settings);
-    if (window.webkit && window.webkit.messageHandlers.credentialBridge && (nativeCredentialReady || nativeCredentialPending)) delete saved.key;
+    if (window.webkit && window.webkit.messageHandlers.credentialBridge) delete saved.key;
     try { localStorage.setItem(LS_SET, JSON.stringify(saved)); } catch (e) {}
   }
   var nativeCredentialReady = false, nativeCredentialPending = false;
@@ -2269,7 +2269,7 @@ try {
   }
   var nativePending = {};
   var NATIVE_ID = 0;
-  function nativeSend(url, key, bodyJson) {
+  function nativeSend(url, key, bodyJson, method, timeout) {
     var op = activeOperation;
     checkOperation(op);
     return new Promise(function (resolve, reject) {
@@ -2279,12 +2279,12 @@ try {
           delete nativePending[id];
           if (op) op.nativeIds.delete(id);
           if (window.webkit.messageHandlers.aiCancelBridge) window.webkit.messageHandlers.aiCancelBridge.postMessage({ id: id });
-          reject(new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۱۲۰ ثانیه‌ای)'));
+          reject(new Error('پاسخ API بیش از حد انتظار طول کشید'));
         }
-      }, 120000);
+      }, timeout || 120000);
       nativePending[id] = { resolve: resolve, reject: reject, timer: timer, operation: op };
       if (op) op.nativeIds.add(id);
-      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson });
+      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson, method: method || 'POST', purpose: method === 'GET' ? 'models' : 'chat' });
     });
   }
   window.__nativeAI = function (id, ok, status, text) {
@@ -2300,11 +2300,32 @@ try {
     }
   };
 
-  async function chat(messages, maxTokens, temperature, modelOverride) {
+  async function listServiceModels() {
+    var op = activeOperation, url = AIModels.proxy(AIModels.endpoints(settings.base).models, settings.proxy);
+    checkOperation(op);
+    var result;
+    if (nativeAvailable()) result = await nativeSend(url, settings.key, '', 'GET', 20000);
+    else {
+      var controller = new AbortController(); if (op) op.controllers.add(controller);
+      var timer = setTimeout(function () { controller.abort(); }, 20000);
+      try {
+        var response = await fetch(url, {method:'GET',signal:controller.signal,redirect:'error',headers:{Authorization:'Bearer '+settings.key}});
+        result = {status:response.status,text:await response.text()};
+        if (!response.ok) throw apiErrorFrom(result.status,result.text);
+      } catch (error) { checkOperation(op); throw error; }
+      finally { clearTimeout(timer); if (op) op.controllers.delete(controller); }
+    }
+    checkOperation(op);
+    if (result.text.length > 2000000) throw new Error('فهرست مدل‌های سرویس بیش از حد بزرگ است');
+    var data; try { data = JSON.parse(result.text); } catch (_) { throw new Error('سرویس به‌جای فهرست مدل‌ها پاسخ نامعتبر داد'); }
+    if (data && data.error) throw apiErrorFrom(result.status,result.text);
+    return AIModels.parse(data);
+  }
+
+  async function chat(messages, maxTokens, temperature, modelOverride, timeout) {
     var op = activeOperation;
     checkOperation(op);
-    var base = (settings.base || DEFAULT_BASE).replace(/\/+$/, '');
-    var url = /\/chat\/completions\/?$/i.test(base) ? base : (base + '/chat/completions');
+    var url = AIModels.endpoints(settings.base || DEFAULT_BASE).chat;
     var px = (settings.proxy || '').trim();
     if (px && !chat._proxyWarned) {
       chat._proxyWarned = true;
@@ -2324,14 +2345,17 @@ try {
     // می‌کنند و به‌جای max_tokens، max_completion_tokens می‌خواهند؛ فرستادن بدنهٔ
     // ثابت باعث خطای ۴۰۰ برای این مدل‌ها می‌شد
     var model = modelOverride || settings.model || 'gpt-6.1-sol';
+    var modelKey = model.split('/').pop();
+    var isModelProbe = op && (op.kind === 'model-selection' || op.kind === 'model-discovery');
+    if (!isModelProbe && !AIReviewers.list(settings).some(function (selected) { return selected.model === model; })) throw new Error('ابتدا تست اتصال را بزن و یک مدل در تنظیمات انتخاب کن');
     var hasImage = messages && messages.some(function (m) {
       return Array.isArray(m.content) && m.content.some(function (p) { return p.type === 'image_url'; });
     });
-    if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(model)) {
-      model = 'gpt-6.1-sol';
+    if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(modelKey)) {
+      throw new Error('مدل انتخاب‌شده از تصویر پشتیبانی نمی‌کند؛ در تنظیمات یک مدل مناسب تصویر انتخاب کن');
     }
     var body = { model: model, messages: messages, stream: false };
-    if (/^(?:o[1-9]|gpt-[56])/i.test(model)) {
+    if (/^(?:o[1-9]|gpt-[56])/i.test(modelKey)) {
       body.max_completion_tokens = maxTokens || 2200;
     } else {
       // استخراج کد از تصویر باید قطعی باشد؛ دمای صفر یعنی حدس تصادفی کمتر
@@ -2342,14 +2366,14 @@ try {
 
     var status, text;
     if (nativeAvailable()) {
-      var nr = await nativeSend(url, settings.key, bodyJson);
+      var nr = await nativeSend(url, settings.key, bodyJson, 'POST', timeout);
       status = nr.status;
       text = nr.text;
     } else {
       var res;
       var controller = new AbortController();
       if (op) op.controllers.add(controller);
-      var requestTimeout = setTimeout(function () { controller.abort(); }, 120000);
+      var requestTimeout = setTimeout(function () { controller.abort(); }, timeout || 120000);
       try {
         res = await fetch(url, {
           method: 'POST',
@@ -2481,12 +2505,13 @@ try {
   var lastEnsembleReview;
   async function askAI(code, clip) {
     var reviewers = AIReviewers.list(settings), reports = [], op = activeOperation;
+    if (!reviewers.length) throw new Error('ابتدا در تنظیمات، تست اتصال و انتخاب مدل را انجام بده');
     var identity = JSON.stringify([code,langKey,currentFileName,settings.base,settings.proxy,settings.key,reviewers]);
     if (lastEnsembleReview && lastEnsembleReview.identity === identity) return JSON.parse(JSON.stringify(lastEnsembleReview.report));
     for (var i = 0; i < reviewers.length; i++) {
       checkOperation(op);
       var reviewer = reviewers[i];
-      if (op) $('operation-stage').textContent = 'بررسی ' + reviewer.name + ' (' + fa(i + 1) + '/۵)…';
+      if (op) $('operation-stage').textContent = 'بررسی ' + reviewer.name + ' (' + fa(i + 1) + '/' + fa(reviewers.length) + ')…';
       try { reports.push(Object.assign({},reviewer,{report:await askAISingle(code,clip,reviewer)})); }
       catch (error) { checkOperation(op); reports.push(Object.assign({},reviewer,{error:aiErrorText(error)})); }
     }
@@ -2497,7 +2522,7 @@ try {
   }
   function reviewersToMd(ai) {
     if (!ai || !ai.reviewers) return '';
-    return '\n\n## بررسی پنج مدل\n\n' + ai.reviewers.map(function (review) {
+    return '\n\n## بررسی مدل‌های انتخاب‌شده\n\n' + ai.reviewers.map(function (review) {
       return '- **' + review.name + '**: ' + (review.complete ? 'بررسی کامل شد' : 'بررسی کامل نشد') + (review.error ? ' — ' + review.error : '');
     }).join('\n');
   }
@@ -2778,6 +2803,7 @@ try {
       openSheet('sheet-api');
       return;
     }
+    if (!AIReviewers.list(settings).length) { openSheet('sheet-settings'); toast('تست اتصال را بزن و مدل دلخواهت را انتخاب کن'); return; }
     runAnalysis(true);
   }
 
@@ -2861,7 +2887,7 @@ try {
       setOperationStage('نتیجهٔ آفلاین آماده است؛ بررسی AI در پس‌زمینه…');
       try {
         ai = await askAI(code, clip);
-        aiConnected = true;
+        aiConnected = !!ai.reviewers && ai.reviewers.every(function (reviewer) { return reviewer.complete; });
         updateAiStatus();
       } catch (e) {
         checkOperation(op);
@@ -3095,7 +3121,7 @@ try {
         resVerdict.textContent = '✓ کد سالم است';
         resVerdict.className = 'verdict ok';
       }
-      resMode.textContent = 'بررسی پنج مدل';
+      resMode.textContent = 'بررسی ' + fa(ai && ai.reviewers ? ai.reviewers.length : AIReviewers.list(settings).length) + ' مدل';
       resMode.className = 'mode-badge ai';
     } else {
       if (secBadge) {
@@ -3507,7 +3533,7 @@ try {
       if (stAiTxt) stAiTxt.textContent = 'در حال بررسی…';
       return;
     }
-    if (aiConnected && settings.key && settings.base) {
+    if (aiConnected && AIReviewers.list(settings).length && settings.key && settings.base) {
       if (aiDot) aiDot.className = 'ai-dot on';
       if (stAi) stAi.className = 'st-ai on';
       if (stAiTxt) stAiTxt.textContent = 'AI آماده';
@@ -3515,7 +3541,7 @@ try {
       // کلید ذخیره شده ولی هنوز تست/تحلیل موفق نداشته‌ایم — کاربر را گول نزنیم (نقطه کهربایی ثابت بدون چشمک بیهوده)
       if (aiDot) aiDot.className = 'ai-dot standby';
       if (stAi) stAi.className = 'st-ai standby';
-      if (stAiTxt) stAiTxt.textContent = 'AI آماده (تست‌نشده)';
+      if (stAiTxt) stAiTxt.textContent = AIReviewers.list(settings).length ? 'AI نیاز به تست مجدد' : 'AI نیاز به انتخاب مدل';
     } else {
       if (aiDot) aiDot.className = 'ai-dot off';
       if (stAi) stAi.className = 'st-ai off';
@@ -3532,16 +3558,65 @@ try {
   cfgBase.value = settings.base;
   cfgProxy.value = settings.proxy || '';
   cfgKey.value = settings.key;
-  cfgModel.value = settings.model;
-  Object.keys(AIReviewers.defaults).forEach(function (name) {
-    var input = $('cfg-review-' + name);
-    input.value = (settings.reviewModels && settings.reviewModels[name]) || AIReviewers.defaults[name];
-    input.addEventListener('change', function () {
-      settings.reviewModels = Object.assign({}, AIReviewers.defaults, settings.reviewModels);
-      settings.reviewModels[name] = input.value.trim() || AIReviewers.defaults[name]; saveSettings(); aiConnected = false; updateAiStatus();
+  var connectionSerial = 0, modelBusy = false;
+  settings.modelCatalog = Array.isArray(settings.modelCatalog) ? settings.modelCatalog.filter(function(m){return m && typeof m.id==='string' && m.id.length<=200;}).slice(0,1000) : [];
+  settings.selectedModels = AIModels.selected((Array.isArray(settings.selectedModels)?settings.selectedModels:[]).map(function(m){return m && m.model;}),settings.modelCatalog);
+  function selectedIds() { return settings.selectedModels.map(function(m){return m.model;}); }
+  function renderModelPicker() {
+    var selected = selectedIds(), query = $('cfg-model-search').value.trim().toLowerCase(), options = $('model-options');
+    options.replaceChildren();
+    $('model-picker').hidden = !settings.modelCatalog.length;
+    $('model-picker-summary').textContent = fa(settings.modelCatalog.length)+' مدل معرفی‌شده؛ '+fa(selected.length)+' مدل انتخاب‌شده';
+    var matching = settings.modelCatalog.filter(function(model){return (model.id+' '+model.name).toLowerCase().includes(query);});
+    matching.slice(0,60).forEach(function(model){
+      var row=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span'),name=document.createElement('b'),status=document.createElement('small');
+      row.className='model-choice';row.dataset.state=model.state;input.type='checkbox';input.dataset.model=model.id;input.checked=selected.includes(model.id);input.disabled=modelBusy;
+      name.dir='ltr';name.textContent=model.id;
+      status.textContent=model.state==='verified'?'✓ دسترسی تأیید شد — '+model.name:model.state==='failed'?'دسترسی تأیید نشد: '+model.error:model.name+' — انتخاب برای بررسی دسترسی';
+      input.addEventListener('change',function(){chooseModel(model,input.checked);});text.append(name,status);row.append(input,text);options.append(row);
     });
+    if(matching.length>60){var more=document.createElement('p');more.className='hint-line';more.textContent='برای دیدن مدل دلخواه، نام آن را جست‌وجو کن ('+fa(matching.length)+' نتیجه).';options.append(more);}
+    $('primary-model-field').hidden=!selected.length;cfgModel.replaceChildren();
+    settings.selectedModels.forEach(function(model){var option=document.createElement('option');option.value=model.model;option.textContent=model.name+' — '+model.model;cfgModel.append(option);});
+    if(selected.length&&!selected.includes(settings.model))settings.model=selected[0];cfgModel.value=settings.model;cfgModel.disabled=modelBusy;
+    cfgTest.disabled=modelBusy;$('cfg-manual-test').disabled=modelBusy;
+  }
+  function invalidateModels() {
+    connectionSerial++; if (activeOperation) cancelOperation();
+    settings.selectedModels=[];settings.modelCatalog=[];aiConnected=false;saveSettings();renderModelPicker();updateAiStatus();
+    cfgTestLine.hidden=true;
+  }
+  async function verifyModel(model) {
+    var result=await chat([{role:'user',content:'Reply only with OK.'}],512,0,model.id,30000);
+    if(typeof result.message.content!=='string'||!result.message.content.trim()||result.finishReason==='length'||result.finishReason==='tool_calls')throw new Error('پاسخ متنی کامل از مدل دریافت نشد');
+    return true;
+  }
+  async function chooseModel(model, checked) {
+    if(modelBusy||activeOperation){renderModelPicker();toast('ابتدا بررسی جاری را تمام یا متوقف کن');return;}
+    if(!checked){settings.selectedModels=settings.selectedModels.filter(function(m){return m.model!==model.id;});saveSettings();renderModelPicker();updateAiStatus();return;}
+    if(settings.selectedModels.length>=5){renderModelPicker();toast('حداکثر پنج مدل را انتخاب کن');return;}
+    if(!settings.key||!settings.base){toast('آدرس سرویس و کلید API را وارد کن');renderModelPicker();return;}
+    var serial=connectionSerial,op=beginOperation('بررسی دسترسی '+model.id+'…');op.kind='model-selection';modelBusy=true;renderModelPicker();updateAiStatus('testing');
+    cfgTestLine.hidden=false;cfgTestLine.className='test-line';cfgTestLine.textContent='در حال بررسی دسترسی '+model.id+'…';
+    try{
+      await verifyModel(model);checkOperation(op);if(serial!==connectionSerial)return;
+      model.state='verified';model.error='';settings.selectedModels.push({id:model.id,model:model.id,name:model.name});aiConnected=true;
+      cfgTestLine.className='test-line ok';cfgTestLine.textContent='✓ '+model.id+' آماده است';saveSettings();haptic('success');
+    }catch(error){
+      if(serial===connectionSerial){model.state=error.name==='AbortError'?'listed':'failed';model.error=error.name==='AbortError'?'':aiErrorText(error);cfgTestLine.className='test-line fail';cfgTestLine.textContent=error.name==='AbortError'?'بررسی دسترسی متوقف شد':'✕ '+aiErrorText(error);saveSettings();}
+    }finally{finishOperation(op);modelBusy=false;renderModelPicker();updateAiStatus();}
+  }
+  $('cfg-model-search').addEventListener('input',renderModelPicker);
+  $('cfg-manual-test').addEventListener('click',function(){
+    var id=$('cfg-manual-model').value.trim();if(!id||id.length>200||/[\u0000-\u001f\u007f]/.test(id)){toast('شناسهٔ معتبر مدل را وارد کن');return;}
+    var model=settings.modelCatalog.find(function(m){return m.id===id;});
+    if(!model){model={id:id,name:AIModels.family(id),state:'listed',error:''};settings.modelCatalog.push(model);}
+    if(selectedIds().includes(id)){toast('این مدل انتخاب شده است');return;}chooseModel(model,true);
   });
+  renderModelPicker();
   cfgHist.checked = !!settings.hist;
+
+  [cfgBase,cfgKey,cfgProxy].forEach(function(input){input.addEventListener('input',invalidateModels);});
 
   cfgBase.addEventListener('change', function () {
     settings.base = cfgBase.value.trim();
@@ -3552,6 +3627,7 @@ try {
   cfgProxy.addEventListener('change', function () {
     settings.proxy = cfgProxy.value.trim();
     saveSettings();
+    aiConnected = false; updateAiStatus();
   });
   cfgKey.addEventListener('change', function () {
     settings.key = cfgKey.value.trim();
@@ -3564,9 +3640,9 @@ try {
     updateAiStatus();
   });
   cfgModel.addEventListener('change', function () {
-    settings.model = cfgModel.value.trim() || 'gpt-6.1-sol';
+    if (!selectedIds().includes(cfgModel.value)) return;
+    settings.model = cfgModel.value;
     saveSettings();
-    aiConnected = false;
     updateAiStatus();
   });
   cfgHist.addEventListener('change', function () {
@@ -3602,28 +3678,30 @@ try {
     cfgTestLine.textContent = 'در حال تست اتصال…';
     cfgTest.classList.add('busy');
     updateAiStatus('testing');
-    var connectionTestStartedAt = Date.now(), connectionOp = beginOperation('آزمون اتصال پنج مدل…'), connectionResults = [];
+    var serial=++connectionSerial,connectionOp=beginOperation('شناسایی مدل‌های سرویس…');connectionOp.kind='model-discovery';
+    modelBusy=true;settings.modelCatalog=[];settings.selectedModels=[];aiConnected=false;saveSettings();renderModelPicker();
+    $('cfg-model-search').value='';
     try {
-      var reviewModels = AIReviewers.list(settings);
-      for (var reviewModel of reviewModels) {
+      var models;
+      try { models=await listServiceModels(); }
+      catch(error){
         checkOperation(connectionOp);
-        setOperationStage('آزمون ' + reviewModel.name + '…');
-        try { await chat([{ role: 'user', content: 'Reply with OK.' }], 1000, 0, reviewModel.model); connectionResults.push({name:reviewModel.name,ok:true}); }
-        catch (error) { checkOperation(connectionOp); connectionResults.push({name:reviewModel.name,ok:false,error:aiErrorText(error)}); }
+        if(![404,405,501].includes(error.code))throw error;
+        models=[];
+        var candidates=[{model:settings.model}].concat(AIReviewers.list({model:'gpt-6.1-sol',reviewModels:settings.reviewModels})),seen=new Set();
+        for(var candidate of candidates){
+          if(seen.has(candidate.model))continue;if(seen.size>=5)break;seen.add(candidate.model);checkOperation(connectionOp);
+          var model={id:candidate.model,name:AIModels.family(candidate.model),state:'listed',error:''};setOperationStage('بررسی مدل '+model.id+'…');
+          try{await verifyModel(model);model.state='verified';models.push(model);}catch(probeError){checkOperation(connectionOp);if([401,429].includes(probeError.code))throw probeError;}
+        }
       }
-      aiConnected = connectionResults.every(function (result) { return result.ok; });
-      updateAiStatus();
-      cfgTestLine.className = 'test-line ' + (aiConnected ? 'ok' : 'fail');
-      cfgTestLine.textContent = connectionResults.map(function (result) { return (result.ok ? '✓ ' : '✕ ') + result.name + (result.error ? ': ' + result.error : ''); }).join('\n');
-      haptic(aiConnected ? 'success' : 'error');
+      checkOperation(connectionOp);if(serial!==connectionSerial)return;
+      settings.modelCatalog=models;saveSettings();cfgTestLine.className='test-line '+(models.length?'ok':'fail');
+      cfgTestLine.textContent=models.length?'✓ '+fa(models.length)+' مدل پیدا شد؛ مدل دلخواهت را انتخاب کن':'مدل متنی پیدا نشد؛ اگر شناسهٔ مدل را داری، آن را در بخش ورود نام مدل بررسی کن.';
+      haptic(models.length?'success':'error');
     } catch (e) {
-      aiConnected = false;
-      updateAiStatus();
-      cfgTestLine.className = 'test-line fail';
-      cfgTestLine.textContent = '✕ ' + aiErrorText(e);
-      haptic('error');
-    }
-    finishOperation(connectionOp); cfgTest.classList.remove('busy');
+      if(serial===connectionSerial){aiConnected=false;cfgTestLine.className='test-line fail';cfgTestLine.textContent=e.name==='AbortError'?'شناسایی مدل‌ها متوقف شد':'✕ '+aiErrorText(e);haptic('error');}
+    } finally {finishOperation(connectionOp);modelBusy=false;cfgTest.classList.remove('busy');renderModelPicker();updateAiStatus();}
   });
 
   /* ── موتور نیتیو همگام‌سازی کیبورد اپل (iOS 18 Native Keyboard Engine) ── */

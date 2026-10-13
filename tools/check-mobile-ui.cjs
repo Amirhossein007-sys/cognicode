@@ -2,7 +2,7 @@
 const {chromium,webkit} = require('playwright');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const {pathToFileURL} = require('node:url');
-const root = path.resolve(__dirname,'..'), output = path.join(root,'artifacts/build-24-validation');
+const root = path.resolve(__dirname,'..'), output = path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.join(root,'release.json'),'utf8')).build+'-validation');
 const android = path.join(process.env.COGNI_ANDROID_ROOT||path.resolve(root,'../cognicode-apk'),'app/src/main/assets/web/index.html');
 const dimensions = [[320,568],[360,640],[393,852],[412,915],[432,960],[560,820],[568,320],[740,360],[852,393],[932,430],[1280,800]];
 (async () => {
@@ -58,17 +58,19 @@ const dimensions = [[320,568],[360,640],[393,852],[412,915],[432,960],[560,820],
         await page.emulateMedia({reducedMotion:'no-preference'});
         await page.waitForTimeout(450);
         const frames=()=>page.evaluate(()=>window.__rainFrames);
-        const before=await frames(); await page.waitForTimeout(400); assert.ok(await frames()>before,'Idle rain must animate');
+        const transform=()=>page.locator('.dr-main').first().evaluate(el=>getComputedStyle(el).transform);
+        const before=await transform(); const initialFrames=await frames(); await page.waitForTimeout(400); assert.notEqual(await transform(),before,'Idle compositor rain must animate');assert.equal(await frames(),initialFrames,'Compositor motion needs no repeated Canvas draws');
         await page.locator('#code').fill('const test = 1;');
         const focused=await frames(); await page.waitForTimeout(600); assert.equal(await frames(),focused,'Pause for the full editor focus, including gaps between edits');
         await page.locator('#code').evaluate(el=>el.blur()); await page.waitForTimeout(500);
-        assert.ok(await frames()>focused,'Resume after keyboard focus ends');
+        assert.equal(await frames(),focused,'Editor focus changes need no redraw');
         await page.locator('#btn-settings').click(); await page.waitForTimeout(500);
         const sheet=await frames(); await page.waitForTimeout(600); assert.equal(await frames(),sheet,'Pause while settings is open');
-        await page.keyboard.press('Escape'); await page.waitForTimeout(500); assert.ok(await frames()>sheet);
+        await page.keyboard.press('Escape'); await page.waitForTimeout(500); assert.equal(await frames(),sheet);
         await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:native-active',{detail:false})));
-        const paused=await frames();await page.waitForTimeout(500);assert.equal(await frames(),paused);
-        await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:native-active',{detail:true})));await page.waitForTimeout(400);assert.ok(await frames()>paused);
+        await page.waitForTimeout(60); // Allow the compositor to apply the pause on its next frame.
+        const paused=await transform();await page.waitForTimeout(500);assert.equal(await transform(),paused);
+        await page.evaluate(()=>window.dispatchEvent(new CustomEvent('cognicode:native-active',{detail:true})));await page.waitForTimeout(400);assert.notEqual(await transform(),paused);
         const blur=await page.locator('.icon-btn,.editor,.keys,.bottom,.sheet,.glass-workspace,.analysis-overlay,.dial-face').evaluateAll(elements=>elements.map(el=>getComputedStyle(el).backdropFilter));
         assert.ok(blur.every(value=>value==='none'),JSON.stringify(blur));
       }

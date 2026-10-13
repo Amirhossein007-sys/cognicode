@@ -20,7 +20,7 @@ const output=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.j
    page.on('pageerror',error=>errors.push(error.message));
    await page.addInitScript(platform=>{
     localStorage.clear();if(platform==='android')window.AndroidBridge={};
-    localStorage.setItem('cognicode.settings.v1',JSON.stringify({key:'fixture',base:'https://large.fixture.invalid/v1',model:'gpt-4o-mini',hist:false}));
+    localStorage.setItem('cognicode.settings.v1',JSON.stringify({key:'fixture',base:'https://large.fixture.invalid/v1',model:'gpt-4o-mini',hist:false,selectedModels:[{"model":"gpt-6.1-sol","name":"ChatGPT / Codex"},{"model":"claude-sonnet-5-5","name":"Claude"},{"model":"deepseek-v4-pro","name":"DeepSeek"},{"model":"glm-5.3","name":"Z.ai"},{"model":"gemini-3.8-flash","name":"Gemini 3.8 Flash"}],modelCatalog:[{"id":"gpt-6.1-sol","name":"ChatGPT / Codex","state":"verified","error":""},{"id":"claude-sonnet-5-5","name":"Claude","state":"verified","error":""},{"id":"deepseek-v4-pro","name":"DeepSeek","state":"verified","error":""},{"id":"glm-5.3","name":"Z.ai","state":"verified","error":""},{"id":"gemini-3.8-flash","name":"Gemini 3.8 Flash","state":"verified","error":""}]}));
     window.__violations=[];document.addEventListener('securitypolicyviolation',e=>window.__violations.push(e.violatedDirective));
    },platform);
    let inflight=0,maxInflight=0,failChunk=false;
@@ -93,3 +93,4 @@ const output=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.j
  }
  fs.writeFileSync(path.join(output,'large-code.json'),JSON.stringify(measurements,null,2)+'\n');
 })().catch(error=>{console.error(String(error.stack||error).slice(0,1800));process.exitCode=1;});
+

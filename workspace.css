@@ -306,4 +306,14 @@ html[data-theme="light"] .project-file-item { background: rgba(255,255,255,.8); 
 .project-file-badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; background: rgba(148,163,184,.15); color: var(--txt2); font-feature-settings: "tnum"; }
 .project-file-badge.badge-entry { background: rgba(56,189,248,.25); color: var(--accent); font-weight: 600; }
 .project-files-empty { padding: 16px; text-align: center; color: var(--txt2); font-size: 12px; }
+.model-options { max-height: 280px; overflow: auto; overscroll-behavior: contain; display: grid; gap: 8px; margin: 10px 0; }
+.model-choice { display: grid; grid-template-columns: 24px minmax(0,1fr); align-items: center; gap: 10px; min-height: 56px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.model-choice input { width: 20px; height: 20px; accent-color: var(--accent); }
+.model-choice b { display: block; font: 500 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+.model-choice small { display: block; color: var(--txt2); line-height: 1.7; }
+.model-choice[data-state="verified"] { border-color: var(--accent); }
+.model-choice[data-state="failed"] small { color: var(--danger,#ef4444); }
+#cfg-model { width: 100%; min-height: 44px; padding: 10px; border-radius: 10px; color: var(--txt1); background: var(--bg); border: 1px solid var(--line); }
+#manual-model-details { margin-block: 12px; }
+#manual-model-details summary { min-height: 44px; padding-block: 10px; cursor: pointer; }
 

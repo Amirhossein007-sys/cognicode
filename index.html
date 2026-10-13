@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+25">
+<meta name="cognicode-release" content="1.1.0+26">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -434,7 +434,7 @@
       </div>
       <div class="form-card">
         <label class="fld">
-          <span>آدرس سرویس هوش مصنوعی <small>(گپ جی پی تی / OpenAI API)</small></span>
+          <span>آدرس سرویس هوش مصنوعی <small>(API سازگار با OpenAI)</small></span>
           <input id="cfg-base" dir="ltr" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://api.gapgpt.app/v1">
           <small class="hint-line">پیش‌فرض: https://api.gapgpt.app/v1 (سرویس ایرانی گپ‌جی‌پی‌تی بدون تحریم و بدون نیاز به پروکسی)</small>
         </label>
@@ -454,18 +454,14 @@
           </div>
           <small class="hint-line" id="credential-hint">کلید فقط در حافظه همین مرورگر (غیررمزنگاری‌شده) می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود.</small>
         </label>
-        <label class="fld">
-          <span>ChatGPT / Codex — مدل توضیح و اصلاح</span>
-          <input id="cfg-model" dir="ltr" list="model-list" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="gpt-6.1-sol">
-          <datalist id="model-list">
-            <option value="gpt-6.1-sol"></option>
-          </datalist>
-          <small class="hint-line">هر کد با پنج مدل بررسی می‌شود. سرویس API انتخابی باید هر پنج مدل را پشتیبانی کند؛ شناسه‌ها را مطابق سرویس خود تنظیم کن.</small>
-        </label>
-        <label class="fld"><span>Claude</span><input id="cfg-review-claude" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="claude-sonnet-5-5"></label>
-        <label class="fld"><span>DeepSeek</span><input id="cfg-review-deepseek" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="deepseek-v4-pro"></label>
-        <label class="fld"><span>Z.ai</span><input id="cfg-review-zai" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="glm-5.3"></label>
-        <label class="fld"><span>Gemini 3.8 Flash</span><input id="cfg-review-gemini" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="gemini-3.8-flash"></label>
+        <div id="model-picker" hidden>
+          <p class="hint-line" id="model-picker-summary" role="status"></p>
+          <label class="fld"><span>جست‌وجوی مدل</span><input id="cfg-model-search" type="search" dir="ltr" autocomplete="off" placeholder="نام مدل یا شرکت"></label>
+          <div id="model-options" class="model-options" role="group" aria-label="انتخاب مدل‌های بررسی"></div>
+          <small class="hint-line">یک یا چند مدل، حداکثر پنج مدل انتخاب کن. با انتخاب هر مدل، دسترسی واقعی با یک درخواست کوتاه بررسی می‌شود؛ این درخواست ممکن است هزینهٔ اندک API داشته باشد.</small>
+        </div>
+        <label class="fld" id="primary-model-field" hidden><span>مدل توضیح خطی و اصلاح کد</span><select id="cfg-model" dir="ltr"></select></label>
+        <details id="manual-model-details"><summary>ورود نام مدل، اگر سرویس فهرست نمی‌دهد</summary><label class="fld"><span>شناسهٔ دقیق مدل</span><input id="cfg-manual-model" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="model-id"></label><button class="ghost-btn" id="cfg-manual-test" type="button">بررسی و انتخاب مدل</button></details>
         <div class="test-row">
           <button class="ghost-btn" id="cfg-test">
             <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -597,11 +593,13 @@
 <script src="vendor/babel-parser.js"></script>
 <script src="review-engine.js"></script>
 <script src="review-service.js"></script>
+<script src="mobile-rain.js"></script>
 <script src="data-rain.js"></script>
 <script src="orbital-clock.js"></script>
 <script src="workspace-store.js"></script>
 <script src="change-set.js"></script>
 <script src="workspace-features.js"></script>
+<script src="ai-models.js"></script>
 <script src="ai-reviewers.js"></script>
 <script src="selection-explainer.js"></script>
 <script src="app.js"></script>

@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v37-data-dial';
+var CACHE = 'cognicode-v38-model-discovery';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -14,6 +14,8 @@ var PRECACHE = [
   './workspace-store.js',
   './workspace-features.js',
   './ai-reviewers.js',
+  './ai-models.js',
+  './mobile-rain.js',
   './selection-explainer.js',
   './change-set.js',
   './project-zip.js',
