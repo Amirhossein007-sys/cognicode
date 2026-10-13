@@ -2,12 +2,13 @@
    Fixed-step flow, vortex wake and batched trails retained; mobile draw/memory budgets capped. */
 'use strict';
 (function () {
-const MAX = 1800; // particle capacity
-const L = 19; // history points per particle
-const STEP = 1 / 60; // fixed physics step
-const PUFFS = 32; // vortex pool size
+const ANDROID = !!window.AndroidBridge || /android/i.test(navigator.userAgent);
+const MAX = ANDROID ? 600 : 1800; // bounded particle capacity
+const L = ANDROID ? 13 : 19; // history points per particle
+const STEP = 1 / (ANDROID ? 30 : 60); // fixed physics step
+const PUFFS = ANDROID ? 12 : 32; // vortex pool size
 const TAU = Math.PI * 2;
-const AGE_BUCKETS = 6;
+const AGE_BUCKETS = ANDROID ? 4 : 6;
 const SEGS_PER_BUCKET = 3;
 
 const DEFAULT_CALM      = [34, 230, 255];
@@ -98,7 +99,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
     const bctx = bloom.getContext("2d");
     if (!ctx || !bctx) return undefined;
 
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)"); let reduced = motion.matches; const android = document.documentElement.classList.contains("android"); const propsRef = {current: {autopilot: true, obstacleRadius: 64}};
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)"); let reduced = motion.matches; const android = ANDROID; const propsRef = {current: {autopilot: true, obstacleRadius: 64}};
     const rand = mulberry32(7);
 
     let disposed = false;
@@ -240,7 +241,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       const flow = clamp(propsRef.current.flowSpeed ?? 1, 0.05, 5);
       pz[i] = z;
       v0[i] = nominal;
-      len[i] = 9 + Math.floor(rand() * 11);
+      len[i] = android ? 7 + Math.floor(rand() * 7) : 9 + Math.floor(rand() * 11);
       px[i] = x;
       py[i] = y;
       vx[i] = 0;
@@ -261,7 +262,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
     };
 
     const applyCount = (uniform         )       => {
-      const auto = android ? clamp(Math.round(w * h / 750), 300, 560) : clamp(Math.round(w * h / 520), 480, 1400);
+      const auto = android ? clamp(Math.round(w * h / 1600), 150, 260) : clamp(Math.round(w * h / 520), 480, 1400);
       const requested = propsRef.current.count;
       targetCount = clamp(Math.round(requested !== undefined ? requested : auto), 1, MAX);
       setActive(targetCount * quality, uniform);
@@ -621,8 +622,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       }
 
       /* bloom: quarter-res copy, blurred by CSS */
-      bctx.clearRect(0, 0, bw, bh);
-      if (!android && w > 680) bctx.drawImage(main, 0, 0, bw, bh);
+      if (!android && w > 680) { bctx.clearRect(0, 0, bw, bh); bctx.drawImage(main, 0, 0, bw, bh); }
     };
 
     /* ─────────────── lifecycle helpers ─────────────── */
@@ -711,14 +711,14 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
 
 
 
-    let nativeActive = true, focused = false, typingUntil = 0, restartTimer, nextPaint = 0;
+    let nativeActive = true, focused = false, editing = false, pointerDown = false, panelOpen = false, typingUntil = 0, restartTimer, nextPaint = 0;
     const interval = android ? 50 : 1000 / 30;
-    const canAnimate = () => !disposed && nativeActive && !document.hidden && !reduced && !focused && performance.now() >= typingUntil;
+    const canAnimate = () => !disposed && nativeActive && !document.hidden && !reduced && !focused && !editing && !pointerDown && !panelOpen && performance.now() >= typingUntil;
     const stop = () => { cancelAnimationFrame(raf); raf = 0; live = false; };
     const frame = now => {
       if (!canAnimate()) { stop(); return; }
       if (now + .1 >= nextPaint) {
-        const elapsed = now - last; last = now; acc += Math.min(.05, elapsed / 1000);
+        const elapsed = now - last; last = now; acc += Math.min(android ? .1 : .05, elapsed / 1000);
         nextPaint += interval; if (nextPaint <= now) nextPaint = now + interval;
         const before = performance.now(); let steps = 0;
         while (acc >= STEP && steps < 3) { simulate(); acc -= STEP; steps++; }
@@ -736,7 +736,8 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
     const refresh = () => {
       if (disposed || !initialised || !nativeActive || document.hidden) return;
       buildStyles();
-      if (reduced || focused) { stop(); rebuildStatic(); }
+      if (reduced) { stop(); rebuildStatic(); }
+      else if (focused) { stop(); render(); }
       else { render(); start(); }
     };
     resize(); buildStyles(); applyCount(true);
@@ -761,6 +762,32 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       typingUntil = performance.now() + 220; stop(); clearTimeout(restartTimer);
       restartTimer = setTimeout(start, 225);
     }, {passive:true});
+    if (android) {
+      // Preserve the last frame while native scrolling, editing or panels need the CPU/GPU.
+      const deferStart = (delay = 250) => {
+        typingUntil = performance.now() + delay; stop(); clearTimeout(restartTimer);
+        restartTimer = setTimeout(start, delay + 5);
+      };
+      const editable = element => !!element?.closest?.('input,textarea,[contenteditable="true"]');
+      document.addEventListener('focusin', event => { editing = editable(event.target); if (editing) stop(); });
+      document.addEventListener('focusout', () => {
+        setTimeout(() => { editing = editable(document.activeElement); if (!editing) deferStart(); }, 0);
+      });
+      document.addEventListener('pointerdown', () => { pointerDown = true; stop(); }, {passive:true});
+      const releasePointer = () => { pointerDown = false; deferStart(); };
+      window.addEventListener('pointerup', releasePointer, {passive:true});
+      window.addEventListener('pointercancel', releasePointer, {passive:true});
+      window.addEventListener('blur', releasePointer);
+      document.addEventListener('scroll', () => deferStart(300), {capture:true, passive:true});
+      const panels = [...document.querySelectorAll('.sheet,.analysis-overlay')];
+      const updatePanels = () => {
+        panelOpen = panels.some(panel => panel.classList.contains('open') || (panel.classList.contains('analysis-overlay') && !panel.hidden));
+        if (panelOpen) stop(); else deferStart();
+      };
+      const panelObserver = new MutationObserver(updatePanels);
+      panels.forEach(panel => panelObserver.observe(panel, {attributes:true, attributeFilter:['class','hidden']}));
+      updatePanels();
+    }
     window.DataRain = {refresh, setFocus(value) { focused = !!value; pointerActive = false; if (!focused) { idleSince = liveTime; idleDelay = 1.2; } refresh(); }};
 })();
 })();

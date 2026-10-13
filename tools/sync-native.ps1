@@ -1,6 +1,7 @@
 # تک‌منبع همگام‌سازی وب‌اپ با پوشه نیتیو (قبل از هر commit اجرا کن)
 # همین اسکریپت در CI هم استفاده می‌شود (.github/workflows/ios.yml) تا درفت نشود.
 # روی macOS هم با pwsh اجرا می‌شود؛ پس فقط از دستورهای سازگار pwsh استفاده کن.
+param([string]$AndroidRoot = '')
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $scriptDir
@@ -29,7 +30,8 @@ Write-Output 'native/Web synced'
 foreach ($old in @('sonar.js','matrix-rain.js','matrix-rain.css','radio-clock.css')) { if (Test-Path -LiteralPath (Join-Path $web $old)) { Remove-Item -LiteralPath (Join-Path $web $old) } }
 
 # همگام‌سازی دارایی‌های اندروید با حفظ تزریق android-bridge.js
-$androidWeb = Join-Path (Split-Path -Parent $root) 'cognicode-apk/app/src/main/assets/web'
+if (-not $AndroidRoot) { $AndroidRoot = Join-Path (Split-Path -Parent $root) 'cognicode-apk' }
+$androidWeb = Join-Path $AndroidRoot 'app/src/main/assets/web'
 if (Test-Path $androidWeb) {
     foreach ($f in $files) {
         if ($f -eq 'index.html') {

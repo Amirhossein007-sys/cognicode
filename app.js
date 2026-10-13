@@ -26,6 +26,8 @@ try {
   function countLines(s) { return s === '' ? 1 : s.split('\n').length; }
 
   /* ── وضعیت و ذخیره‌سازی ── */
+  var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
+  var highlightWorkerThreshold = isAndroidPlatform ? 4000 : 20000;
   var LS_SET = 'cognicode.settings.v1';
   var LS_HIST = 'cognicode.history.v1';
   var LS_MIG = 'cognicode.migration.v2';
@@ -506,7 +508,7 @@ try {
   function applyHighlight(html, code) {
     hlCode.dataset.highlightState = 'ready';
     viewportHighlight = null; highlightRange = '';
-    if (code.length >= 20000) {
+    if (code.length >= highlightWorkerThreshold) {
       viewportHighlight = { code: code, lines: html.split('\n'), plain: code.split('\n') };
       renderVisibleHighlight();
     } else hlCode.innerHTML = html + '\n';
@@ -545,7 +547,7 @@ try {
   }
   function renderHighlight() {
     var code = ta.value;
-    if (code.length >= 20000 && !highlightUnavailable && window.Worker) {
+    if (code.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker) {
       viewportHighlight = null; highlightRange = '';
       hlCode.textContent = code + '\n';
       hlCode.dataset.highlightState = 'pending';
@@ -579,7 +581,7 @@ try {
     // detect() روی هر کلید سنگین است (۳۴ رجکس روی کل متن) — داخل همان دیبانس
     // ۸۰ms هایلایت اجرا می‌شود تا تایپ روان بماند
     hlTimer = setTimeout(function () {
-      if (!(ta.value.length >= 20000 && !highlightUnavailable && window.Worker)) {
+      if (!(ta.value.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker)) {
         var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
         if (k !== langKey) setLang(k);
       }
@@ -3694,7 +3696,6 @@ try {
   }
 
   /* ── شروع ── */
-  var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
   window.__onNativeCredentialStatus = function (ok, hasKey) {
     if (!ok) {
       nativeCredentialPending = false;

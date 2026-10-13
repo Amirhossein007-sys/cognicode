@@ -39,7 +39,7 @@
       dayKey = nextDay; dateLabel.textContent = parts.weekday + '، ' + parts.day + ' ' + parts.month + ' ' + parts.year; dateLabel.dateTime = nextDay;
     }
     if (minuteKey !== nextMinute) {
-      minuteKey = nextMinute; clock.setAttribute('aria-label', 'ساعت تهران ' + pad(h) + ':' + pad(m) + '، ' + dateLabel.textContent + '، UTC+۳:۳۰'); clock.title = clock.getAttribute('aria-label');
+      minuteKey = nextMinute; clock.setAttribute('aria-label', 'ساعت تهران ' + pad(h) + ':' + pad(m) + '، ' + dateLabel.textContent); clock.title = clock.getAttribute('aria-label');
     }
     timeLabel.textContent = pad(h) + ':' + pad(m) + ':' + pad(s); timeLabel.dateTime = now.toISOString(); previousTime = stamp;
     if (active && !document.hidden) timer = setTimeout(function () { update(true); }, 1000 - now.getTime() % 1000);

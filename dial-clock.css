@@ -5,7 +5,8 @@
   grid-area: clock; min-width: 0; justify-self: center; text-align: center;
 }
 html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; --dial-label: #475569; --dial-accent: #275168; }
-.topbar .icon-btn { min-width: 44px; }
+.topbar .top-actions { gap: 8px; }
+.topbar .top-actions .icon-btn { width: 44px; height: 44px; min-width: 44px; }
 .dial-face { width: var(--dial-size); height: var(--dial-size); margin-inline: auto; position: relative; border-radius: 50%; background: var(--dial-bg); }
 .dial-art { position: absolute; width: 360px; height: 360px; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(var(--dial-scale)); font-family: ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif; font-variant-numeric: tabular-nums; color: var(--dial-ink); }
 .dial-seconds, .dial-minutes { --dial-angle: 0deg; position: absolute; inset: 0; transform: rotate(calc(-1 * var(--dial-angle))); transition: transform .95s linear; color: var(--dial-label); }
@@ -17,8 +18,7 @@ html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; 
 .dial-hour { position: absolute; inset: 0; display: grid; place-items: center; transform: translateX(-8px); font-size: 76px; font-weight: 800; line-height: 1; }
 .dial-minute { position: absolute; right: 70px; top: 50%; transform: translateY(-50%); min-width: 58px; font-size: 50px; font-weight: 800; line-height: 1; background: var(--dial-bg); color: var(--dial-ink); padding: 2px 4px; }
 .dial-minute::after { content: ""; position: absolute; right: -70px; top: 50%; transform: translateY(-50%); width: 142px; height: 57px; border: 2px solid var(--dial-accent); border-right: 0; border-radius: 40px 0 0 40px; pointer-events: none; }
-.dial-brand { position: absolute; left: 0; right: 0; top: 105px; font-size: 25px; line-height: 30px; font-weight: 600; text-transform: none; color: var(--dial-label); }
-.dial-zone { position: absolute; left: 0; right: 0; bottom: 103px; font-size: 20px; line-height: 27px; font-weight: 600; color: var(--dial-label); }
+.dial-brand { position: absolute; left: 0; right: 0; top: 105px; font-size: 22px; line-height: 30px; font-weight: 600; text-transform: none; color: var(--dial-label); }
 .dial-clock .dial-date { display: block; margin-top: 7px; color: var(--dial-ink); font: 500 12px/19px var(--fa); white-space: nowrap; background: none; border: 0; padding: 0; box-shadow: none; }
 .dial-time { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .dial-clock.is-resetting .dial-seconds, .dial-clock.is-resetting .dial-minutes, .dial-clock.is-resetting .dial-spike::after { transition: none; }
@@ -30,12 +30,13 @@ html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; 
 }
 @media(max-height:500px) and (orientation:landscape) {
   .topbar { grid-template-areas: "brand clock actions"; grid-template-columns: minmax(0,1fr) 210px minmax(0,1fr); row-gap: 0; }
-  .dial-clock { --dial-size: 90px; --dial-scale: .25; }
+  .dial-clock { --dial-size: 70px; --dial-scale: .194444; }
   .dial-hour { font-size: 96px; }
   .dial-minute { font-size: 60px; }
   .dial-clock .dial-date { font-size: 11px; line-height: 16px; margin-top: 6px; }
-  .dial-brand { font-size: 29px; }
-  .dial-zone { font-size: 23px; }
+  .dial-brand { font-size: 25px; }
 }
+/* Discrete second ticks avoid continuous repainting of counter-rotated labels. */
+html.android .dial-clock *, html.android .dial-clock *::after { transition: none; }
 @media(prefers-reduced-motion:reduce) { .dial-clock *, .dial-clock *::after { transition: none !important; } }
 html.focus-mode .dial-clock *, html.focus-mode .dial-clock *::after { transition: none; }

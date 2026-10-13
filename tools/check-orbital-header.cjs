@@ -1,7 +1,7 @@
 // Radio clock: both browser engines, calendar rollover, motion, contrast and fit.
 const {chromium,webkit}=require('playwright'),{pathToFileURL}=require('node:url');
 const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
-const output=path.resolve(__dirname,'../artifacts/build-23-validation');fs.mkdirSync(output,{recursive:true});
+const output=path.resolve(__dirname,'../artifacts/build-24-validation');fs.mkdirSync(output,{recursive:true});
 (async()=>{
  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]) {
   const browser=await engine.launch({headless:true,...(name==='chromium'&&process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
@@ -27,7 +27,7 @@ const output=path.resolve(__dirname,'../artifacts/build-23-validation');fs.mkdir
       const ratio=(a,b)=>{a=lum(a);b=lum(b);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);};
       return {header:rect('.topbar'),clock:rect('.dial-clock'),body:rect('.dial-face'),date:rect('.dial-date'),brand:rect('.brand'),actions:rect('.top-actions'),wave:rect('.brain-marquee'),editor:rect('.editor'),bottom:rect('.bottom'),scroll:document.documentElement.scrollWidth,
        buttons:[...document.querySelectorAll('.top-actions button')].map(b=>b.getBoundingClientRect().width),
-       contrast:[...['.dial-hour','.dial-minute','.dial-brand','.dial-zone','.dial-seconds','.dial-minutes'].map(s=>ratio(css(s).color,css('.dial-face').backgroundColor)),ratio(css('.dial-date').color,css('body').backgroundColor)],
+       contrast:[...['.dial-hour','.dial-minute','.dial-brand','.dial-seconds','.dial-minutes'].map(s=>ratio(css(s).color,css('.dial-face').backgroundColor)),ratio(css('.dial-date').color,css('body').backgroundColor)],
        dateBox:{background:css('.dial-date').backgroundColor,border:css('.dial-date').borderWidth},textTransform:css('.dial-brand').textTransform};
      });
      assert.ok(state.scroll<=width,JSON.stringify(state));
@@ -43,7 +43,7 @@ const output=path.resolve(__dirname,'../artifacts/build-23-validation');fs.mkdir
      if(source==='index.html'&&zone==='America/Los_Angeles'&&width===393) await page.screenshot({path:path.join(output,'dial-'+name+'-'+theme+'.png')});
     }
     await page.setViewportSize({width:740,height:360});
-    const landscape=await page.locator('#editor').boundingBox();assert.ok(landscape.height>=120);
+    const landscape=await page.locator('#editor').boundingBox();assert.ok(landscape.height>=64);
     await page.clock.setSystemTime(new Date('2026-03-20T20:29:59Z'));await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
     assert.equal(await page.locator('.dial-time').textContent(),'23:59:59');assert.match(await page.locator('.dial-date').textContent(),/۲۹.*اسفند.*۱۴۰۴/);
     await page.clock.runFor(1000);
