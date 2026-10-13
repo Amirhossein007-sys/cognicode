@@ -26,6 +26,18 @@ html[data-theme="light"] .quick-start {
 .quick-grid button, .selection-actions button, .operation-bar button, .patch-action, .session-action { min-height: 44px; padding: 8px 12px; border-radius: 12px; color: var(--txt1); border: 1px solid var(--line); background: rgba(56,189,248,.12); font: inherit; }
 .quick-grid button:hover, .session-action:hover { background: rgba(56,189,248,.23); }
 .key { min-width: 44px; min-height: 44px; }.key.sq { width: 44px; }.keys-scroll { padding-block: 2px; }
+.editor-spacer, .editor-window { display: block; }
+.app-paused *, .app-paused *::before, .app-paused *::after { animation-play-state: paused !important; transition: none !important; }
+.energy-saving .scanline, .energy-saving .burst-star, .energy-saving .terminal-text { animation: none !important; filter: none; }
+.energy-saving #btn-play.loading { animation: none !important; }
+#hl-code.virtualized { display: block; }
+#hl-code.zoom-preview { display: block; }
+.editor-zoom { display: flex; flex: 0 0 auto; gap: 2px; padding-right: 4px; border-right: 1px solid var(--line); }
+.editor-zoom .key { padding-inline: 4px; font-size: 13px; }
+#zoom-reset { min-width: 48px; font-size: 11px; }
+#cfg-test-line { white-space: pre-line; }
+.keys { mask-image: none; -webkit-mask-image: none; }
+.keys-scroll { min-width: 0; flex: 1; mask-image: linear-gradient(to right,transparent,black 8px,black calc(100% - 8px),transparent); -webkit-mask-image: linear-gradient(to right,transparent,black 8px,black calc(100% - 8px),transparent); }
 .topbar .icon-btn { width: 44px; min-width: 44px; }
 @media(max-width:359px) { .topbar { padding-inline: 5px; } .topbar .brand-txt b { font-size: 11px; } }
 html.focus-mode .brain-marquee { flex-basis: 24px; min-height: 24px; height: 24px; }
@@ -223,6 +235,12 @@ html[data-theme="light"] .analysis-overlay .load-status { color: #0f172a; text-s
 .topbar .brand-txt { flex: 1; min-width: 0; }
 .topbar .brand-txt b { overflow: hidden; text-overflow: ellipsis; }
 .topbar .brand-txt span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Moving content behind a blur repaints even when JavaScript is idle. */
+@media(max-width:680px), (pointer:coarse) {
+  .editor, .keys, .bottom, .sheet, .glass-workspace, .analysis-overlay, .icon-btn { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .brain-marquee-track { animation: none; }
+  .brain-marquee-track path { filter: none; }
+}
 /* The native bridge and modern WebViews share one inset value per edge. */
 html.android .topbar { padding-top: calc(var(--safe-top) + 8px); }
 html.android .bottom { margin-bottom: calc(var(--safe-bottom) + 8px); }

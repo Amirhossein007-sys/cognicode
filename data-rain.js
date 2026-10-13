@@ -3,12 +3,13 @@
 'use strict';
 (function () {
 const ANDROID = !!window.AndroidBridge || /android/i.test(navigator.userAgent);
-const MAX = ANDROID ? 600 : 1800; // bounded particle capacity
-const L = ANDROID ? 13 : 19; // history points per particle
-const STEP = 1 / (ANDROID ? 30 : 60); // fixed physics step
-const PUFFS = ANDROID ? 12 : 32; // vortex pool size
+const MOBILE = ANDROID || !!window.webkit?.messageHandlers || /iPhone|iPad|iPod/.test(navigator.userAgent) || matchMedia('(max-width:680px), (pointer:coarse)').matches;
+const MAX = MOBILE ? 600 : 1800;
+const L = MOBILE ? 13 : 19;
+const STEP = 1 / (MOBILE ? 30 : 60);
+const PUFFS = MOBILE ? 12 : 32;
 const TAU = Math.PI * 2;
-const AGE_BUCKETS = ANDROID ? 4 : 6;
+const AGE_BUCKETS = MOBILE ? 4 : 6;
 const SEGS_PER_BUCKET = 3;
 
 const DEFAULT_CALM      = [34, 230, 255];
@@ -241,7 +242,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       const flow = clamp(propsRef.current.flowSpeed ?? 1, 0.05, 5);
       pz[i] = z;
       v0[i] = nominal;
-      len[i] = android ? 7 + Math.floor(rand() * 7) : 9 + Math.floor(rand() * 11);
+      len[i] = MOBILE ? 7 + Math.floor(rand() * 7) : 9 + Math.floor(rand() * 11);
       px[i] = x;
       py[i] = y;
       vx[i] = 0;
@@ -262,7 +263,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
     };
 
     const applyCount = (uniform         )       => {
-      const auto = android ? clamp(Math.round(w * h / 1600), 150, 260) : clamp(Math.round(w * h / 520), 480, 1400);
+      const auto = MOBILE ? clamp(Math.round(w * h / 1700), 150, 240) : clamp(Math.round(w * h / 520), 480, 1400);
       const requested = propsRef.current.count;
       targetCount = clamp(Math.round(requested !== undefined ? requested : auto), 1, MAX);
       setActive(targetCount * quality, uniform);
@@ -622,7 +623,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       }
 
       /* bloom: quarter-res copy, blurred by CSS */
-      if (!android && w > 680) { bctx.clearRect(0, 0, bw, bh); bctx.drawImage(main, 0, 0, bw, bh); }
+      if (!MOBILE && w > 680) { bctx.clearRect(0, 0, bw, bh); bctx.drawImage(main, 0, 0, bw, bh); }
     };
 
     /* ─────────────── lifecycle helpers ─────────────── */
@@ -658,7 +659,7 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
       const rect = root.getBoundingClientRect();
       const nw = Math.max(1, rect.width || window.innerWidth);
       const nh = Math.max(1, rect.height || window.innerHeight);
-      let d = Math.min(window.devicePixelRatio || 1, android ? 1 : 1.5);
+      let d = Math.min(window.devicePixelRatio || 1, MOBILE ? 1 : 1.5);
       if (nw * nh * d * d > 4.5e6) d = Math.sqrt(4.5e6 / (nw * nh));
       if (nw === w && nh === h && d === dpr) return;
 
@@ -711,14 +712,16 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
 
 
 
-    let nativeActive = true, focused = false, editing = false, pointerDown = false, panelOpen = false, typingUntil = 0, restartTimer, nextPaint = 0;
-    const interval = android ? 50 : 1000 / 30;
-    const canAnimate = () => !disposed && nativeActive && !document.hidden && !reduced && !focused && !editing && !pointerDown && !panelOpen && performance.now() >= typingUntil;
-    const stop = () => { cancelAnimationFrame(raf); raf = 0; live = false; };
+    let nativeActive = true, focused = false, editing = false, pointerDown = false, panelOpen = false, typingUntil = 0, restartTimer, nextPaint = 0, frameTimer, animateUntil = 0;
+    let energySaving = !!(window.__cogniEnergy?.lowPower || window.__cogniEnergy?.thermal >= 1);
+    const interval = MOBILE ? 1000 / 12 : 1000 / 30;
+    const canAnimate = () => !disposed && nativeActive && !document.hidden && !reduced && !energySaving && !focused && !editing && !pointerDown && !panelOpen && performance.now() >= typingUntil;
+    const stop = () => { clearTimeout(frameTimer); cancelAnimationFrame(raf); raf = 0; live = false; };
     const frame = now => {
       if (!canAnimate()) { stop(); return; }
+      if (MOBILE && now >= animateUntil) { stop(); return; }
       if (now + .1 >= nextPaint) {
-        const elapsed = now - last; last = now; acc += Math.min(android ? .1 : .05, elapsed / 1000);
+        const elapsed = now - last; last = now; acc += Math.min(MOBILE ? .1 : .05, elapsed / 1000);
         nextPaint += interval; if (nextPaint <= now) nextPaint = now + interval;
         const before = performance.now(); let steps = 0;
         while (acc >= STEP && steps < 3) { simulate(); acc -= STEP; steps++; }
@@ -730,9 +733,11 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
         if (slowFrames >= 30 && quality > .4) { quality = Math.max(.4, quality - .1); slowFrames = 0; applyCount(false); }
         else if (fastFrames >= 180 && quality < 1) { quality = Math.min(1, quality + .05); fastFrames = 0; applyCount(false); }
       }
-      raf = requestAnimationFrame(frame);
+      // Do not wake up at ProMotion's 120Hz for a 12fps decorative layer.
+      if (MOBILE) frameTimer = setTimeout(() => { raf = requestAnimationFrame(frame); }, Math.max(1, nextPaint - performance.now()));
+      else raf = requestAnimationFrame(frame);
     };
-    const start = () => { stop(); if (!canAnimate()) return; live = true; last = performance.now(); nextPaint = last + interval; acc = 0; raf = requestAnimationFrame(frame); };
+    const start = () => { stop(); if (!canAnimate()) return; live = true; last = performance.now(); animateUntil = last + 4000; nextPaint = last + interval; acc = 0; raf = requestAnimationFrame(frame); };
     const refresh = () => {
       if (disposed || !initialised || !nativeActive || document.hidden) return;
       buildStyles();
@@ -757,12 +762,17 @@ const WAVE_2 = makeWave(900, 3.4, 0.35, 4.2, 10);
     window.addEventListener('cognicode:native-active', event => { nativeActive = !!event.detail; if (nativeActive) refresh(); else { clearTimeout(restartTimer); stop(); } });
     window.addEventListener('pagehide', () => { nativeActive = false; clearTimeout(restartTimer); stop(); });
     window.addEventListener('pageshow', () => { nativeActive = true; refresh(); });
+    window.addEventListener('cognicode:launch-complete', start);
+    window.addEventListener('cognicode:energy-change', event => {
+      const energy = event.detail || {}; energySaving = !!(energy.lowPower || energy.thermal >= 1);
+      if (energySaving) { clearTimeout(restartTimer); stop(); } else refresh();
+    });
     document.addEventListener('input', event => {
-      if (!android || event.target.id !== 'code') return;
+      if (!MOBILE || event.target.id !== 'code') return;
       typingUntil = performance.now() + 220; stop(); clearTimeout(restartTimer);
       restartTimer = setTimeout(start, 225);
     }, {passive:true});
-    if (android) {
+    if (MOBILE) {
       // Preserve the last frame while native scrolling, editing or panels need the CPU/GPU.
       const deferStart = (delay = 250) => {
         typingUntil = performance.now() + delay; stop(); clearTimeout(restartTimer);

@@ -13,6 +13,8 @@ var PRECACHE = [
   './data-rain.css',
   './workspace-store.js',
   './workspace-features.js',
+  './ai-reviewers.js',
+  './selection-explainer.js',
   './change-set.js',
   './project-zip.js',
   './syntax.js',

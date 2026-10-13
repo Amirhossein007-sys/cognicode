@@ -46,7 +46,8 @@ const output=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.j
    await page.waitForFunction(code=>document.querySelector('#code').value===code,sample);
    await page.waitForFunction(()=>document.querySelector('#hl-code').dataset.highlightState==='ready',null,{timeout:30000});
    assert.equal(await page.locator('#code').inputValue(),sample);
-   assert.equal(await page.locator('#hl-code').textContent(),sample+'\n');
+   const visible=await page.locator('#hl-code').evaluate(el=>({text:el.textContent,start:+el.dataset.lineStart,end:+el.dataset.lineEnd}));
+   assert.equal(visible.text,sample.split('\n').slice(visible.start,visible.end).join('\n')+'\n');
    assert.equal(requests.length,0,'Import must not analyse automatically');
    const importAndHighlightMs=Date.now()-started;
    for(const top of [0,375000,750000]){
@@ -72,8 +73,8 @@ const output=path.join(root,'artifacts/build-'+JSON.parse(fs.readFileSync(path.j
    assert.match(await page.locator('#res-verdict').textContent(),/سالم/);
    const chunks=await page.evaluate(code=>ReviewEngine.aiChunks(code,'javascript').map(c=>c.text),sample);
    assert.equal(chunks.join('\n'),sample,'No source byte may be omitted by AI chunking');
-   assert.equal(requests.length,chunks.length);for(const chunk of chunks)assert.ok(requests.some(request=>request.endsWith(chunk)),'Every chunk must reach the selected API transport');
-   assert.ok(maxInflight<=3,'Bounded API concurrency');
+   assert.equal(requests.length,chunks.length*5);for(const chunk of chunks)assert.ok(requests.some(request=>request.endsWith(chunk)),'Every chunk must reach the selected API transport');
+   assert.ok(maxInflight<=2,'Bounded API concurrency');
    await page.locator('#res-close').click();
    // UTF-16 + CRLF preserve the full file, including its terminal newline.
    await page.locator('#file-input').setInputFiles({name:'large-utf16.js',mimeType:'text/plain',buffer:Buffer.concat([Buffer.from([255,254]),Buffer.from(sample.replace(/\n/g,'\r\n'),'utf16le')])});

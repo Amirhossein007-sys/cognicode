@@ -191,6 +191,7 @@ struct WebViewContainer: UIViewRepresentable {
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         DynamicIslandManager.shared.endAnalysis(success: false)
         coordinator.keyboardManager.stopObserving()
+        coordinator.energyPolicy.stop()
         coordinator.cancelRequests()
         coordinator.stabilityTimer?.invalidate()
         coordinator.stabilityTimer = nil
@@ -206,6 +207,7 @@ struct WebViewContainer: UIViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let webView: WKWebView
         let keyboardManager = NativeKeyboardManager()
+        let energyPolicy = NativeEnergyPolicy()
         private var requests: [String: URLSessionDataTask] = [:]
         private var recoveryAttempts = 0
         fileprivate var stabilityTimer: Timer?
@@ -230,6 +232,7 @@ struct WebViewContainer: UIViewRepresentable {
 
             // تزریق متادیتای هوشمند سخت‌افزار آیفون قبل از شروع رندر DOM
             config.userContentController.addUserScript(DeviceIntelligence.shared.generateUserScript())
+            config.userContentController.addUserScript(NativeEnergyPolicy.initialScript())
 
             // The bundled index.html owns viewport metadata. At document start,
             // document.head may not exist; do not inject a duplicate viewport.
@@ -276,6 +279,10 @@ struct WebViewContainer: UIViewRepresentable {
 
             // راه‌اندازی رصدگر نیتیو فریم و انیمیشن کیبورد
             keyboardManager.startObserving(webView: wv)
+            energyPolicy.start(webView: wv) { [weak self] in
+                self?.cancelRequests()
+                DynamicIslandManager.shared.endAnalysis(success: false)
+            }
 
             if let index = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Web") {
                 wv.loadFileURL(index, allowingReadAccessTo: index.deletingLastPathComponent())
@@ -476,6 +483,7 @@ struct WebViewContainer: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            energyPolicy.publish()
             if let draft = NativeDraft.read() { notify("__onNativeDraft", arguments: [draft]) }
             notify("__onNativeRecovery", arguments: [recoveryAttempts > 0])
             // F21: پایداری ۳۰ ثانیه‌ای قبل از صفرکردن شمارنده خرابی برای جلوگیری از حلقه بارگذاری مجدد

@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" class="launch-pending" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="cognicode-release" content="1.1.0+24">
+<meta name="cognicode-release" content="1.1.0+25">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>کوگنی کد (CogniCode) — هوش مصنوعی کد برای آیفون</title>
 <meta name="description" content="کوگنی کد: کد بنویس؛ هوش مصنوعی بگوید چه می‌کند، به چه دردی می‌خورد و کجای کد خطا دارد.">
@@ -165,6 +165,11 @@
     <input type="file" id="camera-input" class="sr-only-input" accept="image/*" capture="environment" hidden>
     <input type="file" id="gallery-input" accept="image/*" hidden>
 
+    <div class="editor-zoom" role="group" aria-label="بزرگ‌نمایی کد">
+      <button class="key" id="zoom-out" type="button" aria-label="کوچک‌تر کردن متن کد">−</button>
+      <button class="key" id="zoom-reset" type="button" aria-label="بازنشانی بزرگ‌نمایی کد">۱۰۰٪</button>
+      <button class="key" id="zoom-in" type="button" aria-label="بزرگ‌تر کردن متن کد">+</button>
+    </div>
     <div class="keys-scroll" id="keys-scroll">
       <button class="key" id="key-problems" type="button" hidden aria-controls="problems" aria-expanded="false">☷ <span>نتایج <b id="review-tab-count">۰</b></span></button>
       <button class="key" id="key-focus" type="button" aria-label="حالت تمرکز" aria-pressed="false" title="کاهش حرکت پس‌زمینه و جمع‌وجور کردن ساعت">◎ <span>تمرکز</span></button>
@@ -450,16 +455,17 @@
           <small class="hint-line" id="credential-hint">کلید فقط در حافظه همین مرورگر (غیررمزنگاری‌شده) می‌ماند و مستقیماً به سرور هوش مصنوعی انتخابی تو ارسال می‌گردد؛ جایی دیگر آپلود نمی‌شود.</small>
         </label>
         <label class="fld">
-          <span>نام مدل</span>
-          <input id="cfg-model" dir="ltr" list="model-list" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="gpt-4o-mini">
+          <span>ChatGPT / Codex — مدل توضیح و اصلاح</span>
+          <input id="cfg-model" dir="ltr" list="model-list" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="gpt-6.1-sol">
           <datalist id="model-list">
-            <option value="gpt-4o-mini"></option>
-            <option value="gpt-4o"></option>
-            <option value="chatgpt-4o-latest"></option>
-            <option value="o3-mini"></option>
-            <option value="deepseek-chat"></option>
+            <option value="gpt-6.1-sol"></option>
           </datalist>
+          <small class="hint-line">هر کد با پنج مدل بررسی می‌شود. سرویس API انتخابی باید هر پنج مدل را پشتیبانی کند؛ شناسه‌ها را مطابق سرویس خود تنظیم کن.</small>
         </label>
+        <label class="fld"><span>Claude</span><input id="cfg-review-claude" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="claude-sonnet-5-5"></label>
+        <label class="fld"><span>DeepSeek</span><input id="cfg-review-deepseek" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="deepseek-v4-pro"></label>
+        <label class="fld"><span>Z.ai</span><input id="cfg-review-zai" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="glm-5.3"></label>
+        <label class="fld"><span>Gemini 3.8 Flash</span><input id="cfg-review-gemini" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="gemini-3.8-flash"></label>
         <div class="test-row">
           <button class="ghost-btn" id="cfg-test">
             <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -596,6 +602,8 @@
 <script src="workspace-store.js"></script>
 <script src="change-set.js"></script>
 <script src="workspace-features.js"></script>
+<script src="ai-reviewers.js"></script>
+<script src="selection-explainer.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

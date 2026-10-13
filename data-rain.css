@@ -25,7 +25,7 @@ html.focus-mode .dr-main { opacity: .18; }
 html.focus-mode .dr-bloom, html.android .dr-bloom { display: none; }
 html.android .dr-grain { display: none; }
 /* Keep the full-screen blur off phone-sized displays; trails retain their colour. */
-@media(max-width:680px) { .dr-bloom { display: none; } }
+@media(max-width:680px), (pointer:coarse) { .dr-bloom, .dr-grain { display: none; } }
 @media(prefers-contrast:more), (prefers-reduced-transparency:reduce) {
   .dr-main { opacity: .15 !important; }
   .dr-bloom { display: none; }

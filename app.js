@@ -23,16 +23,16 @@ try {
   function esc(s) { return Syntax.esc(String(s == null ? '' : s)); }
   // کلاس رنگ نقطهٔ زبان — به‌جای style درون‌خطی که CSP (style-src بدون unsafe-inline) رد می‌کند
   function ldClass(color) { return 'ld-' + String(color || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase(); }
-  function countLines(s) { return s === '' ? 1 : s.split('\n').length; }
+  function countLines(s) { return ta && s === ta.value ? indexSource(s).lines.length : s.split('\n').length; }
 
   /* ── وضعیت و ذخیره‌سازی ── */
   var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
-  var highlightWorkerThreshold = isAndroidPlatform ? 4000 : 20000;
+  var highlightWorkerThreshold = 4000;
   var LS_SET = 'cognicode.settings.v1';
   var LS_HIST = 'cognicode.history.v1';
   var LS_MIG = 'cognicode.migration.v2';
   var DEFAULT_BASE = 'https://api.gapgpt.app/v1';
-  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-4o-mini', hist: true, proxy: '' };
+  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-6.1-sol', reviewModels: Object.assign({}, AIReviewers.defaults), hist: true, proxy: '' };
   var history = [];
   // مهاجرت نقطه‌ای تنظیمات قدیمی — فقط یک‌بار در عمر نصب اجرا می‌شود تا انتخاب
   // بعدی خود کاربر (مثلاً OpenAI) در اجراهای بعدی بازنویسی نشود
@@ -43,6 +43,7 @@ try {
       try { localStorage.setItem(LS_MIG, '1'); } catch (e2) {}
     }
     for (var k in savedSet) if (k in settings) settings[k] = savedSet[k];
+    if (/^(gpt-4o(?:-mini)?|chatgpt-4o-latest|o3-mini|deepseek-chat)$/.test(settings.model)) settings.model = 'gpt-6.1-sol';
   } catch (e) {}
   // تاریخچه مستقل از تنظیمات پارس می‌شود تا خراب‌بودن یکی، دیگری را پاک نکند
   try {
@@ -248,17 +249,48 @@ try {
   try {
     var savedZoom = parseFloat(localStorage.getItem(LS_ZOOM));
     if (!isNaN(savedZoom) && savedZoom >= MIN_FONT_SIZE && savedZoom <= MAX_FONT_SIZE) {
-      // مهاجرت از باگ 320x480: زوم 8px روی گوشی ناخواناست و قطعاً از باگ قبلی مانده؛ نادیده بگیر
-      var phoneBadZoom = !isDesktopWidth() && savedZoom <= 10;
-      if (!phoneBadZoom) editorFontSize = savedZoom;
-      else { try { localStorage.removeItem(LS_ZOOM); } catch (_) {} }
+      editorFontSize = savedZoom;
     }
   } catch (e) {}
 
-  var zoomHudTimer = null;
+  var zoomHudTimer = null, zoomFrame = 0, pendingZoom = null, zoomSaveTimer, zoomCommitTimer, zoomPreviewNodes = [];
+  function showZoom(size) {
+    var percent = fa(Math.round(size / BASE_FONT_SIZE * 100)) + '٪';
+    if ($('zoom-reset')) $('zoom-reset').textContent = percent;
+    if (zoomHud) { zoomHud.textContent = '🔍 ' + percent; zoomHud.classList.add('visible'); }
+  }
+  function clearZoomPreview() {
+    zoomPreviewNodes.forEach(function (node) { node.style.removeProperty('transform'); node.style.removeProperty('transform-origin'); });
+    zoomPreviewNodes = []; hlCode.classList.remove('zoom-preview');
+  }
+  function previewEditorZoom(size) {
+    clearZoomPreview();
+    var scale = size / editorFontSize;
+    var text = hlCode._viewportNodes && hlCode.classList.contains('virtualized') ? hlCode._viewportNodes[1] : hlCode;
+    var numbers = gutter._viewportNodes && gutter.classList.contains('virtualized') ? gutter._viewportNodes[1] : gutter;
+    hlCode.classList.add('zoom-preview');
+    [text,numbers].forEach(function (node) {
+      var start = node === text ? (+hlCode.dataset.lineStart || 0) : (+gutter.dataset.lineStart || 0);
+      node.style.transformOrigin = (node === text ? ta.scrollLeft : 0) + 'px ' + (ta.scrollTop - start * lineHeight) + 'px';
+      node.style.transform = 'scale(' + scale + ')'; zoomPreviewNodes.push(node);
+    });
+    showZoom(size);
+  }
+  function commitQueuedZoom() {
+    var size = pendingZoom; pendingZoom = null; cancelAnimationFrame(zoomFrame); zoomFrame = 0;
+    clearTimeout(zoomCommitTimer); clearZoomPreview();
+    if (size !== null) setEditorZoom(size, true);
+  }
+  function queueEditorZoom(size) {
+    pendingZoom = Math.round(Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)) * 10) / 10;
+    if (!zoomFrame) zoomFrame = requestAnimationFrame(function () { zoomFrame = 0; if (pendingZoom !== null) previewEditorZoom(pendingZoom); });
+  }
   function setEditorZoom(newSize, showHud) {
+    clearTimeout(zoomCommitTimer); cancelAnimationFrame(zoomFrame); zoomFrame = 0; pendingZoom = null; clearZoomPreview();
     newSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
     newSize = Math.round(newSize * 10) / 10;
+    var oldSize = editorFontSize, oldLineHeight = lineHeight || 25;
+    var anchorLine = ta.scrollTop / oldLineHeight, anchorColumn = ta.scrollLeft / oldSize;
     editorFontSize = newSize;
 
     var newLh = Math.max(14, Math.round(editorFontSize * 1.5625 * 10) / 10);
@@ -270,7 +302,9 @@ try {
     }
 
     recomputeLineHeight();
+    ta.scrollTop = anchorLine * lineHeight; ta.scrollLeft = anchorColumn * newSize;
     syncScroll();
+    if ($('zoom-reset')) $('zoom-reset').textContent = fa(Math.round(editorFontSize / BASE_FONT_SIZE * 100)) + '٪';
 
     if (showHud && zoomHud) {
       var pct = Math.round((editorFontSize / BASE_FONT_SIZE) * 100);
@@ -282,9 +316,8 @@ try {
       }, 1300);
     }
 
-    try {
-      localStorage.setItem(LS_ZOOM, String(editorFontSize));
-    } catch (e) {}
+    clearTimeout(zoomSaveTimer);
+    zoomSaveTimer = setTimeout(function () { try { localStorage.setItem(LS_ZOOM, String(editorFontSize)); } catch (_) {} }, 250);
   }
 
   // فیکس Native: اگر ویوپورت بعد از لود اصلاح شد (980px → 390px واقعی آیفون)،
@@ -326,22 +359,12 @@ try {
 
     editorEl.addEventListener('touchstart', function (e) {
       if (e.touches.length === 2) {
+        if (e.cancelable) e.preventDefault();
         var t1 = e.touches[0];
         var t2 = e.touches[1];
         pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         pinchStartFontSize = editorFontSize;
         isPinching = true;
-
-        var now = Date.now();
-        if (now - lastTwoFingerTap < 340) {
-          // دابل تپ با دو انگشت: بازگشت به مقیاس پیش‌فرض ۱۰۰٪
-          setEditorZoom(BASE_FONT_SIZE, true);
-          haptic('medium');
-          isPinching = false;
-          lastTwoFingerTap = 0;
-          return;
-        }
-        lastTwoFingerTap = now;
 
         if (zoomHud) {
           var pct = Math.round((editorFontSize / BASE_FONT_SIZE) * 100);
@@ -363,7 +386,7 @@ try {
         var dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         if (pinchStartDist > 10) {
           var scale = dist / pinchStartDist;
-          setEditorZoom(pinchStartFontSize * scale, true);
+          queueEditorZoom(pinchStartFontSize * scale);
         }
       }
     }, { passive: false });
@@ -371,6 +394,7 @@ try {
     function endPinch() {
       if (isPinching) {
         isPinching = false;
+        commitQueuedZoom();
         clearTimeout(zoomHudTimer);
         zoomHudTimer = setTimeout(function () {
           if (zoomHud) zoomHud.classList.remove('visible');
@@ -396,7 +420,7 @@ try {
       e.preventDefault();
       e.stopPropagation();
       if (isPinching) {
-        setEditorZoom(pinchStartFontSize * e.scale, true);
+        queueEditorZoom(pinchStartFontSize * e.scale);
       }
     });
     editorEl.addEventListener('gestureend', function (e) {
@@ -410,7 +434,8 @@ try {
         e.preventDefault();
         var delta = -e.deltaY;
         var step = delta > 0 ? 1.2 : -1.2;
-        setEditorZoom(editorFontSize + step, true);
+        queueEditorZoom((pendingZoom === null ? editorFontSize : pendingZoom) + step);
+        clearTimeout(zoomCommitTimer); zoomCommitTimer = setTimeout(commitQueuedZoom, 120);
       }
     }, { passive: false });
 
@@ -424,6 +449,11 @@ try {
       });
     }
   }
+  [['zoom-out', -2], ['zoom-in', 2], ['zoom-reset', 0]].forEach(function (entry) {
+    var button = $(entry[0]);
+    button.addEventListener('mousedown', function (event) { event.preventDefault(); });
+    button.addEventListener('click', function () { setEditorZoom(entry[1] ? editorFontSize + entry[1] : BASE_FONT_SIZE, true); });
+  });
 
   // جلوگیری کامل و قطعی از زوم شدن برنامه (عمل زوم فقط و فقط در محدوده ادیتور کد مجاز است)
   document.addEventListener('gesturestart', function (e) {
@@ -490,28 +520,62 @@ try {
   /* ── موتور ادیتور (رنگ‌آمیزی با دیبانس برای کارایی روی کدهای طولانی) ── */
   var hlTimer = null;
   var highlightWorker, highlightBusy, highlightQueued, highlightTimeout, highlightSerial = 0, highlightUnavailable = false;
-  var viewportHighlight, highlightRange = '';
+  var viewportHighlight, highlightRange = '', sourceIndex;
+  function indexSource(code) {
+    if (sourceIndex && sourceIndex.code === code) return sourceIndex;
+    var lines = code.split('\n'), starts = new Uint32Array(lines.length), offset = 0;
+    for (var i = 0; i < lines.length; i++) { starts[i] = offset; offset += lines[i].length + 1; }
+    sourceIndex = {code: code, lines: lines, starts: starts};
+    return sourceIndex;
+  }
+  function visibleRange(total) {
+    var start = Math.max(0, Math.floor(ta.scrollTop / lineHeight) - 8);
+    return {start: start, end: Math.min(total, start + Math.ceil(ta.clientHeight / lineHeight) + 24)};
+  }
+  function renderWindow(element, start, end, total, text, html) {
+    var nodes = element._viewportNodes;
+    if (!nodes) {
+      nodes = [document.createElement('span'), document.createElement('span'), document.createElement('span')];
+      nodes[0].className = nodes[2].className = 'editor-spacer'; nodes[1].className = 'editor-window';
+      element._viewportNodes = nodes;
+    }
+    if (element.firstChild !== nodes[0]) element.replaceChildren.apply(element, nodes);
+    nodes[0].style.height = start * lineHeight + 'px';
+    nodes[1].style.height = (end - start) * lineHeight + 'px';
+    nodes[2].style.height = (total - end) * lineHeight + 'px';
+    if (html) nodes[1].innerHTML = text; else nodes[1].textContent = text;
+    element.classList.add('virtualized'); element.dataset.lineStart = start; element.dataset.lineEnd = end;
+  }
+  function renderGutter() {
+    var total = indexSource(ta.value).lines.length;
+    var range = visibleRange(total), key = total + ':' + range.start + ':' + range.end + ':' + lineHeight;
+    if (gutter._range === key) return;
+    gutter._range = key; gutter.dataset.lines = String(total);
+    if (total >= 300) {
+      var numbers = []; for (var n = range.start; n < range.end; n++) numbers.push(n + 1);
+      renderWindow(gutter, range.start, range.end, total, numbers.join('\n') + '\n', false);
+    } else {
+      gutter.classList.remove('virtualized');
+      var text = ''; for (var n = 1; n <= total; n++) text += n + '\n'; gutter.textContent = text;
+    }
+  }
   function renderVisibleHighlight() {
     if (!viewportHighlight || viewportHighlight.code !== ta.value) return;
-    var start = Math.max(0, Math.floor(ta.scrollTop / lineHeight) - 8);
-    var end = Math.min(viewportHighlight.lines.length, start + Math.ceil(ta.clientHeight / lineHeight) + 24);
-    var range = start + ':' + end;
+    var bounds = visibleRange(viewportHighlight.plain.length), start = bounds.start, end = bounds.end;
+    var range = start + ':' + end + ':' + lineHeight;
     if (range === highlightRange) return;
     highlightRange = range;
-    var plain = viewportHighlight.plain;
-    // Off-screen lines remain text, retaining exact scroll width/height and content.
-    // Only the visible lines and an overscan margin need token DOM elements.
-    var prefix = start ? Syntax.esc(plain.slice(0, start).join('\n')) + '\n' : '';
-    var suffix = end < plain.length ? '\n' + Syntax.esc(plain.slice(end).join('\n')) : '';
-    hlCode.innerHTML = prefix + viewportHighlight.lines.slice(start, end).join('\n') + suffix + '\n';
+    var html = viewportHighlight.lines ? viewportHighlight.lines.slice(start, end).join('\n') : Syntax.esc(viewportHighlight.plain.slice(start, end).join('\n'));
+    renderWindow(hlCode, start, end, viewportHighlight.plain.length, html + '\n', true);
+    hlCode.style.width = Math.max(0, ta.scrollWidth - 32) + 'px';
   }
   function applyHighlight(html, code) {
     hlCode.dataset.highlightState = 'ready';
     viewportHighlight = null; highlightRange = '';
-    if (code.length >= highlightWorkerThreshold) {
-      viewportHighlight = { code: code, lines: html.split('\n'), plain: code.split('\n') };
+    if (code.length >= 20000) {
+      viewportHighlight = { code: code, lines: html.split('\n'), plain: indexSource(code).lines };
       renderVisibleHighlight();
-    } else hlCode.innerHTML = html + '\n';
+    } else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.innerHTML = html + '\n'; }
   }
   function highlightFallback() {
     clearTimeout(highlightTimeout); highlightUnavailable = true;
@@ -549,16 +613,12 @@ try {
     var code = ta.value;
     if (code.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker) {
       viewportHighlight = null; highlightRange = '';
-      hlCode.textContent = code + '\n';
+      if (code.length >= 20000) { viewportHighlight = {code: code, lines: null, plain: indexSource(code).lines}; renderVisibleHighlight(); }
+      else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.textContent = code + '\n'; }
       hlCode.dataset.highlightState = 'pending';
       queueHighlight({ id: ++highlightSerial, code: code, mode: langMode });
     } else applyHighlight(Syntax.highlight(code, langKey), code);
-    var lineCount = countLines(code);
-    if (gutter.dataset.lines !== String(lineCount)) {
-      var g = '';
-      for (var i = 1; i <= lineCount; i++) g += i + '\n';
-      gutter.textContent = g; gutter.dataset.lines = String(lineCount);
-    }
+    renderGutter();
   }
   function updateEditor() {
     var code = ta.value;
@@ -595,15 +655,29 @@ try {
     reviewTab.setAttribute('aria-expanded', String(!problems.hidden && !problems.classList.contains('peek')));
     $('review-tab-count').textContent = fa(currentErrors.length);
   }
+  var liveReviewAbort;
+  var appNativeActive = true;
+  window.addEventListener('cognicode:native-active', function (event) {
+    appNativeActive = !!event.detail;
+    if (!appNativeActive) {
+      clearTimeout(liveReviewTimer); ++liveReviewSerial;
+      if (liveReviewAbort) liveReviewAbort.abort();
+      if (activeOperation) cancelOperation();
+      clearTimeout(hlTimer); clearTimeout(highlightTimeout);
+      if (highlightWorker) highlightWorker.terminate(); highlightWorker = null; highlightBusy = null; highlightQueued = null;
+    } else if (hlCode.dataset.highlightState === 'pending') renderHighlight();
+  });
   function scheduleLiveReview() {
     clearTimeout(liveReviewTimer);
+    if (liveReviewAbort) liveReviewAbort.abort();
     var serial = ++liveReviewSerial;
-    if (!reviewAvailable) return;
+    if (!reviewAvailable || !appNativeActive || document.hidden) return;
     if (ledgerFileName !== currentFileName) { reviewAvailable = false; issueLedger = []; clearErrors(false); syncReviewTab(); return; }
     liveReviewTimer = setTimeout(async function () {
       var code = ta.value, language = langMode === 'auto' ? Syntax.detect(code) : langMode;
       try {
-        var local = await ReviewService.local(code, language);
+        liveReviewAbort = new AbortController();
+        var local = await ReviewService.local(code, language, {signal:liveReviewAbort.signal});
         if (serial !== liveReviewSerial || ta.value !== code || !reviewAvailable) return;
         var fresh = ReviewEngine.dedupe(local.errors.concat(local.warnings, local.security.findings));
         issueLedger = ReviewEngine.reconcile(issueLedger, ledgerCode, code, fresh, language);
@@ -618,12 +692,13 @@ try {
         info.textContent = hard ? 'بررسی زنده: ' + fa(hard) + ' خطای نحو یا ایراد باز' : pending ? 'نحو دوباره بررسی شد؛ موارد AI تغییرکرده نیاز به بررسی دوباره دارند' : 'بررسی زنده: ' + (local.syntaxComplete ? 'نحو سالم است' : 'بررسی ساختاری انجام شد');
         info.className = 'review-summary glass-workspace';
         setBrainState(hard ? 'error' : pending || !local.syntaxComplete ? 'idle' : currentErrors.length ? 'warning' : 'healthy');
-      } catch (error) { $('problems-summary').textContent = 'بررسی زنده کامل نشد؛ تحلیل کد را دوباره بزن'; }
-    }, 240);
+      } catch (error) { if (error.name !== 'AbortError') $('problems-summary').textContent = 'بررسی زنده کامل نشد؛ تحلیل کد را دوباره بزن'; }
+    }, ta.value.length >= 20000 ? 600 : 300);
   }
 
   function syncScroll() {
     renderVisibleHighlight();
+    renderGutter();
     hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
     gutter.scrollTop = ta.scrollTop;
     // دو لایهٔ نشانگر اسکرول‌کننده نیستند: فرزندانشان position:absolute‌اند و هیچ
@@ -637,10 +712,9 @@ try {
 
   function updateCaretLine() {
     var pos = ta.selectionStart || 0;
-    var val = ta.value;
-    var ln = 1, lastNl = -1;
-    for (var i = 0; i < pos; i++) { if (val.charCodeAt(i) === 10) { ln++; lastNl = i; } }
-    var col = pos - lastNl;
+    var starts = indexSource(ta.value).starts, lo = 0, hi = starts.length;
+    while (lo + 1 < hi) { var mid = (lo + hi) >> 1; if (starts[mid] <= pos) lo = mid; else hi = mid; }
+    var ln = lo + 1, col = pos - starts[lo] + 1;
     stPos.textContent = fa(ln) + ':' + fa(col);
   }
 
@@ -2226,7 +2300,7 @@ try {
     }
   };
 
-  async function chat(messages, maxTokens, temperature) {
+  async function chat(messages, maxTokens, temperature, modelOverride) {
     var op = activeOperation;
     checkOperation(op);
     var base = (settings.base || DEFAULT_BASE).replace(/\/+$/, '');
@@ -2249,15 +2323,15 @@ try {
     // مدل‌های استدلالی (o1/o3/… و gpt-5) پارامترهای temperature و max_tokens را رد
     // می‌کنند و به‌جای max_tokens، max_completion_tokens می‌خواهند؛ فرستادن بدنهٔ
     // ثابت باعث خطای ۴۰۰ برای این مدل‌ها می‌شد
-    var model = settings.model || 'gpt-4o-mini';
+    var model = modelOverride || settings.model || 'gpt-6.1-sol';
     var hasImage = messages && messages.some(function (m) {
       return Array.isArray(m.content) && m.content.some(function (p) { return p.type === 'image_url'; });
     });
     if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(model)) {
-      model = 'gpt-4o-mini';
+      model = 'gpt-6.1-sol';
     }
     var body = { model: model, messages: messages, stream: false };
-    if (/^(?:o[1-9]|gpt-5)/i.test(model)) {
+    if (/^(?:o[1-9]|gpt-[56])/i.test(model)) {
       body.max_completion_tokens = maxTokens || 2200;
     } else {
       // استخراج کد از تصویر باید قطعی باشد؛ دمای صفر یعنی حدس تصادفی کمتر
@@ -2310,13 +2384,13 @@ try {
   }
 
   var lastAIReview = null, aiChunkCache = new Map();
-  async function askAIChunk(code, clip, language) {
-    var identity = JSON.stringify([clip.text, language, currentFileName, clip.context || '', settings.base, settings.model, settings.key, settings.proxy]);
+  async function askAIChunk(code, clip, language, model) {
+    var identity = JSON.stringify([clip.text, language, currentFileName, clip.context || '', settings.base, model, settings.key, settings.proxy]);
     if (aiChunkCache.has(identity)) return JSON.parse(JSON.stringify(aiChunkCache.get(identity)));
     var r = await chat([
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: (clip.context || '') + buildCodeMessage(clip) }
-    ], /^(?:o[1-9]|gpt-5)/i.test(settings.model || '') ? 4000 : 1400, 0);
+    ], 10000, 0, model);
     var txt = String(r.message.content || '').trim();
     var t = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     var s = t.indexOf('{'), e2 = t.lastIndexOf('}');
@@ -2335,6 +2409,10 @@ try {
           obj.explanation.notes = (Array.isArray(obj.explanation.notes) ? obj.explanation.notes : []).concat(['موارد بدون شاهد دقیق یا با پاسخ ناقص، خطای قطعی محسوب نشدند؛ بررسی عملکرد همچنان ممکن است نیاز به زمینهٔ بیشتر داشته باشد.']);
         }
         if (!obj.errors.length) { obj.advice = ''; obj.fixExplanation = ''; }
+        if (obj.valid === false && !obj.errors.length) {
+          obj.incomplete = true;
+          obj.explanation.notes = (obj.explanation.notes || []).concat(['مدل کد را نامعتبر دانست، اما ایراد دارای شاهد برنگرداند؛ این نظر نتیجهٔ قطعی محسوب نمی‌شود.']);
+        }
         /* حکم امنیتی مدل جدا از سلامتِ کد پالایش می‌شود؛ نبودش هم خطا نیست */
         obj.security = sanitizeSecurity(obj.security, code);
         if (!obj.incomplete) {
@@ -2354,8 +2432,8 @@ try {
     };
   }
 
-  async function askAI(code, clip) {
-    var language = langKey, identity = JSON.stringify([code, language, currentFileName, settings.base, settings.model, settings.key, settings.proxy]);
+  async function askAISingle(code, clip, reviewer) {
+    var language = langKey, identity = JSON.stringify([code, language, currentFileName, settings.base, reviewer.model, settings.key, settings.proxy]);
     if (lastAIReview && lastAIReview.identity === identity) return JSON.parse(JSON.stringify(lastAIReview.report));
     var chunks = ReviewEngine.aiChunks(code, language), results = new Array(chunks.length), next = 0, op = activeOperation;
     var completed = 0;
@@ -2367,13 +2445,13 @@ try {
           if (chunk.text.length > MAX_CODE_CHARS) throw new Error('یک خط ورودی از سقف بررسی AI بزرگ‌تر است');
           var context = 'زبان این بخش: ' + chunk.language + '. شماره خط‌ها را از ۱ در همین بخش بده. ' +
             (chunk.complete ? 'این یک فایل کامل است. ' : 'این فقط بخشی از فایل است؛ شروع و پایان بریده شده‌اند. نبود تعریف، import، براکت ابتدا/انتها یا وابستگی را خطا نگیر. فقط ایراد داخلی با شاهد قطعی گزارش کن. ') + '\n';
-          results[index] = await askAIChunk(chunk.text, { text: chunk.text, context: context }, chunk.language);
+          results[index] = await askAIChunk(chunk.text, { text: chunk.text, context: context }, chunk.language, reviewer.model);
         } catch (error) { checkOperation(op); results[index] = { incomplete: true, errors: [], explanation: { summary: '', steps: [], uses: [], notes: [aiErrorText(error)] } }; }
         completed++;
         if (activeOperation === op) setOperationStage('نتیجهٔ آفلاین آماده است؛ بررسی AI ' + fa(completed) + ' از ' + fa(chunks.length));
       }
     }
-    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, consume));
+    await Promise.all(Array.from({ length: Math.min(2, chunks.length) }, consume));
     checkOperation(op);
     var reviewedChunks = results.filter(function (report) { return !report.incomplete && !report.raw; }).length;
     var coverage = { totalChunks: chunks.length, reviewedChunks: reviewedChunks,
@@ -2399,6 +2477,29 @@ try {
       ]) } };
     if (!incomplete) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
     return merged;
+  }
+  var lastEnsembleReview;
+  async function askAI(code, clip) {
+    var reviewers = AIReviewers.list(settings), reports = [], op = activeOperation;
+    var identity = JSON.stringify([code,langKey,currentFileName,settings.base,settings.proxy,settings.key,reviewers]);
+    if (lastEnsembleReview && lastEnsembleReview.identity === identity) return JSON.parse(JSON.stringify(lastEnsembleReview.report));
+    for (var i = 0; i < reviewers.length; i++) {
+      checkOperation(op);
+      var reviewer = reviewers[i];
+      if (op) $('operation-stage').textContent = 'بررسی ' + reviewer.name + ' (' + fa(i + 1) + '/۵)…';
+      try { reports.push(Object.assign({},reviewer,{report:await askAISingle(code,clip,reviewer)})); }
+      catch (error) { checkOperation(op); reports.push(Object.assign({},reviewer,{error:aiErrorText(error)})); }
+    }
+    var merged = AIReviewers.merge(reports);
+    merged.errors = ReviewEngine.dedupe(merged.errors);
+    if (!merged.incomplete) lastEnsembleReview = {identity:identity,report:JSON.parse(JSON.stringify(merged))};
+    return merged;
+  }
+  function reviewersToMd(ai) {
+    if (!ai || !ai.reviewers) return '';
+    return '\n\n## بررسی پنج مدل\n\n' + ai.reviewers.map(function (review) {
+      return '- **' + review.name + '**: ' + (review.complete ? 'بررسی کامل شد' : 'بررسی کامل نشد') + (review.error ? ' — ' + review.error : '');
+    }).join('\n');
   }
 
   /* ── اصلاح کد (درخواست جدا) ──
@@ -2804,7 +2905,7 @@ try {
       code: code,
       errors: all,
       mode: useAI && ai && !ai.raw && !ai.incomplete ? 'ai' : 'local',
-      model: useAI ? settings.model : '',
+      model: useAI ? 'ChatGPT / Codex · Claude · DeepSeek · Z.ai · Gemini 3.8 Flash' : '',
       incomplete: local.partial || !!(useAI && (!ai || ai.raw || ai.incomplete)),
       proposed: fixCode,
       explanation: fixExp || adv || '',
@@ -2826,7 +2927,7 @@ try {
       syncReviewTab();
       haptic('error');
       toast('کد خطا دارد ⚠️ — روی هر مورد بزن تا خطش را ببینی');
-      currentMd = '## مشکلات کد\n\n' + all.map(function (er) { return '- خط ' + fa(er.line) + ': ' + er.message + (er.hint ? ' — ' + er.hint : ''); }).join('\n') + '\n\n' + securityToMd(mal, ai && !ai.raw ? ai.security : null);
+      currentMd = '## مشکلات کد\n\n' + all.map(function (er) { return '- خط ' + fa(er.line) + ': ' + er.message + (er.hint ? ' — ' + er.hint : ''); }).join('\n') + '\n\n' + securityToMd(mal, ai && !ai.raw ? ai.security : null) + reviewersToMd(ai);
       addHistory('کد دارای ' + fa(hard.length) + ' خطا', 'err');
       return;
     }
@@ -2851,7 +2952,7 @@ try {
           Checker.localExplain(code, langKey, warns);
         mode = 'local';
       } else if (ai.explanation) {
-        md = explanationToMd(ai.explanation, warns);
+        md = explanationToMd(ai.explanation, warns) + reviewersToMd(ai);
         mode = 'ai';
       } else {
         md = '> ⚠️ **مدل توضیحی برنگرداند.** یک‌بار دیگر «تحلیل کد» را بزن.\n\n' +
@@ -2994,7 +3095,7 @@ try {
         resVerdict.textContent = '✓ کد سالم است';
         resVerdict.className = 'verdict ok';
       }
-      resMode.textContent = 'هوش مصنوعی · ' + (settings.model || '');
+      resMode.textContent = 'بررسی پنج مدل';
       resMode.className = 'mode-badge ai';
     } else {
       if (secBadge) {
@@ -3432,6 +3533,14 @@ try {
   cfgProxy.value = settings.proxy || '';
   cfgKey.value = settings.key;
   cfgModel.value = settings.model;
+  Object.keys(AIReviewers.defaults).forEach(function (name) {
+    var input = $('cfg-review-' + name);
+    input.value = (settings.reviewModels && settings.reviewModels[name]) || AIReviewers.defaults[name];
+    input.addEventListener('change', function () {
+      settings.reviewModels = Object.assign({}, AIReviewers.defaults, settings.reviewModels);
+      settings.reviewModels[name] = input.value.trim() || AIReviewers.defaults[name]; saveSettings(); aiConnected = false; updateAiStatus();
+    });
+  });
   cfgHist.checked = !!settings.hist;
 
   cfgBase.addEventListener('change', function () {
@@ -3455,7 +3564,7 @@ try {
     updateAiStatus();
   });
   cfgModel.addEventListener('change', function () {
-    settings.model = cfgModel.value.trim() || 'gpt-4o-mini';
+    settings.model = cfgModel.value.trim() || 'gpt-6.1-sol';
     saveSettings();
     aiConnected = false;
     updateAiStatus();
@@ -3493,15 +3602,20 @@ try {
     cfgTestLine.textContent = 'در حال تست اتصال…';
     cfgTest.classList.add('busy');
     updateAiStatus('testing');
-    var connectionTestStartedAt = Date.now();
+    var connectionTestStartedAt = Date.now(), connectionOp = beginOperation('آزمون اتصال پنج مدل…'), connectionResults = [];
     try {
-      await chat([{ role: 'user', content: 'سلام' }], 5);
-      aiConnected = true;
+      var reviewModels = AIReviewers.list(settings);
+      for (var reviewModel of reviewModels) {
+        checkOperation(connectionOp);
+        setOperationStage('آزمون ' + reviewModel.name + '…');
+        try { await chat([{ role: 'user', content: 'Reply with OK.' }], 1000, 0, reviewModel.model); connectionResults.push({name:reviewModel.name,ok:true}); }
+        catch (error) { checkOperation(connectionOp); connectionResults.push({name:reviewModel.name,ok:false,error:aiErrorText(error)}); }
+      }
+      aiConnected = connectionResults.every(function (result) { return result.ok; });
       updateAiStatus();
-      cfgTestLine.className = 'test-line ok';
-      cfgTestLine.textContent = '✓ اتصال برقرار است (' + ((Date.now() - connectionTestStartedAt) / 1000).toFixed(1) + ' ثانیه) — مدل پاسخ داد';
-      toast('اتصال به هوش مصنوعی با موفقیت برقرار شد ✓');
-      haptic('success');
+      cfgTestLine.className = 'test-line ' + (aiConnected ? 'ok' : 'fail');
+      cfgTestLine.textContent = connectionResults.map(function (result) { return (result.ok ? '✓ ' : '✕ ') + result.name + (result.error ? ': ' + result.error : ''); }).join('\n');
+      haptic(aiConnected ? 'success' : 'error');
     } catch (e) {
       aiConnected = false;
       updateAiStatus();
@@ -3509,7 +3623,7 @@ try {
       cfgTestLine.textContent = '✕ ' + aiErrorText(e);
       haptic('error');
     }
-    cfgTest.classList.remove('busy');
+    finishOperation(connectionOp); cfgTest.classList.remove('busy');
   });
 
   /* ── موتور نیتیو همگام‌سازی کیبورد اپل (iOS 18 Native Keyboard Engine) ── */

@@ -35,6 +35,7 @@ const dimensions = [[320,568],[360,640],[393,852],[412,915],[432,960],[560,820],
         },{width,insets,theme,platform});
         await page.evaluate(()=>document.fonts.ready);
         await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        await page.waitForFunction(top=>parseFloat(getComputedStyle(document.querySelector('.topbar')).paddingTop)>=top+4,insets[0]);
         const state=await page.evaluate(()=>{
           const r=selector=>{const el=document.querySelector(selector),rect=el.getBoundingClientRect();return {x:rect.x,y:rect.y,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height};};
           return {brand:r('.brand'),actions:r('.top-actions'),buttons:[...document.querySelectorAll('.top-actions button')].map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};}).sort((a,b)=>a.x-b.x),clock:r('.dial-clock'),editor:r('#editor'),bottom:r('.bottom'),scroll:document.documentElement.scrollWidth,

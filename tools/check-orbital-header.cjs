@@ -1,7 +1,7 @@
 // Radio clock: both browser engines, calendar rollover, motion, contrast and fit.
 const {chromium,webkit}=require('playwright'),{pathToFileURL}=require('node:url');
 const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
-const output=path.resolve(__dirname,'../artifacts/build-24-validation');fs.mkdirSync(output,{recursive:true});
+const output=path.resolve(__dirname,'../artifacts/build-25-validation');fs.mkdirSync(output,{recursive:true});
 (async()=>{
  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]) {
   const browser=await engine.launch({headless:true,...(name==='chromium'&&process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});

@@ -38,5 +38,7 @@ html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; 
 }
 /* Discrete second ticks avoid continuous repainting of counter-rotated labels. */
 html.android .dial-clock *, html.android .dial-clock *::after { transition: none; }
+@media(max-width:680px), (pointer:coarse) { .dial-clock *, .dial-clock *::after { transition: none; } }
 @media(prefers-reduced-motion:reduce) { .dial-clock *, .dial-clock *::after { transition: none !important; } }
 html.focus-mode .dial-clock *, html.focus-mode .dial-clock *::after { transition: none; }
+.energy-saving .dial-seconds { visibility: hidden; }
