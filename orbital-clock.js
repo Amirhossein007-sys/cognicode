@@ -8,7 +8,9 @@
   var hourLabel = clock.querySelector('.dial-hour'), minuteLabel = clock.querySelector('.dial-minute');
   var timeLabel = clock.querySelector('.dial-time'), dateLabel = clock.querySelector('.dial-date');
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-  var calm = window.matchMedia('(max-width:680px), (pointer:coarse)');
+  var isAndroid = function () {
+    return !!window.AndroidBridge || /android/i.test(navigator.userAgent) || document.documentElement.classList.contains('android');
+  };
   var energySaving = !!(window.__cogniEnergy && (window.__cogniEnergy.lowPower || window.__cogniEnergy.thermal >= 1));
   var dateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-arabext', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   var timer, resetFrame, dayKey = '', minuteKey = '', previousTime, secondAngle = 0, minuteAngle = 0;
@@ -27,17 +29,16 @@
     var now = new Date(), tehran = new Date(now.getTime() + 210 * 60000);
     var h = tehran.getUTCHours(), m = tehran.getUTCMinutes(), s = tehran.getUTCSeconds();
     var stamp = Math.floor(now.getTime() / 1000);
-    var motion = animate && previousTime !== undefined && stamp === previousTime + 1 && !reduced.matches && !calm.matches && !energySaving && active && !document.hidden && !document.documentElement.classList.contains('focus-mode');
+    var android = isAndroid();
+    var motion = animate && previousTime !== undefined && stamp === previousTime + 1 && !reduced.matches && !android && !energySaving && active && !document.hidden && !document.documentElement.classList.contains('focus-mode');
     if (motion) { secondAngle += 6; if (s === 0) minuteAngle += 6; }
     else { secondAngle = s * 6; minuteAngle = m * 6; }
     clock.classList.toggle('is-resetting', !motion);
-    if (!calm.matches || !animate || s % 5 === 0) {
-      var secondsValue = secondAngle + 'deg';
-      if (secondsRing.style.getPropertyValue('--dial-angle') !== secondsValue) secondsRing.style.setProperty('--dial-angle', secondsValue);
-    }
+    var secondsValue = secondAngle + 'deg';
+    if (secondsRing.style.getPropertyValue('--dial-angle') !== secondsValue) secondsRing.style.setProperty('--dial-angle', secondsValue);
     var minutesValue = minuteAngle + 'deg';
     if (minutesRing.style.getPropertyValue('--dial-angle') !== minutesValue) minutesRing.style.setProperty('--dial-angle', minutesValue);
-    if (!motion && !reduced.matches && !calm.matches && !energySaving) { void secondsRing.offsetWidth; resetFrame = requestAnimationFrame(function () { clock.classList.remove('is-resetting'); }); }
+    if (!motion && !reduced.matches && !android && !energySaving) { void secondsRing.offsetWidth; resetFrame = requestAnimationFrame(function () { clock.classList.remove('is-resetting'); }); }
     if (hourLabel.textContent !== pad(h)) hourLabel.textContent = pad(h);
     if (minuteLabel.textContent !== pad(m)) minuteLabel.textContent = pad(m);
     var nextDay = tehran.toISOString().slice(0, 10), nextMinute = pad(h) + pad(m) + nextDay;
@@ -59,7 +60,6 @@
   window.addEventListener('pagehide', function () { active = false; stop(); });
   window.addEventListener('cognicode:native-active', function (event) { active = !!event.detail; if (active) resume(); else stop(); });
   reduced.addEventListener('change', resume);
-  calm.addEventListener('change', resume);
   window.addEventListener('cognicode:energy-change', function (event) { var energy = event.detail || {}; energySaving = !!(energy.lowPower || energy.thermal >= 1); resume(); });
   update(false);
 })();

@@ -34,6 +34,10 @@
 }
 
 :root {
+  --safe-top: max(var(--sat, 0px), env(safe-area-inset-top, 0px));
+  --safe-bottom: max(var(--sab, 0px), env(safe-area-inset-bottom, 0px));
+  --safe-left: max(var(--sal, 0px), env(safe-area-inset-left, 0px));
+  --safe-right: max(var(--sar, 0px), env(safe-area-inset-right, 0px));
   --bg: #0f172a;               /* Deep Navy (Tailwind Slate-900) */
   --bg2: #1e293b;              /* Elevated Slate-800 */
   --card: rgba(30, 41, 59, 0.60);
@@ -94,7 +98,6 @@
   --err-tx: #fca5a5; --warn-tx: #fde68a;
   --scrim: rgba(8, 12, 24, 0.65);
   --txt-strong: #ffffff;
-  --sonar-dot: #38bdf8;
   --tab-bg: rgba(255, 255, 255, 0.05);
 }
 
@@ -145,8 +148,8 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   width: 100%;
   max-width: min(100%, 640px);
   margin-inline: auto;
-  padding-left: max(var(--sal, 0px), env(safe-area-inset-left, 0px));
-  padding-right: max(var(--sar, 0px), env(safe-area-inset-right, 0px));
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
   overflow: hidden;
 }
 @supports (height: 100dvh) {
@@ -157,7 +160,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px 8px;
-  padding-top: calc(max(var(--sat, 0px), env(safe-area-inset-top, 0px)) + 8px);
+  padding-top: calc(var(--safe-top) + 8px);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -529,7 +532,7 @@ html[data-theme="light"] .zoom-hud {
 /* ═══ نوار پایین (کارت مستقل Play + وضعیت) ═══ */
 .bottom {
   margin: 6px 12px 0;
-  margin-bottom: max(8px, max(var(--sab, 0px), env(safe-area-inset-bottom, 0px)));
+  margin-bottom: max(8px, var(--safe-bottom));
   background: var(--bar-bg);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -790,9 +793,9 @@ html[data-theme="light"] .mf-desc {
 .backdrop.show { opacity: 1; pointer-events: auto; }
 .sheet {
   position: fixed; z-index: 50;
-  left: 0; right: 0; bottom: 0;
+  left: var(--safe-left); right: var(--safe-right); bottom: 0;
   max-width: 560px; margin-inline: auto;
-  max-height: 88vh; max-height: 88dvh;
+  max-height: 88vh; max-height: min(88dvh, calc(100dvh - var(--safe-top) - 8px));
   display: flex; flex-direction: column;
   background: var(--card-strong);
   backdrop-filter: blur(34px) saturate(160%); -webkit-backdrop-filter: blur(34px) saturate(160%);
@@ -829,7 +832,7 @@ html[data-theme="light"] .mf-desc {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+  padding: 14px 16px calc(24px + var(--safe-bottom));
 }
 
 /* سربرگ نتیجه */
@@ -1059,7 +1062,7 @@ html[data-theme="light"] .fld input:focus {
 /* ═══ توست ═══ */
 .toast {
   position: fixed; z-index: 90;
-  bottom: calc(150px + env(safe-area-inset-bottom));
+  bottom: calc(150px + var(--safe-bottom));
   left: 50%; transform: translate(-50%, 16px);
   max-width: min(86vw, 400px);
   padding: 11px 18px; border-radius: 16px;
@@ -1100,7 +1103,7 @@ html.screen-large #app, html.screen-large-max #app {
 }
 html.screen-large .topbar, html.screen-large-max .topbar {
   padding: 12px 20px 10px;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-top: calc(var(--safe-top) + 10px);
 }
 html.screen-large .brand .logo, html.screen-large-max .brand .logo {
   width: 44px;
@@ -1137,7 +1140,7 @@ html.screen-large .key, html.screen-large-max .key {
 }
 html.screen-large .bottom, html.screen-large-max .bottom {
   margin: 8px 16px 0;
-  margin-bottom: max(10px, env(safe-area-inset-bottom));
+  margin-bottom: max(10px, var(--safe-bottom));
   border-radius: 20px;
 }
 html.screen-large .play, html.screen-large-max .play {
@@ -1152,11 +1155,11 @@ html.screen-standard-pro .editor-shell {
 }
 html.screen-standard-pro .topbar {
   padding: 10px 16px 8px;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  padding-top: calc(var(--safe-top) + 8px);
 }
 html.screen-standard-pro .bottom {
   margin: 6px 12px 0;
-  margin-bottom: max(8px, env(safe-area-inset-bottom));
+  margin-bottom: max(8px, var(--safe-bottom));
 }
 
 /* ── بهینه‌سازی مدل‌های ProMotion 120Hz (انیمیشن‌های فوق‌روان و سیال) ── */
@@ -1173,18 +1176,18 @@ html.is-promotion .play {
 
 /* ── هماهنگی با سخت‌افزار Dynamic Island ── */
 html.has-dynamic-island .topbar {
-  padding-top: calc(env(safe-area-inset-top, 54px) + 6px);
+  padding-top: calc(var(--safe-top) + 6px);
 }
 
 /* ── هماهنگی با سخت‌افزار Notch (آیفون ۱۳ و ۱۴ پایه) ── */
 html.has-notch .topbar {
-  padding-top: calc(env(safe-area-inset-top, 47px) + 6px);
+  padding-top: calc(var(--safe-top) + 6px);
 }
 
 /* ── بهینه‌سازی مدل‌های کامپکت (iPhone 13 mini) ── */
 html.screen-compact .topbar {
   padding: 6px 10px 4px;
-  padding-top: calc(env(safe-area-inset-top, 44px) + 4px);
+  padding-top: calc(var(--safe-top) + 4px);
 }
 html.screen-compact .brand-txt span {
   display: none;
@@ -1203,7 +1206,7 @@ html.screen-compact .key {
 }
 html.screen-compact .bottom {
   margin: 4px 8px 0;
-  margin-bottom: max(6px, env(safe-area-inset-bottom));
+  margin-bottom: max(6px, var(--safe-bottom));
 }
 @media (prefers-reduced-motion: reduce) {
   /* همهٔ انیمیشن‌های بی‌نهایت و ورودی‌ها خاموش می‌شوند؛ اسپینرهای وضعیت (rot)
@@ -1217,8 +1220,6 @@ html.screen-compact .bottom {
 /* ═══════════════════════════════════════════════
    پس‌زمینه سونار (میدان نقطه‌ای تعاملی)
    ═══════════════════════════════════════════════ */
-.sonar { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.sonar canvas { display: block; width: 100%; height: 100%; color: var(--sonar-dot); }
 
 /* ═══════════════════════════════════════════════
    دکمه تغییر حالت روشن/تاریک
@@ -1303,7 +1304,6 @@ html[data-theme="light"] {
   --err-tx: #b91c1c; --warn-tx: #92400e;
   --scrim: rgba(15, 23, 42, 0.38);
   --txt-strong: #0f172a;
-  --sonar-dot: #0284c7;
   --tab-bg: rgba(255, 255, 255, 0.65);
 }
 html[data-theme="light"] body { background: #f8fafc; }
@@ -1738,13 +1738,9 @@ html[data-theme="light"] .mlm-node-title {
 /* GradientWave: muted palettes plus stable surfaces preserve text contrast. */
 :root { --editor-bg: rgba(15,23,42,.94); --c-com: #94a3b8; --ph: #94a3b8; --gutter-txt: #94a3b8; }
 html[data-theme="light"] { --editor-bg: rgba(255,255,255,.96); --txt3: #475569; --ph: #64748b; --gutter-txt: #64748b; }
-.sonar { overflow: hidden; background: linear-gradient(140deg,#0f172a,#164e63,#312e81); }
-html[data-theme="light"] .sonar { background: linear-gradient(140deg,#f8fafc,#bae6fd,#e0e7ff); }
-.sonar::after { content: ''; position: absolute; inset: 0; background: rgba(15,23,42,.55); }
-html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
 /* بلور سطوح در بخش «شیشه» پایین‌تر تعریف می‌شود (.editor/.keys/.bottom → 5px تیره،
    2px روشن) و حالت بدون‌بلور در media query کاهش‌شفافیت/افزایش‌کنتراست می‌آید. */
-.analysis-activity { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 6px); left: 50%; transform: translateX(-50%); z-index: 2000; direction: ltr; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 24px); padding: 8px 14px; border-radius: 28px; background: #0f172a; color: #f8fafc; box-shadow: 0 4px 20px #0005; pointer-events: none; font-size: 12px; }
+.analysis-activity { position: fixed; top: calc(var(--safe-top) + 6px); left: 50%; transform: translateX(-50%); z-index: 2000; direction: ltr; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 24px); padding: 8px 14px; border-radius: 28px; background: #0f172a; color: #f8fafc; box-shadow: 0 4px 20px #0005; pointer-events: none; font-size: 12px; }
 .analysis-activity img { width: 28px; height: 28px; flex: 0 0 28px; }
 .activity-wave { display: flex; align-items: center; gap: 2px; height: 22px; color: #67e8f9; }
 .activity-wave i { width: 3px; height: 18px; background: currentColor; border-radius: 3px; animation: activity-wave .75s ease-in-out infinite alternate; }
@@ -1761,10 +1757,6 @@ html[data-theme="light"] .sonar::after { background: rgba(248,250,252,.55); }
 .code-area textarea::placeholder { opacity: 1; }
 
 /* Particle background adapted from particles-bg; stable reading surfaces. */
-#particles-js { background: linear-gradient(to top right, #000814, #003566, #0077b6); }
-html[data-theme="light"] #particles-js { background: linear-gradient(to top right, #e3f2fd, #90caf9, #64b5f6); }
-#particles-js::after { background: rgba(15,23,42,.40); }
-html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45); }
 .topbar { background: var(--bar-bg); }
 #sheet-import .choice { min-height: 64px; }
 @media (prefers-contrast: more) {
@@ -1772,7 +1764,7 @@ html[data-theme="light"] #particles-js::after { background: rgba(248,250,252,.45
   html[data-theme="light"] { --editor-bg: #fff; --bar-bg: #fff; --panel-bg: #fff; }
 }
 
-/* Translucent reading surfaces: retain particles through a restrained tint. */
+/* Translucent reading surfaces: retain the Matrix through a restrained tint. */
 :root {
   --editor-bg: rgba(10, 22, 40, .46);
   --bar-bg: rgba(10, 22, 40, .42);
@@ -1852,12 +1844,12 @@ html[data-theme="light"] .bottom {
 .ld-b0916a { background:#b0916a; color:#b0916a; }
 .ld-8e8e93 { background:#8e8e93; color:#8e8e93; }
 
-/* Use the app's existing particle background, with no second canvas or network. */
-html.launch-pending body > :not(#launch-splash):not(#particles-js) { visibility: hidden; }
+/* Use the app's shared Matrix background, with no second canvas or network. */
+html.launch-pending body > :not(#launch-splash):not(#data-rain-background) { visibility: hidden; }
 .launch-splash {
   position: fixed; inset: 0; z-index: 3000;
   display: grid; place-items: center;
-  padding: calc(env(safe-area-inset-top, 0px) + 24px) max(24px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 24px) max(24px, env(safe-area-inset-left, 0px));
+  padding: calc(var(--safe-top) + 24px) max(24px, var(--safe-right)) calc(var(--safe-bottom) + 24px) max(24px, var(--safe-left));
   color: #f8fafc; color-scheme: dark;
 }
 .launch-content { display: flex; flex-direction: column; align-items: center; gap: 24px; width: 100%; text-align: center; }
@@ -1890,7 +1882,7 @@ html.launch-pending body > :not(#launch-splash):not(#particles-js) { visibility:
   contain: paint;
 }
 html[data-theme="light"] .brain-marquee { background: #f8fafc; color: #0369a1; border-color: #cbd5e1; }
-.brain-marquee-track { display: flex; width: 200%; height: 100%; animation: brainMarquee 12s linear infinite; }
+.brain-marquee-track { display: flex; width: 200%; height: 100%; animation: brainMarquee 12s linear infinite; will-change: transform; transform: translate3d(0, 0, 0); }
 .brain-marquee-track svg { width: 50%; height: 100%; flex: 0 0 50%; stroke-width: 1.5; }
 .brain-marquee-track path { vector-effect: non-scaling-stroke; }
 .brain-marquee { transition: color .3s ease, border-color .3s ease; }
@@ -1898,13 +1890,25 @@ html[data-theme="light"] .brain-marquee { background: #f8fafc; color: #0369a1; b
 .brain-marquee[data-state="error"] { color: #fda4af; border-color: #fb7185; }
 html[data-theme="light"] .brain-marquee[data-state="healthy"] { color: #047857; border-color: #059669; }
 html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; border-color: #e11d48; }
-.brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
+@media (min-width: 681px) and (hover: hover) {
+  .brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
+}
 @keyframes brainMarquee { to { transform: translateX(-50%); } }
 /* Keep the existing flex editor and all its overlay/scroll metrics intact. */
 .bottom .play { width: 94%; margin-inline: auto; border-radius: 14px; }
 @media (min-width: 480px) {
   .topbar .brand-txt span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar .brand-txt b { font-size: 15px; }
+}
+@media (max-width: 480px) {
+  .topbar { padding: 6px 10px 4px; padding-top: calc(var(--safe-top) + 6px); }
+  .topbar .brand .logo { width: 32px; height: 32px; border-radius: 10px; }
+  .topbar .brand-txt b { font-size: 13.5px; }
+  .topbar .brand-txt span { display: none; }
+  .top-actions { gap: 4px; }
+  .top-actions .icon-btn { width: 36px; height: 36px; min-width: 36px; border-radius: 11px; }
+  .keys { margin: 3px 6px 0; padding: 4px; }
+  .bottom { margin: 3px 6px 0; margin-bottom: max(6px, var(--safe-bottom)); }
 }
 @media (max-width: 359px) {
   .topbar .brand .logo { display: none; }
@@ -1914,12 +1918,12 @@ html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; bo
 @media (max-height: 500px) and (orientation: landscape) {
   .app { max-width: 840px; }
   .brain-marquee { flex-basis: 22px; height: 22px; min-height: 22px; font-size: 11px; }
-  .topbar { padding: 4px 12px 2px; padding-top: max(4px, env(safe-area-inset-top, 0px)); min-height: 36px; }
+  .topbar { padding: 4px 12px 2px; padding-top: max(4px, var(--safe-top)); min-height: 36px; }
   .topbar .brand .logo { width: 28px; height: 28px; border-radius: 8px; }
   .topbar .icon-btn { width: 34px; height: 34px; border-radius: 10px; }
   .topbar .brand-txt b { font-size: 13px; }
   .editor-shell { margin-top: 2px; padding: 0 8px; min-height: 120px; }
-  .bottom { margin: 2px 8px 0; margin-bottom: max(4px, env(safe-area-inset-bottom)); border-radius: 14px; }
+  .bottom { margin: 2px 8px 0; margin-bottom: max(4px, var(--safe-bottom)); border-radius: 14px; }
   .playbar { padding: 4px 8px 1px; }
   .play { height: 36px; font-size: 14px; border-radius: 12px; }
   .keys { margin: 2px 4px 0; padding: 2px 4px; }
@@ -1962,22 +1966,23 @@ html.android .keys,
 html.android .bottom,
 html.android .sheet,
 html.android .analysis-overlay,
-html.android .pipboy-clock .pipboy-chassis {
-  -webkit-backdrop-filter: blur(5px) !important;
-  backdrop-filter: blur(5px) !important;
+html.android .dial-face {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 html.android .editor {
-  background: rgba(15, 23, 42, 0.94) !important;
-  transform: translateZ(0);
+  background: var(--bg) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   contain: content;
 }
 html.android .topbar,
 html.android .keys,
 html.android .bottom {
-  transform: translateZ(0);
+  transform: none;
 }
 html.android .play {
-  will-change: transform;
+  will-change: auto;
 }
 
 /* تشخیص و هماهنگی خودکار با اندازه صفحه انواع گوشی‌های اندروید */
@@ -2014,7 +2019,7 @@ html.screen-compact .keys {
 }
 html.screen-compact .bottom {
   margin: 4px 8px 0;
-  margin-bottom: max(6px, max(var(--sab, 0px), env(safe-area-inset-bottom, 0px)));
+  margin-bottom: max(6px, var(--safe-bottom));
 }
 html.screen-compact .play {
   height: 44px;

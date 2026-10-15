@@ -1,0 +1,37 @@
+/* Supplied DataRain flow, behind controls and stable reading surfaces. */
+:root { --bg: #080e1b; }
+html[data-theme="light"] { --bg: #f6f8fc; }
+html[data-theme="light"] body { background: var(--bg); }
+.dr-root {
+  --dr-calm: #38bdf8; --dr-mid: #a855f7; --dr-hot: #f43f5e; --dr-core: #f0fdf4;
+  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  contain: strict; background: #080e1b;
+}
+.dr-root canvas, .dr-vignette, .dr-grain { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
+.dr-mobile-flow .dr-main { animation: dr-mobile-fall 20s linear infinite; will-change: transform; }
+.dr-mobile-flow .dr-mobile-copy { top: -100%; bottom: auto; }
+.dr-mobile-flow.dr-motion-paused .dr-main { animation-play-state: paused; }
+@keyframes dr-mobile-fall { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@media(prefers-reduced-motion:reduce) { .dr-mobile-flow .dr-main { animation-play-state: paused; } }
+.dr-main { opacity: .98; }
+.dr-bloom { opacity: .35; filter: blur(10px); }
+.dr-vignette { background: radial-gradient(ellipse at 50% 40%, #080e1b15 0, #080e1b55 100%); }
+.dr-grain { opacity: .045; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' d='M0 0h128v128H0z'/%3E%3C/svg%3E"); }
+html[data-theme="light"] .dr-root { background: #f6f8fc; --dr-calm: #0284c7; --dr-mid: #7c3aed; --dr-hot: #db2777; --dr-core: #0f172a; }
+html[data-theme="light"] .dr-main { opacity: .95; }
+html[data-theme="light"] .dr-bloom { opacity: .20; }
+html[data-theme="light"] .dr-vignette { background: radial-gradient(ellipse at 50% 40%, rgba(246,248,252,0.08) 0, rgba(246,248,252,0.40) 100%); }
+html.launch-pending .dr-main { opacity: .9; }
+html.launch-pending[data-theme="light"] .dr-main { opacity: .82; }
+.launch-splash { color: var(--txt1); color-scheme: dark light; }
+html[data-theme="light"] .launch-content p { color: #1e293b; text-shadow: none; }
+.topbar { background: transparent; }
+html.focus-mode .dr-main { opacity: .18; }
+html.focus-mode .dr-bloom, html.android .dr-bloom { display: none; }
+html.android .dr-grain { display: none; }
+/* Keep the full-screen blur off phone-sized displays; trails retain their colour. */
+@media(max-width:680px), (pointer:coarse) { .dr-bloom, .dr-grain { display: none; } }
+@media(prefers-contrast:more), (prefers-reduced-transparency:reduce) {
+  .dr-main { opacity: .15 !important; }
+  .dr-bloom { display: none; }
+}

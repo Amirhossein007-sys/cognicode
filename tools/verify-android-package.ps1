@@ -1,5 +1,6 @@
 param([string]$AndroidRoot = 'C:\Users\Amirii\Desktop\cognicode-apk')
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskRelease = Get-Content -LiteralPath (Join-Path $taskRoot 'release.json') -Raw | ConvertFrom-Json
 $taskDirectory = Join-Path $taskRoot ('artifacts/build-' + $taskRelease.build + '-validation')
@@ -10,11 +11,11 @@ $taskSha = [Security.Cryptography.SHA256]::Create()
 $taskMatched = 0
 try {
     foreach ($taskSource in Get-ChildItem -LiteralPath $taskAssets -Recurse -File) {
-        $taskRelative = [IO.Path]::GetRelativePath($taskAssets, $taskSource.FullName).Replace('\', '/')
+        $taskRelative = $taskSource.FullName.Substring($taskAssets.Length).TrimStart('\', '/').Replace('\', '/')
         $taskEntry = $taskZip.GetEntry('assets/web/' + $taskRelative)
         if (-not $taskEntry) { throw "Missing packaged web file: $taskRelative" }
         $taskStream = $taskEntry.Open()
-        try { $taskPackagedHash = [Convert]::ToHexString($taskSha.ComputeHash($taskStream)) } finally { $taskStream.Dispose() }
+        try { $taskPackagedHash = [BitConverter]::ToString($taskSha.ComputeHash($taskStream)).Replace('-', '') } finally { $taskStream.Dispose() }
         if ($taskPackagedHash -ne (Get-FileHash -LiteralPath $taskSource.FullName -Algorithm SHA256).Hash) { throw "Stale packaged web file: $taskRelative" }
         $taskMatched++
     }

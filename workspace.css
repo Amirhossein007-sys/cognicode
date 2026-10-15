@@ -31,10 +31,6 @@ html[data-theme="light"] .quick-start {
 .energy-saving .scanline, .energy-saving .burst-star, .energy-saving .terminal-text { animation: none !important; filter: none; }
 .energy-saving #btn-play.loading { animation: none !important; }
 #hl-code.virtualized { display: block; }
-#hl-code.zoom-preview { display: block; }
-.editor-zoom { display: flex; flex: 0 0 auto; gap: 2px; padding-right: 4px; border-right: 1px solid var(--line); }
-.editor-zoom .key { padding-inline: 4px; font-size: 13px; }
-#zoom-reset { min-width: 48px; font-size: 11px; }
 #cfg-test-line { white-space: pre-line; }
 .keys { mask-image: none; -webkit-mask-image: none; }
 .keys-scroll { min-width: 0; flex: 1; mask-image: linear-gradient(to right,transparent,black 8px,black calc(100% - 8px),transparent); -webkit-mask-image: linear-gradient(to right,transparent,black 8px,black calc(100% - 8px),transparent); }

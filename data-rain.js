@@ -18,10 +18,10 @@ const DEFAULT_MID      = [138, 92, 255];
 const DEFAULT_HOT      = [255, 61, 154];
 const DEFAULT_CORE      = [234, 252, 255];
 
-const BASE_ALPHA = [0.2, 0.32, 0.48];
-const BASE_WIDTH = [0.7, 0.9, 1.2];
-const ALPHA_GAIN = 1.3;
-const HEAD_WIDTH = 1.4;
+const BASE_ALPHA = [0.35, 0.48, 0.65];
+const BASE_WIDTH = [0.9, 1.2, 1.5];
+const ALPHA_GAIN = 1.6;
+const HEAD_WIDTH = 1.6;
 
 // precomputed per-step filter coefficients (the step is fixed)
 const K_RELAX = 1 - Math.exp(-STEP / 0.12);

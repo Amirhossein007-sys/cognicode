@@ -1882,7 +1882,7 @@ html.launch-pending body > :not(#launch-splash):not(#data-rain-background) { vis
   contain: paint;
 }
 html[data-theme="light"] .brain-marquee { background: #f8fafc; color: #0369a1; border-color: #cbd5e1; }
-.brain-marquee-track { display: flex; width: 200%; height: 100%; animation: brainMarquee 12s linear infinite; }
+.brain-marquee-track { display: flex; width: 200%; height: 100%; animation: brainMarquee 12s linear infinite; will-change: transform; transform: translate3d(0, 0, 0); }
 .brain-marquee-track svg { width: 50%; height: 100%; flex: 0 0 50%; stroke-width: 1.5; }
 .brain-marquee-track path { vector-effect: non-scaling-stroke; }
 .brain-marquee { transition: color .3s ease, border-color .3s ease; }
@@ -1890,13 +1890,25 @@ html[data-theme="light"] .brain-marquee { background: #f8fafc; color: #0369a1; b
 .brain-marquee[data-state="error"] { color: #fda4af; border-color: #fb7185; }
 html[data-theme="light"] .brain-marquee[data-state="healthy"] { color: #047857; border-color: #059669; }
 html[data-theme="light"] .brain-marquee[data-state="error"] { color: #be123c; border-color: #e11d48; }
-.brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
+@media (min-width: 681px) and (hover: hover) {
+  .brain-marquee-track path { filter: drop-shadow(0 0 2px currentColor); }
+}
 @keyframes brainMarquee { to { transform: translateX(-50%); } }
 /* Keep the existing flex editor and all its overlay/scroll metrics intact. */
 .bottom .play { width: 94%; margin-inline: auto; border-radius: 14px; }
 @media (min-width: 480px) {
   .topbar .brand-txt span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar .brand-txt b { font-size: 15px; }
+}
+@media (max-width: 480px) {
+  .topbar { padding: 6px 10px 4px; padding-top: calc(var(--safe-top) + 6px); }
+  .topbar .brand .logo { width: 32px; height: 32px; border-radius: 10px; }
+  .topbar .brand-txt b { font-size: 13.5px; }
+  .topbar .brand-txt span { display: none; }
+  .top-actions { gap: 4px; }
+  .top-actions .icon-btn { width: 36px; height: 36px; min-width: 36px; border-radius: 11px; }
+  .keys { margin: 3px 6px 0; padding: 4px; }
+  .bottom { margin: 3px 6px 0; margin-bottom: max(6px, var(--safe-bottom)); }
 }
 @media (max-width: 359px) {
   .topbar .brand .logo { display: none; }

@@ -3,7 +3,15 @@
 window.AIReviewers = (function () {
   const defaults = {claude:'claude-sonnet-5-5',deepseek:'deepseek-v4-pro',zai:'glm-5.3',gemini:'gemini-3.8-flash'};
   function list(settings) {
-    if (Array.isArray(settings.selectedModels)) return settings.selectedModels.slice(0,5).filter(model=>model && typeof model.model==='string' && model.model.trim()).map(model=>({id:model.model,model:model.model,name:model.name||model.model}));
+    if (!settings) return [];
+    if (Array.isArray(settings.selectedModels)) {
+      if (!settings.selectedModels.length) return [];
+      if (settings.model) {
+        const found = settings.selectedModels.find(m => m && m.model === settings.model);
+        if (found) return [{ id: found.model, model: found.model, name: found.name || found.model }];
+      }
+      return settings.selectedModels.slice(0, 1).filter(model=>model && typeof model.model==='string' && model.model.trim()).map(model=>({id:model.model,model:model.model,name:model.name||model.model}));
+    }
     const models = settings.reviewModels || {};
     return [['openai','ChatGPT / Codex',settings.model||'gpt-6.1-sol'],['claude','Claude',models.claude||defaults.claude],['deepseek','DeepSeek',models.deepseek||defaults.deepseek],['zai','Z.ai',models.zai||defaults.zai],['gemini','Gemini 3.8 Flash',models.gemini||defaults.gemini]].map(([id,name,model])=>({id,name,model:String(model).trim()}));
   }

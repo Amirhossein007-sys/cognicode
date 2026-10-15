@@ -15,16 +15,30 @@ window.MobileRain = (() => {
       const rect=root.getBoundingClientRect(),w=Math.round(rect.width),h=Math.round(rect.height);
       if(!w||!h||(!force&&w===width&&h===height))return;
       width=w;height=h;
-      const dpr=Math.min(devicePixelRatio||1,.75),ctx=canvas.getContext('2d');
+      const dpr=Math.min(devicePixelRatio||1,0.75),ctx=canvas.getContext('2d');
       canvas.width=Math.max(1,Math.round(w*dpr));canvas.height=Math.max(1,Math.round(h*dpr));ctx.scale(dpr,dpr);
-      const style=getComputedStyle(root),colors=['--dr-calm','--dr-mid','--dr-hot'].map(key=>style.getPropertyValue(key).trim());
+      const isLight=document.documentElement.getAttribute('data-theme')==='light';
+      const colors=isLight?['#0284c7','#7c3aed','#be185d']:['#38bdf8','#a855f7','#f43f5e'];
       let seed=7;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};
-      const count=Math.max(40,Math.min(80,Math.round(w*h/4800)));
+      const count=Math.max(95,Math.min(165,Math.round(w*h/2300)));
       for(let i=0;i<count;i++){
-        const x=random()*w,y=random()*h,length=55+random()*90,drift=(random()-.5)*18,color=colors[i%3];
+        const x=random()*w,y=random()*h,length=65+random()*115,drift=(random()-.5)*16,color=colors[i%3];
         for(const offset of [-h,0,h]){
-          const gradient=ctx.createLinearGradient(x,y+offset,x+drift,y+length+offset);gradient.addColorStop(0,color+'00');gradient.addColorStop(1,color+(i%3?'70':'a0'));
-          ctx.strokeStyle=gradient;ctx.lineWidth=i%3?.85:1.15;ctx.beginPath();ctx.moveTo(x,y+offset);ctx.lineTo(x+drift,y+length+offset);ctx.stroke();
+          const gradient=ctx.createLinearGradient(x,y+offset,x+drift,y+length+offset);
+          gradient.addColorStop(0,color+'00');
+          gradient.addColorStop(0.5,color+(isLight?'bb':'cc'));
+          gradient.addColorStop(1,color+'ff');
+          ctx.strokeStyle=gradient;
+          ctx.lineWidth=i%3?1.6:2.4;
+          ctx.beginPath();
+          ctx.moveTo(x,y+offset);
+          ctx.lineTo(x+drift,y+length+offset);
+          ctx.stroke();
+          // Leading droplet head
+          ctx.fillStyle=color;
+          ctx.beginPath();
+          ctx.arc(x+drift,y+length+offset,i%3?1.5:2.2,0,Math.PI*2);
+          ctx.fill();
         }
       }
       copy.width=canvas.width;copy.height=canvas.height;copy.getContext('2d').drawImage(canvas,0,0);

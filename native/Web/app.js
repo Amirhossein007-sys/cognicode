@@ -23,14 +23,16 @@ try {
   function esc(s) { return Syntax.esc(String(s == null ? '' : s)); }
   // کلاس رنگ نقطهٔ زبان — به‌جای style درون‌خطی که CSP (style-src بدون unsafe-inline) رد می‌کند
   function ldClass(color) { return 'ld-' + String(color || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase(); }
-  function countLines(s) { return s === '' ? 1 : s.split('\n').length; }
+  function countLines(s) { return ta && s === ta.value ? indexSource(s).lines.length : s.split('\n').length; }
 
   /* ── وضعیت و ذخیره‌سازی ── */
+  var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
+  var highlightWorkerThreshold = 4000;
   var LS_SET = 'cognicode.settings.v1';
   var LS_HIST = 'cognicode.history.v1';
   var LS_MIG = 'cognicode.migration.v2';
   var DEFAULT_BASE = 'https://api.gapgpt.app/v1';
-  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-4o-mini', hist: true, proxy: '' };
+  var settings = { base: DEFAULT_BASE, key: '', model: 'gpt-6.1-sol', reviewModels: Object.assign({}, AIReviewers.defaults), selectedModels: [], modelCatalog: [], hist: true, proxy: '' };
   var history = [];
   // مهاجرت نقطه‌ای تنظیمات قدیمی — فقط یک‌بار در عمر نصب اجرا می‌شود تا انتخاب
   // بعدی خود کاربر (مثلاً OpenAI) در اجراهای بعدی بازنویسی نشود
@@ -41,6 +43,7 @@ try {
       try { localStorage.setItem(LS_MIG, '1'); } catch (e2) {}
     }
     for (var k in savedSet) if (k in settings) settings[k] = savedSet[k];
+    if (/^(gpt-4o(?:-mini)?|chatgpt-4o-latest|o3-mini|deepseek-chat)$/.test(settings.model)) settings.model = 'gpt-6.1-sol';
   } catch (e) {}
   // تاریخچه مستقل از تنظیمات پارس می‌شود تا خراب‌بودن یکی، دیگری را پاک نکند
   try {
@@ -49,7 +52,7 @@ try {
   } catch (e) { history = []; }
   function saveSettings() {
     var saved = Object.assign({}, settings);
-    if (window.webkit && window.webkit.messageHandlers.credentialBridge && (nativeCredentialReady || nativeCredentialPending)) delete saved.key;
+    if (window.webkit && window.webkit.messageHandlers.credentialBridge) delete saved.key;
     try { localStorage.setItem(LS_SET, JSON.stringify(saved)); } catch (e) {}
   }
   var nativeCredentialReady = false, nativeCredentialPending = false;
@@ -246,17 +249,48 @@ try {
   try {
     var savedZoom = parseFloat(localStorage.getItem(LS_ZOOM));
     if (!isNaN(savedZoom) && savedZoom >= MIN_FONT_SIZE && savedZoom <= MAX_FONT_SIZE) {
-      // مهاجرت از باگ 320x480: زوم 8px روی گوشی ناخواناست و قطعاً از باگ قبلی مانده؛ نادیده بگیر
-      var phoneBadZoom = !isDesktopWidth() && savedZoom <= 10;
-      if (!phoneBadZoom) editorFontSize = savedZoom;
-      else { try { localStorage.removeItem(LS_ZOOM); } catch (_) {} }
+      editorFontSize = savedZoom;
     }
   } catch (e) {}
 
-  var zoomHudTimer = null;
+  var zoomHudTimer = null, zoomFrame = 0, pendingZoom = null, zoomSaveTimer, zoomCommitTimer, zoomPreviewNodes = [];
+  function showZoom(size) {
+    var percent = fa(Math.round(size / BASE_FONT_SIZE * 100)) + '٪';
+    if ($('zoom-reset')) $('zoom-reset').textContent = percent;
+    if (zoomHud) { zoomHud.textContent = '🔍 ' + percent; zoomHud.classList.add('visible'); }
+  }
+  function clearZoomPreview() {
+    zoomPreviewNodes.forEach(function (node) { node.style.removeProperty('transform'); node.style.removeProperty('transform-origin'); });
+    zoomPreviewNodes = []; hlCode.classList.remove('zoom-preview');
+  }
+  function previewEditorZoom(size) {
+    clearZoomPreview();
+    var scale = size / editorFontSize;
+    var text = hlCode._viewportNodes && hlCode.classList.contains('virtualized') ? hlCode._viewportNodes[1] : hlCode;
+    var numbers = gutter._viewportNodes && gutter.classList.contains('virtualized') ? gutter._viewportNodes[1] : gutter;
+    hlCode.classList.add('zoom-preview');
+    [text,numbers].forEach(function (node) {
+      var start = node === text ? (+hlCode.dataset.lineStart || 0) : (+gutter.dataset.lineStart || 0);
+      node.style.transformOrigin = (node === text ? ta.scrollLeft : 0) + 'px ' + (ta.scrollTop - start * lineHeight) + 'px';
+      node.style.transform = 'scale(' + scale + ')'; zoomPreviewNodes.push(node);
+    });
+    showZoom(size);
+  }
+  function commitQueuedZoom() {
+    var size = pendingZoom; pendingZoom = null; cancelAnimationFrame(zoomFrame); zoomFrame = 0;
+    clearTimeout(zoomCommitTimer); clearZoomPreview();
+    if (size !== null) setEditorZoom(size, true);
+  }
+  function queueEditorZoom(size) {
+    pendingZoom = Math.round(Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, size)) * 10) / 10;
+    if (!zoomFrame) zoomFrame = requestAnimationFrame(function () { zoomFrame = 0; if (pendingZoom !== null) previewEditorZoom(pendingZoom); });
+  }
   function setEditorZoom(newSize, showHud) {
+    clearTimeout(zoomCommitTimer); cancelAnimationFrame(zoomFrame); zoomFrame = 0; pendingZoom = null; clearZoomPreview();
     newSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
     newSize = Math.round(newSize * 10) / 10;
+    var oldSize = editorFontSize, oldLineHeight = lineHeight || 25;
+    var anchorLine = ta.scrollTop / oldLineHeight, anchorColumn = ta.scrollLeft / oldSize;
     editorFontSize = newSize;
 
     var newLh = Math.max(14, Math.round(editorFontSize * 1.5625 * 10) / 10);
@@ -268,7 +302,9 @@ try {
     }
 
     recomputeLineHeight();
+    ta.scrollTop = anchorLine * lineHeight; ta.scrollLeft = anchorColumn * newSize;
     syncScroll();
+    if ($('zoom-reset')) $('zoom-reset').textContent = fa(Math.round(editorFontSize / BASE_FONT_SIZE * 100)) + '٪';
 
     if (showHud && zoomHud) {
       var pct = Math.round((editorFontSize / BASE_FONT_SIZE) * 100);
@@ -280,9 +316,8 @@ try {
       }, 1300);
     }
 
-    try {
-      localStorage.setItem(LS_ZOOM, String(editorFontSize));
-    } catch (e) {}
+    clearTimeout(zoomSaveTimer);
+    zoomSaveTimer = setTimeout(function () { try { localStorage.setItem(LS_ZOOM, String(editorFontSize)); } catch (_) {} }, 250);
   }
 
   // فیکس Native: اگر ویوپورت بعد از لود اصلاح شد (980px → 390px واقعی آیفون)،
@@ -324,22 +359,12 @@ try {
 
     editorEl.addEventListener('touchstart', function (e) {
       if (e.touches.length === 2) {
+        if (e.cancelable) e.preventDefault();
         var t1 = e.touches[0];
         var t2 = e.touches[1];
         pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         pinchStartFontSize = editorFontSize;
         isPinching = true;
-
-        var now = Date.now();
-        if (now - lastTwoFingerTap < 340) {
-          // دابل تپ با دو انگشت: بازگشت به مقیاس پیش‌فرض ۱۰۰٪
-          setEditorZoom(BASE_FONT_SIZE, true);
-          haptic('medium');
-          isPinching = false;
-          lastTwoFingerTap = 0;
-          return;
-        }
-        lastTwoFingerTap = now;
 
         if (zoomHud) {
           var pct = Math.round((editorFontSize / BASE_FONT_SIZE) * 100);
@@ -361,7 +386,7 @@ try {
         var dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         if (pinchStartDist > 10) {
           var scale = dist / pinchStartDist;
-          setEditorZoom(pinchStartFontSize * scale, true);
+          queueEditorZoom(pinchStartFontSize * scale);
         }
       }
     }, { passive: false });
@@ -369,6 +394,7 @@ try {
     function endPinch() {
       if (isPinching) {
         isPinching = false;
+        commitQueuedZoom();
         clearTimeout(zoomHudTimer);
         zoomHudTimer = setTimeout(function () {
           if (zoomHud) zoomHud.classList.remove('visible');
@@ -394,7 +420,7 @@ try {
       e.preventDefault();
       e.stopPropagation();
       if (isPinching) {
-        setEditorZoom(pinchStartFontSize * e.scale, true);
+        queueEditorZoom(pinchStartFontSize * e.scale);
       }
     });
     editorEl.addEventListener('gestureend', function (e) {
@@ -408,7 +434,8 @@ try {
         e.preventDefault();
         var delta = -e.deltaY;
         var step = delta > 0 ? 1.2 : -1.2;
-        setEditorZoom(editorFontSize + step, true);
+        queueEditorZoom((pendingZoom === null ? editorFontSize : pendingZoom) + step);
+        clearTimeout(zoomCommitTimer); zoomCommitTimer = setTimeout(commitQueuedZoom, 120);
       }
     }, { passive: false });
 
@@ -422,6 +449,13 @@ try {
       });
     }
   }
+  [['zoom-out', -2], ['zoom-in', 2], ['zoom-reset', 0]].forEach(function (entry) {
+    var button = $(entry[0]);
+    if (button) {
+      button.addEventListener('mousedown', function (event) { event.preventDefault(); });
+      button.addEventListener('click', function () { setEditorZoom(entry[1] ? editorFontSize + entry[1] : BASE_FONT_SIZE, true); });
+    }
+  });
 
   // جلوگیری کامل و قطعی از زوم شدن برنامه (عمل زوم فقط و فقط در محدوده ادیتور کد مجاز است)
   document.addEventListener('gesturestart', function (e) {
@@ -482,17 +516,111 @@ try {
     }
     applyErrorPositions();
     updateCaretLine();
+    renderVisibleHighlight();
   }
 
   /* ── موتور ادیتور (رنگ‌آمیزی با دیبانس برای کارایی روی کدهای طولانی) ── */
   var hlTimer = null;
+  var highlightWorker, highlightBusy, highlightQueued, highlightTimeout, highlightSerial = 0, highlightUnavailable = false;
+  var viewportHighlight, highlightRange = '', sourceIndex;
+  function indexSource(code) {
+    if (sourceIndex && sourceIndex.code === code) return sourceIndex;
+    var lines = code.split('\n'), starts = new Uint32Array(lines.length), offset = 0;
+    for (var i = 0; i < lines.length; i++) { starts[i] = offset; offset += lines[i].length + 1; }
+    sourceIndex = {code: code, lines: lines, starts: starts};
+    return sourceIndex;
+  }
+  function visibleRange(total) {
+    var start = Math.max(0, Math.floor(ta.scrollTop / lineHeight) - 8);
+    return {start: start, end: Math.min(total, start + Math.ceil(ta.clientHeight / lineHeight) + 24)};
+  }
+  function renderWindow(element, start, end, total, text, html) {
+    var nodes = element._viewportNodes;
+    if (!nodes) {
+      nodes = [document.createElement('span'), document.createElement('span'), document.createElement('span')];
+      nodes[0].className = nodes[2].className = 'editor-spacer'; nodes[1].className = 'editor-window';
+      element._viewportNodes = nodes;
+    }
+    if (element.firstChild !== nodes[0]) element.replaceChildren.apply(element, nodes);
+    nodes[0].style.height = start * lineHeight + 'px';
+    nodes[1].style.height = (end - start) * lineHeight + 'px';
+    nodes[2].style.height = (total - end) * lineHeight + 'px';
+    if (html) nodes[1].innerHTML = text; else nodes[1].textContent = text;
+    element.classList.add('virtualized'); element.dataset.lineStart = start; element.dataset.lineEnd = end;
+  }
+  function renderGutter() {
+    var total = indexSource(ta.value).lines.length;
+    var range = visibleRange(total), key = total + ':' + range.start + ':' + range.end + ':' + lineHeight;
+    if (gutter._range === key) return;
+    gutter._range = key; gutter.dataset.lines = String(total);
+    if (total >= 300) {
+      var numbers = []; for (var n = range.start; n < range.end; n++) numbers.push(n + 1);
+      renderWindow(gutter, range.start, range.end, total, numbers.join('\n') + '\n', false);
+    } else {
+      gutter.classList.remove('virtualized');
+      var text = ''; for (var n = 1; n <= total; n++) text += n + '\n'; gutter.textContent = text;
+    }
+  }
+  function renderVisibleHighlight() {
+    if (!viewportHighlight || viewportHighlight.code !== ta.value) return;
+    var bounds = visibleRange(viewportHighlight.plain.length), start = bounds.start, end = bounds.end;
+    var range = start + ':' + end + ':' + lineHeight;
+    if (range === highlightRange) return;
+    highlightRange = range;
+    var html = viewportHighlight.lines ? viewportHighlight.lines.slice(start, end).join('\n') : Syntax.esc(viewportHighlight.plain.slice(start, end).join('\n'));
+    renderWindow(hlCode, start, end, viewportHighlight.plain.length, html + '\n', true);
+    hlCode.style.width = Math.max(0, ta.scrollWidth - 32) + 'px';
+  }
+  function applyHighlight(html, code) {
+    hlCode.dataset.highlightState = 'ready';
+    viewportHighlight = null; highlightRange = '';
+    if (code.length >= 20000) {
+      viewportHighlight = { code: code, lines: html.split('\n'), plain: indexSource(code).lines };
+      renderVisibleHighlight();
+    } else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.innerHTML = html + '\n'; }
+  }
+  function highlightFallback() {
+    clearTimeout(highlightTimeout); highlightUnavailable = true;
+    if (highlightWorker) highlightWorker.terminate();
+    highlightWorker = null; highlightBusy = null; highlightQueued = null;
+    var code = ta.value, language = langMode === 'auto' ? Syntax.detect(code) : langMode;
+    if (language !== langKey) setLang(language);
+    applyHighlight(Syntax.highlight(code, langKey), code);
+  }
+  function queueHighlight(job) {
+    if (highlightBusy) { highlightQueued = job; return; }
+    try {
+      if (!highlightWorker) {
+        highlightWorker = Syntax.createWorker();
+        highlightWorker.onerror = function (event) { event.preventDefault(); highlightFallback(); };
+        highlightWorker.onmessage = function (event) {
+          var result = event.data, completed = highlightBusy;
+          if (!completed || completed.id !== result.id) return;
+          clearTimeout(highlightTimeout); highlightBusy = null;
+          if (result.error) { highlightFallback(); return; }
+          if (completed.code === ta.value && completed.mode === langMode) {
+            if (result.language !== langKey) setLang(result.language);
+            applyHighlight(result.html, completed.code);
+          }
+          var next = highlightQueued; highlightQueued = null;
+          if (next) queueHighlight(next);
+        };
+      }
+      highlightBusy = job;
+      highlightTimeout = setTimeout(highlightFallback, 15000);
+      highlightWorker.postMessage(job);
+    } catch (_) { highlightFallback(); }
+  }
   function renderHighlight() {
     var code = ta.value;
-    hlCode.innerHTML = Syntax.highlight(code, langKey) + '\n';
-    var lineCount = countLines(code);
-    var g = '';
-    for (var i = 1; i <= lineCount; i++) g += i + '\n';
-    gutter.textContent = g;
+    if (code.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker) {
+      viewportHighlight = null; highlightRange = '';
+      if (code.length >= 20000) { viewportHighlight = {code: code, lines: null, plain: indexSource(code).lines}; renderVisibleHighlight(); }
+      else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.textContent = code + '\n'; }
+      hlCode.dataset.highlightState = 'pending';
+      queueHighlight({ id: ++highlightSerial, code: code, mode: langMode });
+    } else applyHighlight(Syntax.highlight(code, langKey), code);
+    renderGutter();
   }
   function updateEditor() {
     var code = ta.value;
@@ -515,8 +643,10 @@ try {
     // detect() روی هر کلید سنگین است (۳۴ رجکس روی کل متن) — داخل همان دیبانس
     // ۸۰ms هایلایت اجرا می‌شود تا تایپ روان بماند
     hlTimer = setTimeout(function () {
-      var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
-      if (k !== langKey) setLang(k);
+      if (!(ta.value.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker)) {
+        var k = langMode === 'auto' ? Syntax.detect(ta.value) : langMode;
+        if (k !== langKey) setLang(k);
+      }
       renderHighlight();
     }, 80);
     scheduleLiveReview();
@@ -527,15 +657,29 @@ try {
     reviewTab.setAttribute('aria-expanded', String(!problems.hidden && !problems.classList.contains('peek')));
     $('review-tab-count').textContent = fa(currentErrors.length);
   }
+  var liveReviewAbort;
+  var appNativeActive = true;
+  window.addEventListener('cognicode:native-active', function (event) {
+    appNativeActive = !!event.detail;
+    if (!appNativeActive) {
+      clearTimeout(liveReviewTimer); ++liveReviewSerial;
+      if (liveReviewAbort) liveReviewAbort.abort();
+      if (activeOperation) cancelOperation();
+      clearTimeout(hlTimer); clearTimeout(highlightTimeout);
+      if (highlightWorker) highlightWorker.terminate(); highlightWorker = null; highlightBusy = null; highlightQueued = null;
+    } else if (hlCode.dataset.highlightState === 'pending') renderHighlight();
+  });
   function scheduleLiveReview() {
     clearTimeout(liveReviewTimer);
+    if (liveReviewAbort) liveReviewAbort.abort();
     var serial = ++liveReviewSerial;
-    if (!reviewAvailable) return;
+    if (!reviewAvailable || !appNativeActive || document.hidden) return;
     if (ledgerFileName !== currentFileName) { reviewAvailable = false; issueLedger = []; clearErrors(false); syncReviewTab(); return; }
     liveReviewTimer = setTimeout(async function () {
       var code = ta.value, language = langMode === 'auto' ? Syntax.detect(code) : langMode;
       try {
-        var local = await ReviewService.local(code, language);
+        liveReviewAbort = new AbortController();
+        var local = await ReviewService.local(code, language, {signal:liveReviewAbort.signal});
         if (serial !== liveReviewSerial || ta.value !== code || !reviewAvailable) return;
         var fresh = ReviewEngine.dedupe(local.errors.concat(local.warnings, local.security.findings));
         issueLedger = ReviewEngine.reconcile(issueLedger, ledgerCode, code, fresh, language);
@@ -550,11 +694,13 @@ try {
         info.textContent = hard ? 'بررسی زنده: ' + fa(hard) + ' خطای نحو یا ایراد باز' : pending ? 'نحو دوباره بررسی شد؛ موارد AI تغییرکرده نیاز به بررسی دوباره دارند' : 'بررسی زنده: ' + (local.syntaxComplete ? 'نحو سالم است' : 'بررسی ساختاری انجام شد');
         info.className = 'review-summary glass-workspace';
         setBrainState(hard ? 'error' : pending || !local.syntaxComplete ? 'idle' : currentErrors.length ? 'warning' : 'healthy');
-      } catch (error) { $('problems-summary').textContent = 'بررسی زنده کامل نشد؛ تحلیل کد را دوباره بزن'; }
-    }, 240);
+      } catch (error) { if (error.name !== 'AbortError') $('problems-summary').textContent = 'بررسی زنده کامل نشد؛ تحلیل کد را دوباره بزن'; }
+    }, ta.value.length >= 20000 ? 600 : 300);
   }
 
   function syncScroll() {
+    renderVisibleHighlight();
+    renderGutter();
     hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
     gutter.scrollTop = ta.scrollTop;
     // دو لایهٔ نشانگر اسکرول‌کننده نیستند: فرزندانشان position:absolute‌اند و هیچ
@@ -568,10 +714,9 @@ try {
 
   function updateCaretLine() {
     var pos = ta.selectionStart || 0;
-    var val = ta.value;
-    var ln = 1, lastNl = -1;
-    for (var i = 0; i < pos; i++) { if (val.charCodeAt(i) === 10) { ln++; lastNl = i; } }
-    var col = pos - lastNl;
+    var starts = indexSource(ta.value).starts, lo = 0, hi = starts.length;
+    while (lo + 1 < hi) { var mid = (lo + hi) >> 1; if (starts[mid] <= pos) lo = mid; else hi = mid; }
+    var ln = lo + 1, col = pos - starts[lo] + 1;
     stPos.textContent = fa(ln) + ':' + fa(col);
   }
 
@@ -780,13 +925,8 @@ try {
   ta.addEventListener('click', updateCaretLine);
   /* چسباندن مستقیم (Ctrl+V / لانگ‌پرس):
      رفتار بومی مرورگر برای حفظ دقیق نویسه‌ها، فاصله‌ها، ایندنت‌ها و تاریخچهٔ Undo حفظ می‌شود */
-  ta.addEventListener('paste', function (e) {
-    setTimeout(function () {
-      updateCaretLine();
-      autoDetectAndRender();
-      persistDraftDebounced();
-    }, 0);
-  });
+  // The native paste emits input, which already highlights and saves the draft.
+  // Avoid a second full render and the obsolete paste-only helper calls.
   document.addEventListener('selectionchange', function () {
     if (document.activeElement === ta) updateCaretLine();
   });
@@ -1037,6 +1177,8 @@ try {
 
           item.addEventListener('click', function () {
             haptic('medium');
+            var problem = ReviewEngine.inputProblem(f.content);
+            if (problem) { toast(problem, 5500); return; }
             saveSnapshot();
             ta.value = f.content;
             lastSnapshotValue = f.content;
@@ -1178,6 +1320,8 @@ try {
         } catch (_) { toast('فایل متنی خوانا نیست؛ فایل کد با UTF-8 یا UTF-16 انتخاب کن'); return; }
 
         if (analyzing || scanningImage || ta.value !== fileOriginalCode) { toast('کد تغییر کرده؛ فایل را دوباره انتخاب کن'); return; }
+        var problem = ReviewEngine.inputProblem(content);
+        if (problem) { toast(problem, 5500); return; }
         saveSnapshot();
         ta.value = content;
         lastSnapshotValue = content;
@@ -1971,12 +2115,10 @@ try {
     'نسخه اصلاح‌شده را ننویس. summary کوتاه، steps حداکثر ۳ و uses/notes حداکثر ۲ مورد. تحلیل استاتیک تضمین صحت اجرا نیست. متن خارج JSON ممنوع.'
   ].join('\n');
 
-  /* سقف ورودی مدل. هیچ بخشی از فایل به‌صورت پنهانی حذف نمی‌شود: فایل بزرگ‌تر از سقف
-     اصلاً به مدل نمی‌رود و runAnalysis پیش از ارسال، محدودیت را صریح به کاربر می‌گوید.
-     پس `truncated` فقط یک مصرف‌کننده دارد — همان گارد — و پیام‌ها هیچ‌وقت متن بریده نمی‌بینند. */
+  /* Every source line is planned into AI chunks; this cap applies to one request. */
   var MAX_CODE_CHARS = 48000;
   function clipForAI(code) {
-    return { text: code, truncated: code.length > MAX_CODE_CHARS };
+    return { text: code };
   }
 
   function buildCodeMessage(clip) {
@@ -2077,7 +2219,7 @@ try {
       setTimeout(function () { root.classList.remove('theme-anim'); }, 200);
     }
     root.dataset.theme = dark ? 'dark' : 'light';
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#080e1b' : '#f6f8fc');
     if (colorSchemeMeta) colorSchemeMeta.setAttribute('content', dark ? 'dark' : 'light');
     // نوار وضعیت در حالت standalone: «default» یعنی متن تیره و روی پس‌زمینهٔ تیرهٔ
     // #0f172a ناخواناست. در تم تاریک «black» انتخاب می‌شود (متن روشن، با همان
@@ -2088,16 +2230,14 @@ try {
     if (nativeAvailable() && window.webkit.messageHandlers.themeBridge) {
       window.webkit.messageHandlers.themeBridge.postMessage({ dark: dark });
     }
-    if (window.Sonar) window.Sonar.refresh();
+    if (window.DataRain) window.DataRain.refresh();
   }
   (function initTheme() {
     var saved = null;
     try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
     var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
     var initialDark = saved ? saved === 'dark' : !prefersLight;
-    if (document.documentElement.classList.contains('launch-pending')) {
-      window.addEventListener('cognicode:launch-complete', function () { applyTheme(initialDark, false); }, { once: true });
-    } else applyTheme(initialDark, false);
+    applyTheme(initialDark, false);
   })();
   $('btn-theme').addEventListener('click', function () {
     haptic('selection');
@@ -2131,7 +2271,7 @@ try {
   }
   var nativePending = {};
   var NATIVE_ID = 0;
-  function nativeSend(url, key, bodyJson) {
+  function nativeSend(url, key, bodyJson, method, timeout) {
     var op = activeOperation;
     checkOperation(op);
     return new Promise(function (resolve, reject) {
@@ -2141,12 +2281,12 @@ try {
           delete nativePending[id];
           if (op) op.nativeIds.delete(id);
           if (window.webkit.messageHandlers.aiCancelBridge) window.webkit.messageHandlers.aiCancelBridge.postMessage({ id: id });
-          reject(new Error('پاسخ API بیش از حد انتظار طول کشید (تایم‌اوت ۱۲۰ ثانیه‌ای)'));
+          reject(new Error('پاسخ API بیش از حد انتظار طول کشید'));
         }
-      }, 120000);
+      }, timeout || 120000);
       nativePending[id] = { resolve: resolve, reject: reject, timer: timer, operation: op };
       if (op) op.nativeIds.add(id);
-      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson });
+      window.webkit.messageHandlers.aiBridge.postMessage({ id: id, url: url, key: key, body: bodyJson, method: method || 'POST', purpose: method === 'GET' ? 'models' : 'chat' });
     });
   }
   window.__nativeAI = function (id, ok, status, text) {
@@ -2162,11 +2302,32 @@ try {
     }
   };
 
-  async function chat(messages, maxTokens, temperature) {
+  async function listServiceModels() {
+    var op = activeOperation, url = AIModels.proxy(AIModels.endpoints(settings.base).models, settings.proxy);
+    checkOperation(op);
+    var result;
+    if (nativeAvailable()) result = await nativeSend(url, settings.key, '', 'GET', 20000);
+    else {
+      var controller = new AbortController(); if (op) op.controllers.add(controller);
+      var timer = setTimeout(function () { controller.abort(); }, 20000);
+      try {
+        var response = await fetch(url, {method:'GET',signal:controller.signal,redirect:'error',headers:{Authorization:'Bearer '+settings.key}});
+        result = {status:response.status,text:await response.text()};
+        if (!response.ok) throw apiErrorFrom(result.status,result.text);
+      } catch (error) { checkOperation(op); throw error; }
+      finally { clearTimeout(timer); if (op) op.controllers.delete(controller); }
+    }
+    checkOperation(op);
+    if (result.text.length > 2000000) throw new Error('فهرست مدل‌های سرویس بیش از حد بزرگ است');
+    var data; try { data = JSON.parse(result.text); } catch (_) { throw new Error('سرویس به‌جای فهرست مدل‌ها پاسخ نامعتبر داد'); }
+    if (data && data.error) throw apiErrorFrom(result.status,result.text);
+    return AIModels.parse(data);
+  }
+
+  async function chat(messages, maxTokens, temperature, modelOverride, timeout) {
     var op = activeOperation;
     checkOperation(op);
-    var base = (settings.base || DEFAULT_BASE).replace(/\/+$/, '');
-    var url = /\/chat\/completions\/?$/i.test(base) ? base : (base + '/chat/completions');
+    var url = AIModels.endpoints(settings.base || DEFAULT_BASE).chat;
     var px = (settings.proxy || '').trim();
     if (px && !chat._proxyWarned) {
       chat._proxyWarned = true;
@@ -2185,15 +2346,18 @@ try {
     // مدل‌های استدلالی (o1/o3/… و gpt-5) پارامترهای temperature و max_tokens را رد
     // می‌کنند و به‌جای max_tokens، max_completion_tokens می‌خواهند؛ فرستادن بدنهٔ
     // ثابت باعث خطای ۴۰۰ برای این مدل‌ها می‌شد
-    var model = settings.model || 'gpt-4o-mini';
+    var model = modelOverride || settings.model || 'gpt-6.1-sol';
+    var modelKey = model.split('/').pop();
+    var isModelProbe = op && (op.kind === 'model-selection' || op.kind === 'model-discovery');
+    if (!isModelProbe && !AIReviewers.list(settings).some(function (selected) { return selected.model === model; })) throw new Error('ابتدا تست اتصال را بزن و یک مدل در تنظیمات انتخاب کن');
     var hasImage = messages && messages.some(function (m) {
       return Array.isArray(m.content) && m.content.some(function (p) { return p.type === 'image_url'; });
     });
-    if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(model)) {
-      model = 'gpt-4o-mini';
+    if (hasImage && /^(?:o[13]-mini|deepseek-chat|gpt-3\.5)/i.test(modelKey)) {
+      throw new Error('مدل انتخاب‌شده از تصویر پشتیبانی نمی‌کند؛ در تنظیمات یک مدل مناسب تصویر انتخاب کن');
     }
     var body = { model: model, messages: messages, stream: false };
-    if (/^(?:o[1-9]|gpt-5)/i.test(model)) {
+    if (/^(?:o[1-9]|gpt-[56])/i.test(modelKey)) {
       body.max_completion_tokens = maxTokens || 2200;
     } else {
       // استخراج کد از تصویر باید قطعی باشد؛ دمای صفر یعنی حدس تصادفی کمتر
@@ -2204,14 +2368,14 @@ try {
 
     var status, text;
     if (nativeAvailable()) {
-      var nr = await nativeSend(url, settings.key, bodyJson);
+      var nr = await nativeSend(url, settings.key, bodyJson, 'POST', timeout);
       status = nr.status;
       text = nr.text;
     } else {
       var res;
       var controller = new AbortController();
       if (op) op.controllers.add(controller);
-      var requestTimeout = setTimeout(function () { controller.abort(); }, 120000);
+      var requestTimeout = setTimeout(function () { controller.abort(); }, timeout || 120000);
       try {
         res = await fetch(url, {
           method: 'POST',
@@ -2246,13 +2410,13 @@ try {
   }
 
   var lastAIReview = null, aiChunkCache = new Map();
-  async function askAIChunk(code, clip, language) {
-    var identity = JSON.stringify([clip.text, language, currentFileName, clip.context || '', settings.base, settings.model, settings.key, settings.proxy]);
+  async function askAIChunk(code, clip, language, model) {
+    var identity = JSON.stringify([clip.text, language, currentFileName, clip.context || '', settings.base, model, settings.key, settings.proxy]);
     if (aiChunkCache.has(identity)) return JSON.parse(JSON.stringify(aiChunkCache.get(identity)));
     var r = await chat([
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: (clip.context || '') + buildCodeMessage(clip) }
-    ], /^(?:o[1-9]|gpt-5)/i.test(settings.model || '') ? 4000 : 1400, 0);
+    ], 10000, 0, model);
     var txt = String(r.message.content || '').trim();
     var t = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     var s = t.indexOf('{'), e2 = t.lastIndexOf('}');
@@ -2271,6 +2435,10 @@ try {
           obj.explanation.notes = (Array.isArray(obj.explanation.notes) ? obj.explanation.notes : []).concat(['موارد بدون شاهد دقیق یا با پاسخ ناقص، خطای قطعی محسوب نشدند؛ بررسی عملکرد همچنان ممکن است نیاز به زمینهٔ بیشتر داشته باشد.']);
         }
         if (!obj.errors.length) { obj.advice = ''; obj.fixExplanation = ''; }
+        if (obj.valid === false && !obj.errors.length) {
+          obj.incomplete = true;
+          obj.explanation.notes = (obj.explanation.notes || []).concat(['مدل کد را نامعتبر دانست، اما ایراد دارای شاهد برنگرداند؛ این نظر نتیجهٔ قطعی محسوب نمی‌شود.']);
+        }
         /* حکم امنیتی مدل جدا از سلامتِ کد پالایش می‌شود؛ نبودش هم خطا نیست */
         obj.security = sanitizeSecurity(obj.security, code);
         if (!obj.incomplete) {
@@ -2290,44 +2458,62 @@ try {
     };
   }
 
-  async function askAI(code, clip) {
-    var language = langKey, identity = JSON.stringify([code, language, currentFileName, settings.base, settings.model, settings.key, settings.proxy]);
+  async function askAISingle(code, clip, reviewer) {
+    var language = langKey, identity = JSON.stringify([code, language, currentFileName, settings.base, reviewer.model, settings.key, settings.proxy]);
     if (lastAIReview && lastAIReview.identity === identity) return JSON.parse(JSON.stringify(lastAIReview.report));
-    var chunks = ReviewEngine.aiChunks(code, language), results = new Array(chunks.length), next = 0, op = activeOperation;
-    var completed = 0;
-    async function consume() {
-      while (next < chunks.length) {
-        checkOperation(op);
-        var index = next++, chunk = chunks[index];
-        try {
-          if (chunk.text.length > MAX_CODE_CHARS) throw new Error('یک خط ورودی از سقف بررسی AI بزرگ‌تر است');
-          var context = 'زبان این بخش: ' + chunk.language + '. شماره خط‌ها را از ۱ در همین بخش بده. ' +
-            (chunk.complete ? 'این یک فایل کامل است. ' : 'این فقط بخشی از فایل است؛ شروع و پایان بریده شده‌اند. نبود تعریف، import، براکت ابتدا/انتها یا وابستگی را خطا نگیر. فقط ایراد داخلی با شاهد قطعی گزارش کن. ') + '\n';
-          results[index] = await askAIChunk(chunk.text, { text: chunk.text, context: context }, chunk.language);
-        } catch (error) { checkOperation(op); results[index] = { incomplete: true, errors: [], explanation: { summary: '', steps: [], uses: [], notes: [aiErrorText(error)] } }; }
-        completed++;
-        if (activeOperation === op) setOperationStage('نتیجهٔ آفلاین آماده است؛ بررسی AI ' + fa(completed) + ' از ' + fa(chunks.length));
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, consume));
+    var op = activeOperation;
     checkOperation(op);
-    if (results.length === 1 && chunks[0].line === 1 && !chunks[0].path) {
-      if (!results[0].incomplete && !results[0].raw) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(results[0])) };
-      return results[0];
+    if (activeOperation === op) setOperationStage('در حال تحلیل کد با ' + reviewer.name + '…');
+
+    var textToSend = (clip && typeof clip.text === 'string' && clip.text) ? clip.text : code;
+    if (textToSend.length > MAX_CODE_CHARS) {
+      textToSend = textToSend.slice(0, MAX_CODE_CHARS);
     }
-    var errors = [], notes = [], steps = [], summaries = [], incomplete = false;
-    results.forEach(function (report, i) {
-      incomplete = incomplete || !!report.raw || !!report.incomplete;
-      (report.errors || []).forEach(function (er) { errors.push(Object.assign({}, er, { line: er.line + chunks[i].line - 1 })); });
-      if (report.explanation) {
-        if (report.explanation.summary) summaries.push(report.explanation.summary);
-        notes = notes.concat(report.explanation.notes || []); steps = steps.concat(report.explanation.steps || []);
-      }
-    });
-    var merged = { valid: errors.length === 0, errors: ReviewEngine.confirmIssues(errors, code, language), incomplete: incomplete,
-      explanation: { summary: summaries.slice(0, 2).join('\n'), steps: steps.slice(0, 5), uses: [], notes: notes.slice(0, 3).concat(['همهٔ بخش‌ها برای AI ارسال شدند؛ تحلیل بخش‌های جدا، صحت رفتار کل برنامه را تضمین نمی‌کند.']) } };
-    if (!incomplete) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
+    var context = 'زبان این کد: ' + ((Syntax.LANGS[language] && Syntax.LANGS[language].label) || language) + ' است. ' +
+      'این یک فایل کامل از کد است. تمام ساختار، توابع، متغیرها و منطق اجرای آن را به‌صورت کامل، پیوسته و دقیق بررسی و تحلیل کن.\n';
+
+    var report;
+    try {
+      report = await askAIChunk(textToSend, { text: textToSend, context: context }, language, reviewer.model);
+    } catch (error) {
+      checkOperation(op);
+      report = { incomplete: true, errors: [], explanation: { summary: '', steps: [], uses: [], notes: [aiErrorText(error)] } };
+    }
+    checkOperation(op);
+
+    var totalLines = ReviewEngine.lineCount(code);
+    var coverage = { totalChunks: 1, reviewedChunks: (!report.incomplete && !report.raw) ? 1 : 0, totalLines: totalLines };
+    report.coverage = coverage;
+    if (!report.incomplete && !report.raw) {
+      lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(report)) };
+    }
+    return report;
+  }
+  var lastEnsembleReview;
+  async function askAI(code, clip) {
+    var reviewers = AIReviewers.list(settings), reports = [], op = activeOperation;
+    if (!reviewers.length) throw new Error('ابتدا در تنظیمات، تست اتصال و انتخاب مدل را انجام بده');
+    var reviewer = (settings.model && reviewers.find(function (r) { return r.model === settings.model; })) || reviewers[0];
+    var identity = JSON.stringify([code, langKey, currentFileName, settings.base, settings.proxy, settings.key, reviewer.model]);
+    if (lastEnsembleReview && lastEnsembleReview.identity === identity) return JSON.parse(JSON.stringify(lastEnsembleReview.report));
+    checkOperation(op);
+    if (op) $('operation-stage').textContent = 'در حال تحلیل کد با ' + reviewer.name + '…';
+    try {
+      reports.push(Object.assign({}, reviewer, { report: await askAISingle(code, clip, reviewer) }));
+    } catch (error) {
+      checkOperation(op);
+      reports.push(Object.assign({}, reviewer, { error: aiErrorText(error) }));
+    }
+    var merged = AIReviewers.merge(reports);
+    merged.errors = ReviewEngine.dedupe(merged.errors);
+    if (!merged.incomplete) lastEnsembleReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
     return merged;
+  }
+  function reviewersToMd(ai) {
+    if (!ai || !ai.reviewers) return '';
+    return '\n\n## بررسی مدل‌های انتخاب‌شده\n\n' + ai.reviewers.map(function (review) {
+      return '- **' + review.name + '**: ' + (review.complete ? 'بررسی کامل شد' : 'بررسی کامل نشد') + (review.error ? ' — ' + review.error : '');
+    }).join('\n');
   }
 
   /* ── اصلاح کد (درخواست جدا) ──
@@ -2606,6 +2792,7 @@ try {
       openSheet('sheet-api');
       return;
     }
+    if (!AIReviewers.list(settings).length) { openSheet('sheet-settings'); toast('تست اتصال را بزن و مدل دلخواهت را انتخاب کن'); return; }
     runAnalysis(true);
   }
 
@@ -2613,6 +2800,8 @@ try {
     if (analyzing || scanningImage || activeOperation) return;
     var code = ta.value;
     if (!code.trim()) { toast('اول چند خط کد بنویس ✍️'); return; }
+    var problem = ReviewEngine.inputProblem(code);
+    if (problem) { toast(problem, 5500); return; }
     var op = beginOperation('در حال بررسی ساختار کد…');
     op.kind = 'analysis';
     op.finished = new Promise(function (resolve) { op.resolveFinished = resolve; });
@@ -2646,7 +2835,10 @@ try {
     startLoading();
 
     var localErrs = [], warns = [], ai = null, aiErr = null;
-    var local = await ReviewService.local(code, langKey);
+    var reviewController = new AbortController(); op.controllers.add(reviewController);
+    var local;
+    try { local = await ReviewService.local(code, langKey, { signal: reviewController.signal }); }
+    finally { op.controllers.delete(reviewController); }
     checkOperation(op);
     if (ta.value !== code) throw abortError();
     localErrs = local.errors.slice();
@@ -2675,7 +2867,7 @@ try {
     syncReviewTab();
     var localHard = immediate.filter(function (er) { return er.severity !== 'warning'; }).length;
     var localStatus = localHard ? fa(localHard) + ' خطای قطعی' : local.partial ? 'پوشش جزئی فایل' : local.syntaxComplete ? 'نحو سالم' : 'بررسی ساختاری انجام شد';
-    $('problems-summary').textContent = 'بررسی آفلاین: ' + localStatus + (useAI ? '؛ بررسی AI در پس‌زمینه ادامه دارد' : '');
+    $('problems-summary').textContent = 'بررسی آفلاین: ' + localStatus + '؛ ' + fa(local.coverage.checkedLines) + ' خط بررسی شد' + (useAI ? '؛ بررسی AI در پس‌زمینه ادامه دارد' : '');
     setBrainState(localHard ? 'error' : local.partial || !local.syntaxComplete ? 'idle' : immediate.length ? 'warning' : 'healthy');
     stopLoading(); hideAnalysisOverlay();
     scanline.hidden = true;
@@ -2684,7 +2876,7 @@ try {
       setOperationStage('نتیجهٔ آفلاین آماده است؛ بررسی AI در پس‌زمینه…');
       try {
         ai = await askAI(code, clip);
-        aiConnected = true;
+        aiConnected = !!ai.reviewers && ai.reviewers.every(function (reviewer) { return reviewer.complete; });
         updateAiStatus();
       } catch (e) {
         checkOperation(op);
@@ -2728,12 +2920,13 @@ try {
       code: code,
       errors: all,
       mode: useAI && ai && !ai.raw && !ai.incomplete ? 'ai' : 'local',
-      model: useAI ? settings.model : '',
+      model: useAI ? 'ChatGPT / Codex · Claude · DeepSeek · Z.ai · Gemini 3.8 Flash' : '',
       incomplete: local.partial || !!(useAI && (!ai || ai.raw || ai.incomplete)),
       proposed: fixCode,
       explanation: fixExp || adv || '',
       security: mal,
-      aiSecurity: ai && !ai.raw ? ai.security : null
+      aiSecurity: ai && !ai.raw ? ai.security : null,
+      coverage: { local: local.coverage, ai: ai && ai.coverage || null }
     });
 
     if (hard.length > 0) {
@@ -2749,7 +2942,7 @@ try {
       syncReviewTab();
       haptic('error');
       toast('کد خطا دارد ⚠️ — روی هر مورد بزن تا خطش را ببینی');
-      currentMd = '## مشکلات کد\n\n' + all.map(function (er) { return '- خط ' + fa(er.line) + ': ' + er.message + (er.hint ? ' — ' + er.hint : ''); }).join('\n') + '\n\n' + securityToMd(mal, ai && !ai.raw ? ai.security : null);
+      currentMd = '## مشکلات کد\n\n' + all.map(function (er) { return '- خط ' + fa(er.line) + ': ' + er.message + (er.hint ? ' — ' + er.hint : ''); }).join('\n') + '\n\n' + securityToMd(mal, ai && !ai.raw ? ai.security : null) + reviewersToMd(ai);
       addHistory('کد دارای ' + fa(hard.length) + ' خطا', 'err');
       return;
     }
@@ -2774,7 +2967,7 @@ try {
           Checker.localExplain(code, langKey, warns);
         mode = 'local';
       } else if (ai.explanation) {
-        md = explanationToMd(ai.explanation, warns);
+        md = explanationToMd(ai.explanation, warns) + reviewersToMd(ai);
         mode = 'ai';
       } else {
         md = '> ⚠️ **مدل توضیحی برنگرداند.** یک‌بار دیگر «تحلیل کد» را بزن.\n\n' +
@@ -2917,7 +3110,8 @@ try {
         resVerdict.textContent = '✓ کد سالم است';
         resVerdict.className = 'verdict ok';
       }
-      resMode.textContent = 'هوش مصنوعی · ' + (settings.model || '');
+      var reviewerLabel = (ai && ai.reviewers && ai.reviewers[0] && ai.reviewers[0].name) || settings.model || 'هوش مصنوعی';
+      resMode.textContent = 'تحلیل با ' + reviewerLabel;
       resMode.className = 'mode-badge ai';
     } else {
       if (secBadge) {
@@ -3329,7 +3523,7 @@ try {
       if (stAiTxt) stAiTxt.textContent = 'در حال بررسی…';
       return;
     }
-    if (aiConnected && settings.key && settings.base) {
+    if (aiConnected && AIReviewers.list(settings).length && settings.key && settings.base) {
       if (aiDot) aiDot.className = 'ai-dot on';
       if (stAi) stAi.className = 'st-ai on';
       if (stAiTxt) stAiTxt.textContent = 'AI آماده';
@@ -3337,7 +3531,7 @@ try {
       // کلید ذخیره شده ولی هنوز تست/تحلیل موفق نداشته‌ایم — کاربر را گول نزنیم (نقطه کهربایی ثابت بدون چشمک بیهوده)
       if (aiDot) aiDot.className = 'ai-dot standby';
       if (stAi) stAi.className = 'st-ai standby';
-      if (stAiTxt) stAiTxt.textContent = 'AI آماده (تست‌نشده)';
+      if (stAiTxt) stAiTxt.textContent = AIReviewers.list(settings).length ? 'AI نیاز به تست مجدد' : 'AI نیاز به انتخاب مدل';
     } else {
       if (aiDot) aiDot.className = 'ai-dot off';
       if (stAi) stAi.className = 'st-ai off';
@@ -3354,8 +3548,74 @@ try {
   cfgBase.value = settings.base;
   cfgProxy.value = settings.proxy || '';
   cfgKey.value = settings.key;
-  cfgModel.value = settings.model;
+  var connectionSerial = 0, modelBusy = false;
+  settings.modelCatalog = Array.isArray(settings.modelCatalog) ? settings.modelCatalog.filter(function(m){return m && typeof m.id==='string' && m.id.length<=200;}).slice(0,1000) : [];
+  settings.selectedModels = AIModels.selected((Array.isArray(settings.selectedModels)?settings.selectedModels:[]).map(function(m){return m && m.model;}),settings.modelCatalog);
+  function selectedIds() { return settings.selectedModels.map(function(m){return m.model;}); }
+  function renderModelPicker() {
+    var selected = selectedIds(), query = $('cfg-model-search').value.trim().toLowerCase(), options = $('model-options');
+    options.replaceChildren();
+    $('model-picker').hidden = !settings.modelCatalog.length;
+    var currentChosen = (settings.selectedModels[0] && settings.selectedModels[0].name) || settings.model || '';
+    $('model-picker-summary').textContent = fa(settings.modelCatalog.length) + ' مدل موجود در سرویس' + (currentChosen ? ' — مدل فعال: ' + currentChosen : '');
+    var matching = settings.modelCatalog.filter(function(model){return (model.id+' '+model.name).toLowerCase().includes(query);});
+    matching.slice(0,60).forEach(function(model){
+      var row=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span'),name=document.createElement('b'),status=document.createElement('small');
+      row.className='model-choice';row.dataset.state=model.state;input.type='radio';input.name='cogni_model_choice';input.dataset.model=model.id;
+      input.checked = selected.includes(model.id) || settings.model === model.id;
+      input.disabled = modelBusy;
+      name.dir='ltr';name.textContent=model.id;
+      status.textContent=model.state==='verified'?'✓ دسترسی تأیید شد — '+model.name:model.state==='failed'?'دسترسی تأیید نشد: '+model.error:model.name+' — انتخاب برای تحلیل';
+      input.addEventListener('change',function(){if(input.checked)chooseModel(model,true);});text.append(name,status);row.append(input,text);options.append(row);
+    });
+    if(matching.length>60){var more=document.createElement('p');more.className='hint-line';more.textContent='برای دیدن مدل دلخواه، نام آن را جست‌وجو کن ('+fa(matching.length)+' نتیجه).';options.append(more);}
+    $('primary-model-field').hidden=!selected.length;cfgModel.replaceChildren();
+    settings.selectedModels.forEach(function(model){var option=document.createElement('option');option.value=model.model;option.textContent=model.name+' — '+model.model;cfgModel.append(option);});
+    if(selected.length&&!selected.includes(settings.model))settings.model=selected[0];cfgModel.value=settings.model;cfgModel.disabled=modelBusy;
+    cfgTest.disabled=modelBusy;$('cfg-manual-test').disabled=modelBusy;
+  }
+  function invalidateModels() {
+    connectionSerial++; if (activeOperation) cancelOperation();
+    settings.selectedModels=[];settings.modelCatalog=[];aiConnected=false;saveSettings();renderModelPicker();updateAiStatus();
+    cfgTestLine.hidden=true;
+  }
+  async function verifyModel(model) {
+    var result=await chat([{role:'user',content:'Reply only with OK.'}],512,0,model.id,30000);
+    if(typeof result.message.content!=='string'||!result.message.content.trim()||result.finishReason==='length'||result.finishReason==='tool_calls')throw new Error('پاسخ متنی کامل از مدل دریافت نشد');
+    return true;
+  }
+  async function chooseModel(model, checked) {
+    if(modelBusy||activeOperation){renderModelPicker();toast('ابتدا بررسی جاری را تمام یا متوقف کن');return;}
+    if(!checked){
+      settings.selectedModels=settings.selectedModels.filter(function(m){return m.model!==model.id;});
+      if(settings.model===model.id)settings.model=settings.selectedModels.length?settings.selectedModels[0].model:'';
+      saveSettings();renderModelPicker();updateAiStatus();return;
+    }
+    if(!settings.key||!settings.base){toast('آدرس سرویس و کلید API را وارد کن');renderModelPicker();return;}
+    var serial=connectionSerial,op=beginOperation('بررسی دسترسی '+model.id+'…');op.kind='model-selection';modelBusy=true;renderModelPicker();updateAiStatus('testing');
+    cfgTestLine.hidden=false;cfgTestLine.className='test-line';cfgTestLine.textContent='در حال بررسی دسترسی '+model.id+'…';
+    try{
+      await verifyModel(model);checkOperation(op);if(serial!==connectionSerial)return;
+      model.state='verified';model.error='';
+      settings.selectedModels=[{id:model.id,model:model.id,name:model.name}];
+      settings.model=model.id;
+      aiConnected=true;
+      cfgTestLine.className='test-line ok';cfgTestLine.textContent='✓ مدل '+model.id+' با موفقیت انتخاب شد';saveSettings();haptic('success');
+    }catch(error){
+      if(serial===connectionSerial){model.state=error.name==='AbortError'?'listed':'failed';model.error=error.name==='AbortError'?'':aiErrorText(error);cfgTestLine.className='test-line fail';cfgTestLine.textContent=error.name==='AbortError'?'بررسی دسترسی متوقف شد':'✕ '+aiErrorText(error);saveSettings();}
+    }finally{finishOperation(op);modelBusy=false;renderModelPicker();updateAiStatus();}
+  }
+  $('cfg-model-search').addEventListener('input',renderModelPicker);
+  $('cfg-manual-test').addEventListener('click',function(){
+    var id=$('cfg-manual-model').value.trim();if(!id||id.length>200||/[\u0000-\u001f\u007f]/.test(id)){toast('شناسهٔ معتبر مدل را وارد کن');return;}
+    var model=settings.modelCatalog.find(function(m){return m.id===id;});
+    if(!model){model={id:id,name:AIModels.family(id),state:'listed',error:''};settings.modelCatalog.push(model);}
+    chooseModel(model,true);
+  });
+  renderModelPicker();
   cfgHist.checked = !!settings.hist;
+
+  [cfgBase,cfgKey,cfgProxy].forEach(function(input){input.addEventListener('input',invalidateModels);});
 
   cfgBase.addEventListener('change', function () {
     settings.base = cfgBase.value.trim();
@@ -3366,6 +3626,7 @@ try {
   cfgProxy.addEventListener('change', function () {
     settings.proxy = cfgProxy.value.trim();
     saveSettings();
+    aiConnected = false; updateAiStatus();
   });
   cfgKey.addEventListener('change', function () {
     settings.key = cfgKey.value.trim();
@@ -3378,9 +3639,9 @@ try {
     updateAiStatus();
   });
   cfgModel.addEventListener('change', function () {
-    settings.model = cfgModel.value.trim() || 'gpt-4o-mini';
+    if (!selectedIds().includes(cfgModel.value)) return;
+    settings.model = cfgModel.value;
     saveSettings();
-    aiConnected = false;
     updateAiStatus();
   });
   cfgHist.addEventListener('change', function () {
@@ -3416,23 +3677,30 @@ try {
     cfgTestLine.textContent = 'در حال تست اتصال…';
     cfgTest.classList.add('busy');
     updateAiStatus('testing');
-    var connectionTestStartedAt = Date.now();
+    var serial=++connectionSerial,connectionOp=beginOperation('شناسایی مدل‌های سرویس…');connectionOp.kind='model-discovery';
+    modelBusy=true;settings.modelCatalog=[];settings.selectedModels=[];aiConnected=false;saveSettings();renderModelPicker();
+    $('cfg-model-search').value='';
     try {
-      await chat([{ role: 'user', content: 'سلام' }], 5);
-      aiConnected = true;
-      updateAiStatus();
-      cfgTestLine.className = 'test-line ok';
-      cfgTestLine.textContent = '✓ اتصال برقرار است (' + ((Date.now() - connectionTestStartedAt) / 1000).toFixed(1) + ' ثانیه) — مدل پاسخ داد';
-      toast('اتصال به هوش مصنوعی با موفقیت برقرار شد ✓');
-      haptic('success');
+      var models;
+      try { models=await listServiceModels(); }
+      catch(error){
+        checkOperation(connectionOp);
+        if(![404,405,501].includes(error.code))throw error;
+        models=[];
+        var candidates=[{model:settings.model}].concat(AIReviewers.list({model:'gpt-6.1-sol',reviewModels:settings.reviewModels})),seen=new Set();
+        for(var candidate of candidates){
+          if(seen.has(candidate.model))continue;if(seen.size>=5)break;seen.add(candidate.model);checkOperation(connectionOp);
+          var model={id:candidate.model,name:AIModels.family(candidate.model),state:'listed',error:''};setOperationStage('بررسی مدل '+model.id+'…');
+          try{await verifyModel(model);model.state='verified';models.push(model);}catch(probeError){checkOperation(connectionOp);if([401,429].includes(probeError.code))throw probeError;}
+        }
+      }
+      checkOperation(connectionOp);if(serial!==connectionSerial)return;
+      settings.modelCatalog=models;saveSettings();cfgTestLine.className='test-line '+(models.length?'ok':'fail');
+      cfgTestLine.textContent=models.length?'✓ '+fa(models.length)+' مدل پیدا شد؛ مدل دلخواهت را انتخاب کن':'مدل متنی پیدا نشد؛ اگر شناسهٔ مدل را داری، آن را در بخش ورود نام مدل بررسی کن.';
+      haptic(models.length?'success':'error');
     } catch (e) {
-      aiConnected = false;
-      updateAiStatus();
-      cfgTestLine.className = 'test-line fail';
-      cfgTestLine.textContent = '✕ ' + aiErrorText(e);
-      haptic('error');
-    }
-    cfgTest.classList.remove('busy');
+      if(serial===connectionSerial){aiConnected=false;cfgTestLine.className='test-line fail';cfgTestLine.textContent=e.name==='AbortError'?'شناسایی مدل‌ها متوقف شد':'✕ '+aiErrorText(e);haptic('error');}
+    } finally {finishOperation(connectionOp);modelBusy=false;cfgTest.classList.remove('busy');renderModelPicker();updateAiStatus();}
   });
 
   /* ── موتور نیتیو همگام‌سازی کیبورد اپل (iOS 18 Native Keyboard Engine) ── */
@@ -3619,7 +3887,6 @@ try {
   }
 
   /* ── شروع ── */
-  var isAndroidPlatform = !!(window.AndroidBridge || (navigator.userAgent && /android/i.test(navigator.userAgent)));
   window.__onNativeCredentialStatus = function (ok, hasKey) {
     if (!ok) {
       nativeCredentialPending = false;

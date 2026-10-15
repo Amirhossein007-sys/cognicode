@@ -22,9 +22,9 @@ html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; 
 .dial-clock .dial-date { display: block; margin-top: 7px; color: var(--dial-ink); font: 500 12px/19px var(--fa); white-space: nowrap; background: none; border: 0; padding: 0; box-shadow: none; }
 .dial-time { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .dial-clock.is-resetting .dial-seconds, .dial-clock.is-resetting .dial-minutes, .dial-clock.is-resetting .dial-spike::after { transition: none; }
-@media(max-width:359px) {
+@media(max-width:480px) {
   .dial-clock { --dial-size: 112px; --dial-scale: .311111; }
-  .dial-clock .dial-date { font-size: 11px; line-height: 17px; margin-top: 6px; }
+  .dial-clock .dial-date { font-size: 11px; line-height: 17px; margin-top: 7px; }
   .dial-hour { font-size: 90px; }
   .dial-minute { font-size: 56px; }
 }
@@ -36,9 +36,8 @@ html[data-theme="light"] .dial-clock { --dial-bg: #f6f8fc; --dial-ink: #0f172a; 
   .dial-clock .dial-date { font-size: 11px; line-height: 16px; margin-top: 6px; }
   .dial-brand { font-size: 25px; }
 }
-/* Discrete second ticks avoid continuous repainting of counter-rotated labels. */
+/* Discrete second ticks avoid continuous repainting on Android. */
 html.android .dial-clock *, html.android .dial-clock *::after { transition: none; }
-@media(max-width:680px), (pointer:coarse) { .dial-clock *, .dial-clock *::after { transition: none; } }
 @media(prefers-reduced-motion:reduce) { .dial-clock *, .dial-clock *::after { transition: none !important; } }
 html.focus-mode .dial-clock *, html.focus-mode .dial-clock *::after { transition: none; }
 .energy-saving .dial-seconds { visibility: hidden; }

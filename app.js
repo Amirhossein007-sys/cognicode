@@ -451,8 +451,10 @@ try {
   }
   [['zoom-out', -2], ['zoom-in', 2], ['zoom-reset', 0]].forEach(function (entry) {
     var button = $(entry[0]);
-    button.addEventListener('mousedown', function (event) { event.preventDefault(); });
-    button.addEventListener('click', function () { setEditorZoom(entry[1] ? editorFontSize + entry[1] : BASE_FONT_SIZE, true); });
+    if (button) {
+      button.addEventListener('mousedown', function (event) { event.preventDefault(); });
+      button.addEventListener('click', function () { setEditorZoom(entry[1] ? editorFontSize + entry[1] : BASE_FONT_SIZE, true); });
+    }
   });
 
   // جلوگیری کامل و قطعی از زوم شدن برنامه (عمل زوم فقط و فقط در محدوده ادیتور کد مجاز است)
@@ -2459,65 +2461,52 @@ try {
   async function askAISingle(code, clip, reviewer) {
     var language = langKey, identity = JSON.stringify([code, language, currentFileName, settings.base, reviewer.model, settings.key, settings.proxy]);
     if (lastAIReview && lastAIReview.identity === identity) return JSON.parse(JSON.stringify(lastAIReview.report));
-    var chunks = ReviewEngine.aiChunks(code, language), results = new Array(chunks.length), next = 0, op = activeOperation;
-    var completed = 0;
-    async function consume() {
-      while (next < chunks.length) {
-        checkOperation(op);
-        var index = next++, chunk = chunks[index];
-        try {
-          if (chunk.text.length > MAX_CODE_CHARS) throw new Error('یک خط ورودی از سقف بررسی AI بزرگ‌تر است');
-          var context = 'زبان این بخش: ' + chunk.language + '. شماره خط‌ها را از ۱ در همین بخش بده. ' +
-            (chunk.complete ? 'این یک فایل کامل است. ' : 'این فقط بخشی از فایل است؛ شروع و پایان بریده شده‌اند. نبود تعریف، import، براکت ابتدا/انتها یا وابستگی را خطا نگیر. فقط ایراد داخلی با شاهد قطعی گزارش کن. ') + '\n';
-          results[index] = await askAIChunk(chunk.text, { text: chunk.text, context: context }, chunk.language, reviewer.model);
-        } catch (error) { checkOperation(op); results[index] = { incomplete: true, errors: [], explanation: { summary: '', steps: [], uses: [], notes: [aiErrorText(error)] } }; }
-        completed++;
-        if (activeOperation === op) setOperationStage('نتیجهٔ آفلاین آماده است؛ بررسی AI ' + fa(completed) + ' از ' + fa(chunks.length));
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(2, chunks.length) }, consume));
+    var op = activeOperation;
     checkOperation(op);
-    var reviewedChunks = results.filter(function (report) { return !report.incomplete && !report.raw; }).length;
-    var coverage = { totalChunks: chunks.length, reviewedChunks: reviewedChunks,
-      totalLines: ReviewEngine.sections(code, language).reduce(function (sum, file) { return sum + ReviewEngine.lineCount(file.code); }, 0) };
-    if (results.length === 1 && chunks[0].line === 1 && !chunks[0].path) {
-      results[0].coverage = coverage;
-      if (!results[0].incomplete && !results[0].raw) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(results[0])) };
-      return results[0];
+    if (activeOperation === op) setOperationStage('در حال تحلیل کد با ' + reviewer.name + '…');
+
+    var textToSend = (clip && typeof clip.text === 'string' && clip.text) ? clip.text : code;
+    if (textToSend.length > MAX_CODE_CHARS) {
+      textToSend = textToSend.slice(0, MAX_CODE_CHARS);
     }
-    var errors = [], notes = [], steps = [], summaries = [], incomplete = false;
-    results.forEach(function (report, i) {
-      incomplete = incomplete || !!report.raw || !!report.incomplete;
-      (report.errors || []).forEach(function (er) { errors.push(Object.assign({}, er, { line: er.line + chunks[i].line - 1 })); });
-      if (report.explanation) {
-        if (report.explanation.summary) summaries.push(report.explanation.summary);
-        notes = notes.concat(report.explanation.notes || []); steps = steps.concat(report.explanation.steps || []);
-      }
-    });
-    var merged = { valid: errors.length === 0, errors: ReviewEngine.confirmIssues(errors, code, language), incomplete: incomplete, coverage: coverage,
-      explanation: { summary: summaries.slice(0, 2).join('\n'), steps: steps.slice(0, 5), uses: [], notes: notes.slice(0, 3).concat([
-        'بررسی AI: ' + fa(reviewedChunks) + ' از ' + fa(chunks.length) + ' بخش کامل شد.' + (incomplete ? ' برخی بخش‌ها پاسخ کامل نداشتند؛ بررسی کامل تأیید نمی‌شود.' : ''),
-        'تحلیل بخش‌های جدا، صحت رفتار کل برنامه را تضمین نمی‌کند.'
-      ]) } };
-    if (!incomplete) lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
-    return merged;
+    var context = 'زبان این کد: ' + ((Syntax.LANGS[language] && Syntax.LANGS[language].label) || language) + ' است. ' +
+      'این یک فایل کامل از کد است. تمام ساختار، توابع، متغیرها و منطق اجرای آن را به‌صورت کامل، پیوسته و دقیق بررسی و تحلیل کن.\n';
+
+    var report;
+    try {
+      report = await askAIChunk(textToSend, { text: textToSend, context: context }, language, reviewer.model);
+    } catch (error) {
+      checkOperation(op);
+      report = { incomplete: true, errors: [], explanation: { summary: '', steps: [], uses: [], notes: [aiErrorText(error)] } };
+    }
+    checkOperation(op);
+
+    var totalLines = ReviewEngine.lineCount(code);
+    var coverage = { totalChunks: 1, reviewedChunks: (!report.incomplete && !report.raw) ? 1 : 0, totalLines: totalLines };
+    report.coverage = coverage;
+    if (!report.incomplete && !report.raw) {
+      lastAIReview = { identity: identity, report: JSON.parse(JSON.stringify(report)) };
+    }
+    return report;
   }
   var lastEnsembleReview;
   async function askAI(code, clip) {
     var reviewers = AIReviewers.list(settings), reports = [], op = activeOperation;
     if (!reviewers.length) throw new Error('ابتدا در تنظیمات، تست اتصال و انتخاب مدل را انجام بده');
-    var identity = JSON.stringify([code,langKey,currentFileName,settings.base,settings.proxy,settings.key,reviewers]);
+    var reviewer = (settings.model && reviewers.find(function (r) { return r.model === settings.model; })) || reviewers[0];
+    var identity = JSON.stringify([code, langKey, currentFileName, settings.base, settings.proxy, settings.key, reviewer.model]);
     if (lastEnsembleReview && lastEnsembleReview.identity === identity) return JSON.parse(JSON.stringify(lastEnsembleReview.report));
-    for (var i = 0; i < reviewers.length; i++) {
+    checkOperation(op);
+    if (op) $('operation-stage').textContent = 'در حال تحلیل کد با ' + reviewer.name + '…';
+    try {
+      reports.push(Object.assign({}, reviewer, { report: await askAISingle(code, clip, reviewer) }));
+    } catch (error) {
       checkOperation(op);
-      var reviewer = reviewers[i];
-      if (op) $('operation-stage').textContent = 'بررسی ' + reviewer.name + ' (' + fa(i + 1) + '/' + fa(reviewers.length) + ')…';
-      try { reports.push(Object.assign({},reviewer,{report:await askAISingle(code,clip,reviewer)})); }
-      catch (error) { checkOperation(op); reports.push(Object.assign({},reviewer,{error:aiErrorText(error)})); }
+      reports.push(Object.assign({}, reviewer, { error: aiErrorText(error) }));
     }
     var merged = AIReviewers.merge(reports);
     merged.errors = ReviewEngine.dedupe(merged.errors);
-    if (!merged.incomplete) lastEnsembleReview = {identity:identity,report:JSON.parse(JSON.stringify(merged))};
+    if (!merged.incomplete) lastEnsembleReview = { identity: identity, report: JSON.parse(JSON.stringify(merged)) };
     return merged;
   }
   function reviewersToMd(ai) {
@@ -3121,7 +3110,8 @@ try {
         resVerdict.textContent = '✓ کد سالم است';
         resVerdict.className = 'verdict ok';
       }
-      resMode.textContent = 'بررسی ' + fa(ai && ai.reviewers ? ai.reviewers.length : AIReviewers.list(settings).length) + ' مدل';
+      var reviewerLabel = (ai && ai.reviewers && ai.reviewers[0] && ai.reviewers[0].name) || settings.model || 'هوش مصنوعی';
+      resMode.textContent = 'تحلیل با ' + reviewerLabel;
       resMode.className = 'mode-badge ai';
     } else {
       if (secBadge) {
@@ -3566,14 +3556,17 @@ try {
     var selected = selectedIds(), query = $('cfg-model-search').value.trim().toLowerCase(), options = $('model-options');
     options.replaceChildren();
     $('model-picker').hidden = !settings.modelCatalog.length;
-    $('model-picker-summary').textContent = fa(settings.modelCatalog.length)+' مدل معرفی‌شده؛ '+fa(selected.length)+' مدل انتخاب‌شده';
+    var currentChosen = (settings.selectedModels[0] && settings.selectedModels[0].name) || settings.model || '';
+    $('model-picker-summary').textContent = fa(settings.modelCatalog.length) + ' مدل موجود در سرویس' + (currentChosen ? ' — مدل فعال: ' + currentChosen : '');
     var matching = settings.modelCatalog.filter(function(model){return (model.id+' '+model.name).toLowerCase().includes(query);});
     matching.slice(0,60).forEach(function(model){
       var row=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span'),name=document.createElement('b'),status=document.createElement('small');
-      row.className='model-choice';row.dataset.state=model.state;input.type='checkbox';input.dataset.model=model.id;input.checked=selected.includes(model.id);input.disabled=modelBusy;
+      row.className='model-choice';row.dataset.state=model.state;input.type='radio';input.name='cogni_model_choice';input.dataset.model=model.id;
+      input.checked = selected.includes(model.id) || settings.model === model.id;
+      input.disabled = modelBusy;
       name.dir='ltr';name.textContent=model.id;
-      status.textContent=model.state==='verified'?'✓ دسترسی تأیید شد — '+model.name:model.state==='failed'?'دسترسی تأیید نشد: '+model.error:model.name+' — انتخاب برای بررسی دسترسی';
-      input.addEventListener('change',function(){chooseModel(model,input.checked);});text.append(name,status);row.append(input,text);options.append(row);
+      status.textContent=model.state==='verified'?'✓ دسترسی تأیید شد — '+model.name:model.state==='failed'?'دسترسی تأیید نشد: '+model.error:model.name+' — انتخاب برای تحلیل';
+      input.addEventListener('change',function(){if(input.checked)chooseModel(model,true);});text.append(name,status);row.append(input,text);options.append(row);
     });
     if(matching.length>60){var more=document.createElement('p');more.className='hint-line';more.textContent='برای دیدن مدل دلخواه، نام آن را جست‌وجو کن ('+fa(matching.length)+' نتیجه).';options.append(more);}
     $('primary-model-field').hidden=!selected.length;cfgModel.replaceChildren();
@@ -3593,15 +3586,21 @@ try {
   }
   async function chooseModel(model, checked) {
     if(modelBusy||activeOperation){renderModelPicker();toast('ابتدا بررسی جاری را تمام یا متوقف کن');return;}
-    if(!checked){settings.selectedModels=settings.selectedModels.filter(function(m){return m.model!==model.id;});saveSettings();renderModelPicker();updateAiStatus();return;}
-    if(settings.selectedModels.length>=5){renderModelPicker();toast('حداکثر پنج مدل را انتخاب کن');return;}
+    if(!checked){
+      settings.selectedModels=settings.selectedModels.filter(function(m){return m.model!==model.id;});
+      if(settings.model===model.id)settings.model=settings.selectedModels.length?settings.selectedModels[0].model:'';
+      saveSettings();renderModelPicker();updateAiStatus();return;
+    }
     if(!settings.key||!settings.base){toast('آدرس سرویس و کلید API را وارد کن');renderModelPicker();return;}
     var serial=connectionSerial,op=beginOperation('بررسی دسترسی '+model.id+'…');op.kind='model-selection';modelBusy=true;renderModelPicker();updateAiStatus('testing');
     cfgTestLine.hidden=false;cfgTestLine.className='test-line';cfgTestLine.textContent='در حال بررسی دسترسی '+model.id+'…';
     try{
       await verifyModel(model);checkOperation(op);if(serial!==connectionSerial)return;
-      model.state='verified';model.error='';settings.selectedModels.push({id:model.id,model:model.id,name:model.name});aiConnected=true;
-      cfgTestLine.className='test-line ok';cfgTestLine.textContent='✓ '+model.id+' آماده است';saveSettings();haptic('success');
+      model.state='verified';model.error='';
+      settings.selectedModels=[{id:model.id,model:model.id,name:model.name}];
+      settings.model=model.id;
+      aiConnected=true;
+      cfgTestLine.className='test-line ok';cfgTestLine.textContent='✓ مدل '+model.id+' با موفقیت انتخاب شد';saveSettings();haptic('success');
     }catch(error){
       if(serial===connectionSerial){model.state=error.name==='AbortError'?'listed':'failed';model.error=error.name==='AbortError'?'':aiErrorText(error);cfgTestLine.className='test-line fail';cfgTestLine.textContent=error.name==='AbortError'?'بررسی دسترسی متوقف شد':'✕ '+aiErrorText(error);saveSettings();}
     }finally{finishOperation(op);modelBusy=false;renderModelPicker();updateAiStatus();}
@@ -3611,7 +3610,7 @@ try {
     var id=$('cfg-manual-model').value.trim();if(!id||id.length>200||/[\u0000-\u001f\u007f]/.test(id)){toast('شناسهٔ معتبر مدل را وارد کن');return;}
     var model=settings.modelCatalog.find(function(m){return m.id===id;});
     if(!model){model={id:id,name:AIModels.family(id),state:'listed',error:''};settings.modelCatalog.push(model);}
-    if(selectedIds().includes(id)){toast('این مدل انتخاب شده است');return;}chooseModel(model,true);
+    chooseModel(model,true);
   });
   renderModelPicker();
   cfgHist.checked = !!settings.hist;
