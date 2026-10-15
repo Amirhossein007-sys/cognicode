@@ -27,8 +27,9 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="workspace.css">
-<link rel="stylesheet" href="dial-clock.css">
-<link rel="stylesheet" href="data-rain.css">
+<link rel="stylesheet" href="glass-fold.css">
+<link rel="stylesheet" href="daypart-clock.css">
+<link rel="stylesheet" href="glass-marquee.css">
 </head>
 <body>
 <div id="launch-splash" class="launch-splash" role="status" aria-label="در حال باز شدن کوگنی کد">
@@ -38,7 +39,11 @@
   </div>
 </div>
 <div id="analysis-activity" class="analysis-activity" role="status" aria-live="polite" hidden><img src="icons/analysis-brain.svg" alt=""><span dir="rtl"></span><div class="activity-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
-<div id="data-rain-background" class="dr-root" data-slot="data-rain" aria-hidden="true"><canvas class="dr-bloom" aria-hidden="true"></canvas><canvas class="dr-main" aria-hidden="true"></canvas><div class="dr-vignette"></div><div class="dr-grain"></div></div>
+<div id="glass-fold-background" class="gf-root" aria-hidden="true">
+  <canvas class="gf-canvas" aria-hidden="true"></canvas>
+  <div class="gf-vignette"></div>
+  <div class="gf-fallback"></div>
+</div>
 
 <div id="app" inert aria-hidden="true">
 
@@ -51,14 +56,50 @@
         <span>CogniCode · هوش مصنوعی کد برای آیفون</span>
       </div>
     </div>
-    <!-- Rotating minute/second dials; the Persian date stays outside the face. -->
-    <div class="dial-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و تاریخ شمسی ایران">
-      <div class="dial-face" dir="ltr" aria-hidden="true"><div class="dial-art">
-        <div class="dial-seconds"></div><div class="dial-minutes"></div>
-        <b class="dial-brand">Cogni</b><span class="dial-hour">--</span><span class="dial-minute">--</span>
-      </div></div>
+    <!-- Daypart Clock (Flip Clock / Select-10 style): Tehran time, minimal Shamsi date, and 4 dayparts -->
+    <div class="daypart-clock" id="tehran-clock" role="group" aria-label="ساعت تهران و بخش‌های شبانه‌روز">
+      <div class="dp-header-row">
+        <time class="dp-date dial-date" dir="rtl" aria-label="تاریخ شمسی تهران">…</time>
+        <button type="button" class="dp-live-badge" id="dp-live-btn" aria-label="ساعت زنده وقت تهران">
+          <span class="dp-live-dot" aria-hidden="true"></span>
+          <span class="dp-live-text">وقت تهران</span>
+        </button>
+      </div>
+      <div class="dp-time-pill" dir="ltr">
+        <div class="dp-unit dp-hour" id="dp-hour">
+          <span class="dp-digit">--</span>
+          <svg class="dp-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <span class="dp-colon" aria-hidden="true">:</span>
+        <div class="dp-unit dp-minute" id="dp-minute">
+          <span class="dp-digit">--</span>
+          <svg class="dp-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="dp-unit dp-period" id="dp-period">
+          <span class="dp-digit">--</span>
+          <svg class="dp-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
       <time class="dial-time sr-only" dir="ltr" aria-label="ساعت تهران">--:--:--</time>
-      <time class="dial-date" dir="rtl" aria-label="تاریخ شمسی تهران">…</time>
+      <div class="dp-greeting" id="dp-greeting" dir="rtl">در حال دریافت ساعت تهران...</div>
+      <div class="dp-presets" dir="rtl" role="radiogroup" aria-label="بخش‌های شبانه‌روز">
+        <button type="button" class="dp-pill-btn" data-slot="morning" role="radio" aria-checked="false">
+          <span class="dp-pill-label">صبح</span>
+          <span class="dp-lamp" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="dp-pill-btn" data-slot="noon" role="radio" aria-checked="false">
+          <span class="dp-pill-label">ظهر</span>
+          <span class="dp-lamp" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="dp-pill-btn" data-slot="afternoon" role="radio" aria-checked="false">
+          <span class="dp-pill-label">عصر</span>
+          <span class="dp-lamp" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="dp-pill-btn" data-slot="night" role="radio" aria-checked="false">
+          <span class="dp-pill-label">شب</span>
+          <span class="dp-lamp" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="top-actions">
       <button class="icon-btn theme-btn" id="btn-theme" aria-label="تغییر حالت روشن و تاریک">
@@ -74,10 +115,16 @@
     </div>
   </header>
 
-  <div class="brain-marquee" role="img" aria-label="موج مغزی تزئینی متحرک">
-    <div class="brain-marquee-track" aria-hidden="true">
-      <svg viewBox="0 0 480 28" preserveAspectRatio="none"><path d="M0 14C4 14 5 9 9 9S14 20 18 20S23 6 27 6S32 18 37 18S43 11 48 11S53 15 58 15S64 5 69 5S74 23 80 23S85 10 90 10S95 17 100 17S106 8 111 8S116 14 120 14C124 14 125 9 129 9S134 20 138 20S143 6 147 6S152 18 157 18S163 11 168 11S173 15 178 15S184 5 189 5S194 23 200 23S205 10 210 10S215 17 220 17S226 8 231 8S236 14 240 14C244 14 245 9 249 9S254 20 258 20S263 6 267 6S272 18 277 18S283 11 288 11S293 15 298 15S304 5 309 5S314 23 320 23S325 10 330 10S335 17 340 17S346 8 351 8S356 14 360 14C364 14 365 9 369 9S374 20 378 20S383 6 387 6S392 18 397 18S403 11 408 11S413 15 418 15S424 5 429 5S434 23 440 23S445 10 450 10S455 17 460 17S466 8 471 8S476 14 480 14"/></svg>
-      <svg viewBox="0 0 480 28" preserveAspectRatio="none"><path d="M0 14C4 14 5 9 9 9S14 20 18 20S23 6 27 6S32 18 37 18S43 11 48 11S53 15 58 15S64 5 69 5S74 23 80 23S85 10 90 10S95 17 100 17S106 8 111 8S116 14 120 14C124 14 125 9 129 9S134 20 138 20S143 6 147 6S152 18 157 18S163 11 168 11S173 15 178 15S184 5 189 5S194 23 200 23S205 10 210 10S215 17 220 17S226 8 231 8S236 14 240 14C244 14 245 9 249 9S254 20 258 20S263 6 267 6S272 18 277 18S283 11 288 11S293 15 298 15S304 5 309 5S314 23 320 23S325 10 330 10S335 17 340 17S346 8 351 8S356 14 360 14C364 14 365 9 369 9S374 20 378 20S383 6 387 6S392 18 397 18S403 11 408 11S413 15 418 15S424 5 429 5S434 23 440 23S445 10 450 10S455 17 460 17S466 8 471 8S476 14 480 14"/></svg>
+  <!-- Marquee Effect: Frosted Glass Ticker with Daily Motivational Quotes -->
+  <div class="glass-marquee brain-marquee" id="status-marquee" role="region" aria-label="پیام روز و جملات انگیزشی">
+    <div class="gm-badge">
+      <span class="gm-badge-icon" aria-hidden="true">✨</span>
+      <span class="gm-badge-text">انگیزه</span>
+    </div>
+    <div class="gm-viewport">
+      <div class="gm-track">
+        <span class="gm-item">در حال دریافت پیام روز...</span>
+      </div>
     </div>
   </div>
 
@@ -588,9 +635,9 @@
 <script src="vendor/babel-parser.js"></script>
 <script src="review-engine.js"></script>
 <script src="review-service.js"></script>
-<script src="mobile-rain.js"></script>
-<script src="data-rain.js"></script>
-<script src="orbital-clock.js"></script>
+<script src="glass-fold.js"></script>
+<script src="daypart-clock.js"></script>
+<script src="glass-marquee.js"></script>
 <script src="workspace-store.js"></script>
 <script src="change-set.js"></script>
 <script src="workspace-features.js"></script>

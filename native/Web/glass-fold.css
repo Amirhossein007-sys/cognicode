@@ -1,0 +1,57 @@
+/* ═══════════════════════════════════════════════
+   GlassFold: Animated WebGL Glass Shaders
+   Adapted from GradFlow for CogniCode iOS & Android
+   ═══════════════════════════════════════════════ */
+
+#glass-fold-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background-color: #06081e;
+  transition: background-color 0.4s ease;
+}
+
+html[data-theme="light"] #glass-fold-background {
+  background-color: #eef5fc;
+}
+
+.gf-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.gf-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 40%, transparent 45%, rgba(6, 8, 30, 0.48) 100%);
+  transition: opacity 0.4s ease;
+}
+
+html[data-theme="light"] .gf-vignette {
+  background: radial-gradient(circle at 50% 40%, transparent 50%, rgba(219, 234, 254, 0.4) 100%);
+}
+
+/* Fallback gradient if WebGL context creation fails */
+.gf-fallback {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #06081e 0%, #1e3cc8 50%, #06081e 100%);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.gf-no-webgl .gf-fallback {
+  opacity: 1;
+}
+html[data-theme="light"] .gf-fallback {
+  background: linear-gradient(135deg, #eef5fc 0%, #bfdbfe 50%, #eef5fc 100%);
+}

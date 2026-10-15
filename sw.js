@@ -1,7 +1,7 @@
-/* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
+﻿/* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v38-model-discovery';
+var CACHE = 'cognicode-v39-glass-daypart';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -9,14 +9,14 @@ var PRECACHE = [
   './index.html',
   './styles.css',
   './workspace.css',
-  './dial-clock.css',
-  './data-rain.css',
+  './glass-fold.css',
+  './daypart-clock.css',
+  './glass-marquee.css',
   './workspace-store.js',
   './workspace-features.js',
   './ai-reviewers.js',
   './ai-models.js',
-  './mobile-rain.js',
-  './selection-explainer.js',
+    './selection-explainer.js',
   './change-set.js',
   './project-zip.js',
   './syntax.js',
@@ -29,8 +29,9 @@ var PRECACHE = [
   './vendor/acorn.js',
   './vendor/php-parser.js',
   './vendor/babel-parser.js',
-  './data-rain.js',
-  './orbital-clock.js',
+  './glass-fold.js',
+  './daypart-clock.js',
+  './glass-marquee.js',
   './launch.js',
   './app.js',
   './manifest.webmanifest',
@@ -46,7 +47,7 @@ var PRECACHE = [
 
 /* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
    هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
-var FRESH_NAMES = ['data-rain.css', 'dial-clock.css', 'index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'babel-parser.js', 'syntax.js', 'checker.js', 'malwatch.js', 'data-rain.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
+var FRESH_NAMES = ['glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'babel-parser.js', 'syntax.js', 'checker.js', 'malwatch.js', 'data-rain.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
 
 function isFresh(url) {
   var name = url.pathname.split('/').pop();
@@ -99,3 +100,4 @@ self.addEventListener('fetch', function (e) {
     })
   );
 });
+

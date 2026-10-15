@@ -1,0 +1,164 @@
+/* ══════════════════════════════════════════════════════════════
+   Glass Marquee: Frosted Glass Ticker with Daily Motivational Quotes
+   Dynamic messages for: صبح ، ظهر ، عصر ، شب
+   ══════════════════════════════════════════════════════════════ */
+
+.glass-marquee {
+  flex: 0 0 34px;
+  height: 34px;
+  min-height: 34px;
+  margin: 3px 14px 4px;
+  border-radius: 12px;
+  background: var(--bar-bg);
+  background-image: none !important;
+  border: 1px solid var(--line);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  direction: rtl;
+  contain: paint;
+  font-family: var(--fa);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html[data-theme="light"] .glass-marquee {
+  box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.08);
+}
+
+/* Badge on the right side */
+.gm-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18));
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+html[data-theme="light"] .gm-badge {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(99, 102, 241, 0.12));
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  color: #0284c7;
+}
+
+.gm-badge-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* Viewport and moving track */
+.gm-viewport {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Left/right soft fading gradients */
+.gm-viewport::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.8), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+html[data-theme="light"] .gm-viewport::after {
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.85), transparent);
+}
+
+.gm-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+  animation: gm-scroll 24s linear infinite;
+  padding-left: 30px;
+}
+
+.glass-marquee:hover .gm-track,
+.glass-marquee:active .gm-track {
+  animation-play-state: paused;
+}
+
+@keyframes gm-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(50%);
+  }
+}
+
+.gm-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--txt1);
+  letter-spacing: -0.2px;
+}
+
+.gm-divider {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
+/* State overrides from app code analysis */
+.glass-marquee[data-state="healthy"] {
+  border-color: rgba(52, 211, 153, 0.5);
+}
+.glass-marquee[data-state="error"] {
+  border-color: rgba(251, 113, 133, 0.5);
+}
+.glass-marquee[data-state="warning"] {
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .gm-track {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .glass-marquee {
+    margin: 2px 10px 4px;
+    height: 30px;
+    min-height: 30px;
+  }
+  .gm-badge {
+    padding: 0 8px;
+    font-size: 10.5px;
+  }
+  .gm-item {
+    font-size: 11px;
+    padding: 0 12px;
+  }
+}

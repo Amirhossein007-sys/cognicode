@@ -9,7 +9,7 @@ $web = Join-Path $root 'native/Web'
 
 if (-not (Test-Path $web)) { New-Item -ItemType Directory -Path $web | Out-Null }
 
-$files = @('index.html', 'styles.css', 'workspace.css', 'dial-clock.css', 'data-rain.css', 'workspace-store.js', 'workspace-features.js', 'ai-reviewers.js', 'ai-models.js', 'mobile-rain.js', 'selection-explainer.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'data-rain.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
+$files = @('index.html', 'styles.css', 'workspace.css', 'glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'dial-clock.css', 'workspace-store.js', 'workspace-features.js', 'ai-reviewers.js', 'ai-models.js', 'selection-explainer.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png')
 foreach ($f in $files) {
     $src = Join-Path $root $f
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Required web resource is missing: $f" }
@@ -27,7 +27,7 @@ $swPath = Join-Path $web 'sw.js'
 Set-Content -Path $swPath -Value '/* no service worker inside the native app */' -Encoding UTF8
 
 Write-Output 'native/Web synced'
-foreach ($old in @('sonar.js','matrix-rain.js','matrix-rain.css','radio-clock.css')) { if (Test-Path -LiteralPath (Join-Path $web $old)) { Remove-Item -LiteralPath (Join-Path $web $old) } }
+foreach ($old in @('sonar.js','matrix-rain.js','matrix-rain.css','radio-clock.css','data-rain.js','data-rain.css','mobile-rain.js')) { if (Test-Path -LiteralPath (Join-Path $web $old)) { Remove-Item -LiteralPath (Join-Path $web $old) } }
 
 # همگام‌سازی دارایی‌های اندروید با حفظ تزریق android-bridge.js
 if (-not $AndroidRoot) { $AndroidRoot = Join-Path (Split-Path -Parent $root) 'cognicode-apk' }
@@ -52,5 +52,6 @@ if (Test-Path $androidWeb) {
     }
     Set-Content -Path (Join-Path $androidWeb 'sw.js') -Value '/* no service worker inside the native app */' -Encoding UTF8
     Write-Output 'cognicode-apk web assets synced'
-    foreach ($old in @('sonar.js','matrix-rain.js','matrix-rain.css','radio-clock.css')) { if (Test-Path -LiteralPath (Join-Path $androidWeb $old)) { Remove-Item -LiteralPath (Join-Path $androidWeb $old) } }
+    foreach ($old in @('sonar.js','matrix-rain.js','matrix-rain.css','radio-clock.css','data-rain.js','data-rain.css','mobile-rain.js')) { if (Test-Path -LiteralPath (Join-Path $androidWeb $old)) { Remove-Item -LiteralPath (Join-Path $androidWeb $old) } }
 }
+

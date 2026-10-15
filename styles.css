@@ -1764,16 +1764,16 @@ html[data-theme="light"] { --editor-bg: rgba(255,255,255,.96); --txt3: #475569; 
   html[data-theme="light"] { --editor-bg: #fff; --bar-bg: #fff; --panel-bg: #fff; }
 }
 
-/* Translucent reading surfaces: retain the Matrix through a restrained tint. */
+/* Translucent reading surfaces with GlassFold: optimized contrast for dark and light modes. */
 :root {
-  --editor-bg: rgba(10, 22, 40, .46);
-  --bar-bg: rgba(10, 22, 40, .42);
+  --editor-bg: rgba(10, 22, 40, .68);
+  --bar-bg: rgba(10, 22, 40, .60);
   --txt3: #c0cfdf;
   --c-com: #b7c9dc; --ph: #b7c9dc; --gutter-txt: #b7c9dc;
 }
 html[data-theme="light"] {
-  --editor-bg: rgba(255, 255, 255, .22);
-  --bar-bg: rgba(255, 255, 255, .24);
+  --editor-bg: rgba(255, 255, 255, .84);
+  --bar-bg: rgba(255, 255, 255, .80);
   --c-str: #991b1b; --c-num: #065f46; --c-type: #155e75;
   --c-fn: #854d0e; --c-attr: #075985; --c-prop: #075985;
   --txt3: #334155;
@@ -1844,8 +1844,8 @@ html[data-theme="light"] .bottom {
 .ld-b0916a { background:#b0916a; color:#b0916a; }
 .ld-8e8e93 { background:#8e8e93; color:#8e8e93; }
 
-/* Use the app's shared Matrix background, with no second canvas or network. */
-html.launch-pending body > :not(#launch-splash):not(#data-rain-background) { visibility: hidden; }
+/* Use the app's shared GlassFold WebGL background, with no second canvas or network. */
+html.launch-pending body > :not(#launch-splash):not(#glass-fold-background):not(#data-rain-background) { visibility: hidden; }
 .launch-splash {
   position: fixed; inset: 0; z-index: 3000;
   display: grid; place-items: center;
