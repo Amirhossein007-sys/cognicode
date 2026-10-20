@@ -34,9 +34,9 @@ for (const name of resources) {
   assert.ok(original.equals(bundled), 'Native resource is stale: ' + name);
   hashes[name] = digest(original);
 }
-assert.ok(resources.has('launch.js') && resources.has('orbital-clock.js'), 'Missing launch or clock entry point');
-assert.ok(resources.has('dial-clock.css'), 'Missing dial clock stylesheet');
-assert.ok(resources.has('data-rain.js') && resources.has('data-rain.css'), 'Missing DataRain background resources');
+assert.ok(resources.has('launch.js') && resources.has('daypart-clock.js'), 'Missing launch or clock entry point');
+assert.ok(resources.has('daypart-clock.css'), 'Missing daypart clock stylesheet');
+assert.ok(resources.has('glass-fold.js') && resources.has('glass-fold.css'), 'Missing GlassFold background resources');
 assert.ok(!resources.has('matrix-rain.js') && !resources.has('matrix-rain.css') && !resources.has('radio-clock.css'), 'Legacy background/clock must not be shipped');
 assert.ok(!resources.has('sonar.js'), 'Old particle background must not be shipped');
 const storyboard = read('native/CogniCode/LaunchScreen.storyboard').toString();

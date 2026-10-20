@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="glass-fold.css">
 <link rel="stylesheet" href="daypart-clock.css">
 <link rel="stylesheet" href="glass-marquee.css">
+<link rel="stylesheet" href="activity-ui.css">
 </head>
 <body>
 <div id="launch-splash" class="launch-splash" role="status" aria-label="در حال باز شدن کوگنی کد">
@@ -395,6 +396,7 @@
       <button type="button" class="patch-action" id="res-stop">توقف بررسی</button>
     </div>
     <div class="review-summary glass-workspace" id="review-summary" hidden aria-live="polite"></div>
+    <p class="token-receipt" id="res-token-usage" role="status" hidden></p>
     <!-- دیاگرام تعاملی جریان ذهنی کد -->
     <div class="mental-logic-map" id="mental-logic-map" hidden>
       <div class="mlm-head">
@@ -472,6 +474,19 @@
   </header>
   <div class="sheet-body">
     <div class="form">
+      <div class="form-card" id="ai-cost-controls">
+        <b>مصرف و سهمیهٔ هوش مصنوعی</b>
+        <div class="usage-grid" aria-label="توکن‌های گزارش‌شده در این برنامه"><div class="usage-stat"><span>ورودی</span><b id="usage-input">۰</b></div><div class="usage-stat"><span>خروجی</span><b id="usage-output">۰</b></div><div class="usage-stat"><span>مجموع</span><b id="usage-total">۰</b></div></div>
+        <p class="usage-note" id="ai-key-usage" role="status"></p>
+        <p class="usage-note" id="ai-quota-status" role="status">موجودی کلید: نامشخص — تعداد توکن ثابت از خود کلید قابل دریافت نیست.</p>
+        <p class="usage-note">موجودی OpenAI و سهمیهٔ پروژهٔ Gemini را از پنل رسمی ببینید. شمارنده‌های این بخش فقط مصرفی را ثبت می‌کنند که همین برنامه از پاسخ سرویس دریافت کرده است؛ مصرف خارج از برنامه در آن نیست.</p>
+        <div class="usage-links"><a href="https://platform.openai.com/usage" rel="noopener noreferrer">مصرف و حساب OpenAI ↗</a><a href="https://aistudio.google.com/usage" rel="noopener noreferrer">سهمیه و مصرف Gemini ↗</a></div>
+        <p class="hint-line">حالت اقتصادی فعال است: هر عملیات حداکثر ۳ درخواست و بودجهٔ محافظه‌کارانهٔ ۳۲٬۰۰۰ واحد ورودی و خروجی دارد. توضیح‌ها کوتاه‌اند و ادامهٔ خودکار ارسال نمی‌شود. پروژهٔ بزرگ ممکن است پوشش جزئی داشته باشد؛ مقدار پوشش در گزارش می‌آید.</p>
+        <p class="hint-line" id="ai-usage-last" role="status"></p>
+        <p class="hint-line" id="ai-usage-summary" role="status"></p>
+        <p class="hint-line" id="ai-usage-requests"></p>
+        <small class="hint-line">آمار توکن از پاسخ سرویس است؛ رزروهای بدون آمار و ورودی تصویر، برآوردند و صورتحساب قطعی نیستند. دادهٔ مصرف فقط شامل عددهاست؛ متن کد و کلید در آن ذخیره نمی‌شوند.</small>
+      </div>
       <div class="form-card">
         <label class="fld"><span>اندازهٔ متن گزارش و پنل‌ها</span><input id="cfg-text-scale" type="range" min="100" max="150" step="10" value="100"><output id="text-scale-value" for="cfg-text-scale">۱۰۰٪</output></label>
         <small class="hint-line">بزرگ‌نمایی کد همچنان جداگانه در ادیتور در دسترس است.</small>
@@ -502,7 +517,7 @@
           <p class="hint-line" id="model-picker-summary" role="status"></p>
           <label class="fld"><span>جست‌وجوی مدل</span><input id="cfg-model-search" type="search" dir="ltr" autocomplete="off" placeholder="نام مدل یا شرکت"></label>
           <div id="model-options" class="model-options" role="group" aria-label="انتخاب مدل‌های بررسی"></div>
-          <small class="hint-line">یک یا چند مدل، حداکثر پنج مدل انتخاب کن. با انتخاب هر مدل، دسترسی واقعی با یک درخواست کوتاه بررسی می‌شود؛ این درخواست ممکن است هزینهٔ اندک API داشته باشد.</small>
+          <small class="hint-line">یک مدل برای بررسی انتخاب کن. با انتخاب هر مدل، دسترسی واقعی با یک درخواست کوتاه بررسی می‌شود؛ این درخواست ممکن است هزینهٔ اندک API داشته باشد.</small>
         </div>
         <label class="fld" id="primary-model-field" hidden><span>مدل توضیح خطی و اصلاح کد</span><select id="cfg-model" dir="ltr"></select></label>
         <details id="manual-model-details"><summary>ورود نام مدل، اگر سرویس فهرست نمی‌دهد</summary><label class="fld"><span>شناسهٔ دقیق مدل</span><input id="cfg-manual-model" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="model-id"></label><button class="ghost-btn" id="cfg-manual-test" type="button">بررسی و انتخاب مدل</button></details>
@@ -621,10 +636,15 @@
     <p id="selection-location"></p><pre class="selection-code glass-workspace" id="selection-code" dir="ltr"></pre>
     <div class="selection-actions"><button type="button" data-selection-action="explain">توضیح بده</button><button type="button" data-selection-action="improve">پیشنهاد بهبود</button><button type="button" data-selection-action="review">بررسی خطا</button><button type="button" id="selection-stop" hidden>توقف بررسی</button></div>
     <p class="hint-line">برای بررسی چند خط، ابتدا آن‌ها را در ویرایشگر انتخاب کن؛ بدون انتخاب، خط فعلی نمایش داده می‌شود. توضیح هوش مصنوعی به API تنظیم‌شده نیاز دارد و فقط همین بخش را می‌بیند.</p>
+    <p class="token-receipt" id="selection-token-usage" role="status" hidden></p>
     <div class="md" id="selection-result" aria-live="polite"></div>
   </div>
 </section>
-<div class="operation-bar glass-workspace" id="operation-bar" hidden role="status"><span id="operation-stage"></span><button id="operation-stop" type="button">توقف</button></div>
+<div class="operation-bar" id="operation-bar" hidden role="status" aria-live="polite">
+  <div class="operation-message"><span class="work-spinner" aria-hidden="true"></span><div class="operation-copy"><b>در حال انجام کار</b><span id="operation-stage"></span></div></div>
+  <button id="operation-stop" type="button" aria-label="توقف عملیات جاری">توقف</button>
+</div>
+<div class="app-busy" id="app-busy" role="status" aria-live="polite" hidden><span class="work-spinner" aria-hidden="true"></span><span id="app-busy-label"></span></div>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="project-zip.js"></script>
@@ -645,6 +665,8 @@
 <script src="workspace-features.js"></script>
 <script src="ai-models.js"></script>
 <script src="ai-reviewers.js"></script>
+<script src="app-busy.js"></script>
+<script src="ai-budget.js"></script>
 <script src="selection-explainer.js"></script>
 <script src="app.js"></script>
 </body>

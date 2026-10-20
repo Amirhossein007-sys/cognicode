@@ -1,7 +1,7 @@
 /* کوگنی کد (CogniCode) — سرویس‌ورکر: کش پوستهٔ اپ برای اجرای آفلاین */
 'use strict';
 
-var CACHE = 'cognicode-v40-new-icon';
+var CACHE = 'cognicode-v41-token-budget';
 
 /* فقط فایل‌هایی که واقعاً صفحه/مانيفست مصرف می‌کنند (بدون بایت تکراری) */
 var PRECACHE = [
@@ -16,6 +16,9 @@ var PRECACHE = [
   './workspace-features.js',
   './ai-reviewers.js',
   './ai-models.js',
+  './ai-budget.js',
+  './app-busy.js',
+  './activity-ui.css',
     './selection-explainer.js',
   './change-set.js',
   './project-zip.js',
@@ -49,7 +52,7 @@ var PRECACHE = [
 
 /* کد و مانیفست همیشه از شبکه تازه می‌آیند (network-first) تا آپدیت برنامه
    هرگز پشت کش گیر نکند؛ آیکون‌ها و فونت‌های تغییرناپذیر cache-first می‌مانند */
-var FRESH_NAMES = ['glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'babel-parser.js', 'syntax.js', 'checker.js', 'malwatch.js', 'data-rain.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
+var FRESH_NAMES = ['app-busy.js', 'activity-ui.css', 'ai-budget.js', 'ai-models.js', 'ai-reviewers.js', 'selection-explainer.js', 'glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'index.html', 'styles.css', 'workspace.css', 'workspace-store.js', 'workspace-features.js', 'change-set.js', 'project-zip.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'babel-parser.js', 'syntax.js', 'checker.js', 'malwatch.js', 'data-rain.js', 'orbital-clock.js', 'launch.js', 'app.js', 'manifest.webmanifest'];
 
 function isFresh(url) {
   var name = url.pathname.split('/').pop();

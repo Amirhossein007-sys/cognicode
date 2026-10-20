@@ -9,7 +9,7 @@ $web = Join-Path $root 'native/Web'
 
 if (-not (Test-Path $web)) { New-Item -ItemType Directory -Path $web | Out-Null }
 
-$files = @('index.html', 'styles.css', 'workspace.css', 'glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'dial-clock.css', 'workspace-store.js', 'workspace-features.js', 'ai-reviewers.js', 'ai-models.js', 'selection-explainer.js', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'favicon.png')
+$files = @('index.html', 'styles.css', 'workspace.css', 'glass-fold.css', 'daypart-clock.css', 'glass-marquee.css', 'glass-fold.js', 'daypart-clock.js', 'glass-marquee.js', 'dial-clock.css', 'workspace-store.js', 'workspace-features.js', 'ai-reviewers.js', 'ai-models.js', 'selection-explainer.js', 'ai-budget.js', 'app-busy.js', 'activity-ui.css', 'change-set.js', 'project-zip.js', 'syntax.js', 'checker.js', 'malwatch.js', 'review-engine.js', 'review-service.js', 'review-worker.js', 'review-worker-bundle.js', 'orbital-clock.js', 'launch.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'favicon.png')
 foreach ($f in $files) {
     $src = Join-Path $root $f
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Required web resource is missing: $f" }

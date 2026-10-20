@@ -17,8 +17,8 @@ window.AIReviewers = (function () {
   }
   function merge(reviews) {
     const complete = review => review.report && !review.report.incomplete && !review.report.raw;
-    const finished = reviews.filter(complete), errors=[], steps=[], notes=[], summaries=[], uses=[];
-    for(const review of finished) {
+    const finished = reviews.filter(complete), available = reviews.filter(review=>review.report && !review.report.raw), errors=[], steps=[], notes=[], summaries=[], uses=[];
+    for(const review of available) {
       const report=review.report;
       for(const issue of report.errors||[]) errors.push({...issue,reviewers:[review.name]});
       const explanation=report.explanation||{};
@@ -28,7 +28,7 @@ window.AIReviewers = (function () {
     const reviewers=reviews.map(review=>({id:review.id,name:review.name,model:review.model,complete:complete(review),coverage:review.report?.coverage||null,error:review.error||review.report?.parseNote||(!complete(review)?(review.report?.explanation?.notes||[]).join(' '):'')}));
     for(const review of reviewers)if(!review.complete)notes.push(review.name+': بررسی کامل نشد'+(review.error?' — '+review.error:''));
     const risk={clean:0,unknown:0,suspicious:1,malicious:2};
-    const security=finished.map(review=>review.report.security).filter(Boolean).sort((a,b)=>(risk[b.verdict]||0)-(risk[a.verdict]||0))[0]||null;
+    const security=available.map(review=>review.report.security).filter(Boolean).sort((a,b)=>(risk[b.verdict]||0)-(risk[a.verdict]||0))[0]||null;
     return {valid:reviews.length>0&&finished.length===reviews.length&&finished.every(review=>review.report.valid),incomplete:!reviews.length||finished.length!==reviews.length,errors,security,
       reviewers,coverage:{totalReviewers:reviews.length,completedReviewers:finished.length,models:reviewers},
       explanation:{summary:summaries.join('\n\n'),steps:[...new Set(steps)],uses:[...new Set(uses)],notes:[...new Set(notes)]}};
