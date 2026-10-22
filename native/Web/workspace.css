@@ -27,6 +27,7 @@ html[data-theme="light"] .quick-start {
 .quick-grid button:hover, .session-action:hover { background: rgba(56,189,248,.23); }
 .key { min-width: 44px; min-height: 44px; }.key.sq { width: 44px; }.keys-scroll { padding-block: 2px; }
 .editor-spacer, .editor-window { display: block; }
+.editor-scrolling .brain-marquee-track { animation-play-state: paused; }
 .app-paused *, .app-paused *::before, .app-paused *::after { animation-play-state: paused !important; transition: none !important; }
 .energy-saving .scanline, .energy-saving .burst-star, .energy-saving .terminal-text { animation: none !important; filter: none; }
 .energy-saving #btn-play.loading { animation: none !important; }

@@ -157,13 +157,14 @@ window.__m = (function () {
     console.log(`PASS grid: code layer shares the editor font and the ${grid.lh}px line pitch (${grid.pitchCount} gaps checked)`);
 
     // ── 3. Real rendered alignment of every gutter number against its code line
-    const rows = await page.evaluate(({ steps, lines }) => {
+    const rows = await page.evaluate(async ({ steps, lines }) => {
       const ta = document.getElementById('code');
       const g = document.getElementById('gutter');
       const out = [];
-      steps.forEach(st => {
+      for (const st of steps) {
         ta.scrollTop = st;
-        ta.dispatchEvent(new Event('scroll'));   // runs the app's real syncScroll
+        ta.dispatchEvent(new Event('scroll'));
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const m = window.__m.measure(lines);     // measured fresh, after the scroll
         const row = { requested: st, taScrollTop: ta.scrollTop, gutterScrollTop: g.scrollTop, worst: 0, worstLine: null };
         lines.forEach(ln => {
@@ -172,7 +173,7 @@ window.__m = (function () {
           if (Math.abs(delta) > Math.abs(row.worst)) { row.worst = +delta.toFixed(2); row.worstLine = ln; }
         });
         out.push(row);
-      });
+      }
       return out;
     }, { steps: SCROLL_STEPS, lines: PROBE_LINES });
 
@@ -206,7 +207,7 @@ window.__m = (function () {
       });
     }, MARK_LINES);
 
-    const marks = await page.evaluate(({ steps, lines }) => {
+    const marks = await page.evaluate(async ({ steps, lines }) => {
       const ta = document.getElementById('code');
       const pre = document.getElementById('highlight');
       const lh = parseFloat(getComputedStyle(ta).lineHeight);
@@ -214,9 +215,10 @@ window.__m = (function () {
       const bars = document.querySelectorAll('#err-overlay .err-line');
       const dots = document.querySelectorAll('#gutter-errs i');
       const out = [];
-      steps.forEach(st => {
+      for (const st of steps) {
         ta.scrollTop = st;
         ta.dispatchEvent(new Event('scroll'));
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const m = window.__m.measure(lines.concat([1]));
         // A glyph sits a few px inside its line box (the font's ascent gap), so the
         // marker boxes must be compared against the LINE BOX top, not the glyph top.
@@ -239,7 +241,7 @@ window.__m = (function () {
           });
         });
         out.push(row);
-      });
+      }
       return out;
     }, { steps: SCROLL_STEPS, lines: MARK_LINES });
 

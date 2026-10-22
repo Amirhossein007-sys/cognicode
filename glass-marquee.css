@@ -19,7 +19,8 @@
   align-items: center;
   overflow: hidden;
   direction: rtl;
-  contain: paint;
+  contain: layout paint style;
+  isolation: isolate;
   font-family: var(--fa);
   user-select: none;
   -webkit-user-select: none;
@@ -43,6 +44,8 @@ html[data-theme="light"] .glass-marquee {
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
+  flex-basis: 84px;
+  justify-content: center;
   z-index: 2;
 }
 
@@ -66,6 +69,7 @@ html[data-theme="light"] .gm-badge {
   position: relative;
   display: flex;
   align-items: center;
+  contain: layout paint;
 }
 
 /* Left/right soft fading gradients */
@@ -86,27 +90,20 @@ html[data-theme="light"] .gm-viewport::after {
 }
 
 .gm-track {
-  display: inline-flex;
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: max-content;
+  display: flex;
+  direction: rtl;
   align-items: center;
   white-space: nowrap;
-  will-change: transform;
-  animation: gm-scroll 24s linear infinite;
-  padding-left: 30px;
+  padding: 0;
+  transform: translate3d(0, 0, 0);
 }
 
-.glass-marquee:hover .gm-track,
-.glass-marquee:active .gm-track {
-  animation-play-state: paused;
-}
-
-@keyframes gm-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(50%);
-  }
-}
+.gm-running .gm-track { will-change: transform; }
+.glass-marquee:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .gm-item {
   display: inline-flex;
@@ -117,6 +114,9 @@ html[data-theme="light"] .gm-viewport::after {
   font-weight: 600;
   color: var(--txt1);
   letter-spacing: -0.2px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  unicode-bidi: isolate;
 }
 
 .gm-divider {
@@ -126,6 +126,7 @@ html[data-theme="light"] .gm-viewport::after {
   border-radius: 50%;
   background: var(--accent);
   opacity: 0.7;
+  flex: 0 0 4px;
 }
 
 /* State overrides from app code analysis */
@@ -139,12 +140,15 @@ html[data-theme="light"] .gm-viewport::after {
   border-color: rgba(251, 191, 36, 0.5);
 }
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .gm-track {
-    animation: none;
-    transform: none;
-  }
+/* Static, readable messages for Reduce Motion, low power and old WebViews. */
+.glass-marquee.gm-static { flex-basis: auto; height: auto; max-height: 128px; align-items: stretch; }
+.gm-static .gm-viewport { height: auto; min-height: 30px; }
+.gm-static .gm-track { position: static; display: block; width: 100%; transform: none !important; }
+.gm-static .gm-item { display: none; }
+.gm-static .gm-item:first-child { display: block; padding: 5px 12px; white-space: normal; overflow-wrap: anywhere; line-height: 1.65; }
+.gm-static .gm-divider, .gm-static .gm-viewport::after { display: none; }
+@media (max-width: 680px), (pointer: coarse), (prefers-reduced-transparency: reduce) {
+  .glass-marquee { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 @media (max-width: 480px) {

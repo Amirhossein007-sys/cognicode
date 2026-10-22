@@ -397,12 +397,12 @@ try {
 
     editorEl.addEventListener('touchstart', function (e) {
       if (e.touches.length === 2) {
-        if (e.cancelable) e.preventDefault();
         var t1 = e.touches[0];
         var t2 = e.touches[1];
         pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         pinchStartFontSize = editorFontSize;
         isPinching = true;
+        editorEl.addEventListener('touchmove', movePinch, { passive: false });
 
         if (zoomHud) {
           var pct = Math.round((editorFontSize / BASE_FONT_SIZE) * 100);
@@ -410,14 +410,14 @@ try {
           zoomHud.classList.add('visible');
         }
       } else {
-        isPinching = false;
+        endPinch();
       }
-    }, { passive: false });
+    }, { passive: true });
 
-    editorEl.addEventListener('touchmove', function (e) {
+    function movePinch(e) {
       if (isPinching && e.touches.length === 2) {
         // جلوگیری از زوم کل صفحه مرورگر و اعمال زوم صرفاً به کادر ادیتور
-        e.preventDefault();
+        if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         var t1 = e.touches[0];
         var t2 = e.touches[1];
@@ -427,9 +427,10 @@ try {
           queueEditorZoom(pinchStartFontSize * scale);
         }
       }
-    }, { passive: false });
+    }
 
     function endPinch() {
+      editorEl.removeEventListener('touchmove', movePinch);
       if (isPinching) {
         isPinching = false;
         commitQueuedZoom();
@@ -511,12 +512,8 @@ try {
       e.preventDefault();
     }
   }, { passive: false });
-  // جلوگیری از پینچ دوانگشتی روی سایر بخش‌های برنامه
-  document.addEventListener('touchmove', function (e) {
-    if (e.touches && e.touches.length > 1 && !e.target.closest('#editor')) {
-      e.preventDefault();
-    }
-  }, { passive: false });
+  // CSS touch-action prevents page zoom. A document-wide non-passive touchmove
+  // also blocks ordinary one-finger scrolling, even when it does no work.
   // جلوگیری از دابل‌تپ زوم پیش‌فرض در خارج از کادرهای متنی
   var lastNonEditorTap = 0;
   document.addEventListener('touchend', function (e) {
@@ -561,16 +558,47 @@ try {
   var hlTimer = null;
   var highlightWorker, highlightBusy, highlightQueued, highlightTimeout, highlightSerial = 0, highlightUnavailable = false;
   var viewportHighlight, highlightRange = '', sourceIndex;
+  var editorWindowRange, scrollViewport = null, scrollFrame = 0;
+  var editorScrolling = false, editorScrollIdle;
+  function beginEditorScroll() {
+    clearTimeout(editorScrollIdle);
+    if (!editorScrolling) {
+      editorScrolling = true;
+      document.documentElement.classList.add('editor-scrolling');
+      window.dispatchEvent(new CustomEvent('cognicode:editor-scrolling', {detail: true}));
+    }
+    editorScrollIdle = setTimeout(function () {
+      editorScrolling = false;
+      document.documentElement.classList.remove('editor-scrolling');
+      window.dispatchEvent(new CustomEvent('cognicode:editor-scrolling', {detail: false}));
+    }, 180);
+  }
   function indexSource(code) {
     if (sourceIndex && sourceIndex.code === code) return sourceIndex;
-    var lines = code.split('\n'), starts = new Uint32Array(lines.length), offset = 0;
-    for (var i = 0; i < lines.length; i++) { starts[i] = offset; offset += lines[i].length + 1; }
-    sourceIndex = {code: code, lines: lines, starts: starts};
+    var lines = code.split('\n'), starts = new Uint32Array(lines.length), offset = 0, longLines = false;
+    for (var i = 0; i < lines.length; i++) { starts[i] = offset; offset += lines[i].length + 1; if (lines[i].length > 8192) longLines = true; }
+    sourceIndex = {code: code, lines: lines, starts: starts, longLines: longLines};
     return sourceIndex;
   }
   function visibleRange(total) {
-    var start = Math.max(0, Math.floor(ta.scrollTop / lineHeight) - 8);
-    return {start: start, end: Math.min(total, start + Math.ceil(ta.clientHeight / lineHeight) + 24)};
+    var view = scrollViewport || readEditorViewport();
+    var rows = Math.max(1, Math.ceil(view.height / lineHeight));
+    var first = Math.max(0, Math.min(total - 1, Math.floor(view.top / lineHeight)));
+    var last = Math.min(total, first + rows + 1);
+    var key = total + ':' + lineHeight + ':' + view.height;
+    // Keep the rendered rows while the viewport is inside their buffer. Replacing
+    // token nodes for every crossed line forces expensive layout during a fling.
+    var previous = editorWindowRange;
+    if (previous && previous.key === key &&
+        (previous.start === 0 || first >= previous.start + 4) &&
+        (previous.end === total || last <= previous.end - 4)) return previous;
+    var buffer = rows + 8;
+    editorWindowRange = {key: key, start: Math.max(0, first - buffer), end: Math.min(total, last + buffer)};
+    return editorWindowRange;
+  }
+  function readEditorViewport() {
+    // Read geometry together, before changing either overlay's DOM or styles.
+    return {top: ta.scrollTop, left: ta.scrollLeft, height: ta.clientHeight, width: ta.scrollWidth};
   }
   function renderWindow(element, start, end, total, text, html) {
     var nodes = element._viewportNodes;
@@ -587,7 +615,9 @@ try {
     element.classList.add('virtualized'); element.dataset.lineStart = start; element.dataset.lineEnd = end;
   }
   function renderGutter() {
-    var total = indexSource(ta.value).lines.length;
+    var total = (sourceIndex || indexSource(ta.value)).lines.length;
+    var digits = String(total).length;
+    if (gutter._digits !== digits) { gutter._digits = digits; gutter.style.width = 'calc(' + digits + 'ch + 20px)'; }
     var range = visibleRange(total), key = total + ':' + range.start + ':' + range.end + ':' + lineHeight;
     if (gutter._range === key) return;
     gutter._range = key; gutter.dataset.lines = String(total);
@@ -600,19 +630,25 @@ try {
     }
   }
   function renderVisibleHighlight() {
-    if (!viewportHighlight || viewportHighlight.code !== ta.value) return;
+    if (!viewportHighlight || !sourceIndex || viewportHighlight.code !== sourceIndex.code) return;
+    var view = scrollViewport || readEditorViewport();
     var bounds = visibleRange(viewportHighlight.plain.length), start = bounds.start, end = bounds.end;
-    var range = start + ':' + end + ':' + lineHeight;
+    var range = start + ':' + end + ':' + lineHeight + ':' + view.width;
     if (range === highlightRange) return;
     highlightRange = range;
-    var html = viewportHighlight.lines ? viewportHighlight.lines.slice(start, end).join('\n') : Syntax.esc(viewportHighlight.plain.slice(start, end).join('\n'));
+    var html = viewportHighlight.lines ? viewportHighlight.lines.slice(start, end).map(function (line, i) {
+      // A single minified line can contain thousands of token spans. Preserve its
+      // complete, escaped text without letting it dominate horizontal scrolling.
+      var plain = viewportHighlight.plain[start + i];
+      return plain.length > 8192 ? Syntax.esc(plain) : line;
+    }).join('\n') : Syntax.esc(viewportHighlight.plain.slice(start, end).join('\n'));
     renderWindow(hlCode, start, end, viewportHighlight.plain.length, html + '\n', true);
-    hlCode.style.width = Math.max(0, ta.scrollWidth - 32) + 'px';
+    hlCode.style.width = Math.max(0, view.width - 32) + 'px';
   }
   function applyHighlight(html, code) {
     hlCode.dataset.highlightState = 'ready';
     viewportHighlight = null; highlightRange = '';
-    if (code.length >= 20000) {
+    if (code.length >= 20000 || indexSource(code).longLines) {
       viewportHighlight = { code: code, lines: html.split('\n'), plain: indexSource(code).lines };
       renderVisibleHighlight();
     } else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.innerHTML = html + '\n'; }
@@ -653,7 +689,7 @@ try {
     var code = ta.value;
     if (code.length >= highlightWorkerThreshold && !highlightUnavailable && window.Worker) {
       viewportHighlight = null; highlightRange = '';
-      if (code.length >= 20000) { viewportHighlight = {code: code, lines: null, plain: indexSource(code).lines}; renderVisibleHighlight(); }
+      if (code.length >= 20000 || indexSource(code).longLines) { viewportHighlight = {code: code, lines: null, plain: indexSource(code).lines}; renderVisibleHighlight(); }
       else { hlCode.classList.remove('virtualized'); hlCode.style.removeProperty('width'); hlCode.textContent = code + '\n'; }
       hlCode.dataset.highlightState = 'pending';
       queueHighlight({ id: ++highlightSerial, code: code, mode: langMode });
@@ -737,17 +773,28 @@ try {
   }
 
   function syncScroll() {
+    if (scrollFrame) { cancelAnimationFrame(scrollFrame); scrollFrame = 0; }
+    scrollViewport = readEditorViewport();
+    hl.scrollTop = scrollViewport.top; hl.scrollLeft = scrollViewport.left;
+    gutter.scrollTop = scrollViewport.top;
+    // Scroll the existing layers before replacing rows. Scroll setters clamp to
+    // layout geometry, so placing them after DOM writes forces synchronous layout.
     renderVisibleHighlight();
     renderGutter();
-    hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
-    gutter.scrollTop = ta.scrollTop;
     // دو لایهٔ نشانگر اسکرول‌کننده نیستند: فرزندانشان position:absolute‌اند و هیچ
     // سرریز اسکرول‌پذیری نمی‌سازند، پس scrollTop رویشان همیشه صفر می‌ماند و نوار
     // خطا و نقطهٔ گتر هنگام اسکرول لیز می‌خوردند. به‌جای آن کل لایه را به‌اندازهٔ
     // اسکرول متن بالا می‌بریم؛ بریدن نهایی را والدشان انجام می‌دهد.
-    var shift = 'translateY(' + (-ta.scrollTop) + 'px)';
+    var shift = 'translateY(' + (-scrollViewport.top) + 'px)';
     errOv.style.transform = shift;
     gutErrs.style.transform = shift;
+    scrollViewport = null;
+  }
+  function scheduleScrollSync() {
+    beginEditorScroll();
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(function () {
+      scrollFrame = 0; syncScroll();
+    });
   }
 
   function updateCaretLine() {
@@ -958,7 +1005,8 @@ try {
     pushUndoState(false);
     updateEditor();
   });
-  ta.addEventListener('scroll', syncScroll);
+  ta.addEventListener('scroll', scheduleScrollSync, { passive: true });
+  ta.addEventListener('touchstart', beginEditorScroll, { passive: true });
   ta.addEventListener('keyup', updateCaretLine);
   ta.addEventListener('click', updateCaretLine);
   /* چسباندن مستقیم (Ctrl+V / لانگ‌پرس):

@@ -258,7 +258,7 @@
 
   function evaluateState() {
     config = getCurrentThemeConfig();
-    const shouldRun = nativeActive && !document.hidden && !reducedMotion.matches && !energySaving;
+    const shouldRun = nativeActive && !document.hidden && !reducedMotion.matches && !energySaving && !editorScrolling;
     if (shouldRun) {
       start();
     } else {
@@ -268,6 +268,12 @@
   }
 
   // Lifecycle listeners
+  let editorScrolling = false;
+  window.addEventListener('cognicode:editor-scrolling', (e) => {
+    editorScrolling = !!e.detail;
+    if (editorScrolling) stop();
+    else evaluateState();
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stop();
     else evaluateState();
